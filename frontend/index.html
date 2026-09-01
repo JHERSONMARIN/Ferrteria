@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FerreSys v4.8 - Entregas, Personal y Finanzas</title>
+  <script>
+    // Universal Polyfill para crypto.randomUUID en contextos HTTP no seguros
+    (function() {
+      function generateUUID() {
+        if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+          try {
+            var buf = new Uint8Array(16);
+            crypto.getRandomValues(buf);
+            buf[6] = (buf[6] & 0x0f) | 0x40;
+            buf[8] = (buf[8] & 0x3f) | 0x80;
+            var hex = [];
+            for (var i = 0; i < 16; i++) {
+              hex.push((buf[i] < 16 ? '0' : '') + buf[i].toString(16));
+            }
+            return (
+              hex.slice(0, 4).join('') + '-' +
+              hex.slice(4, 6).join('') + '-' +
+              hex.slice(6, 8).join('') + '-' +
+              hex.slice(8, 10).join('') + '-' +
+              hex.slice(10, 16).join('')
+            );
+          } catch (e) {}
+        }
+        return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, function(c) {
+          return (c ^ (Math.floor(Math.random() * 256) & 15 >> c / 4)).toString(16);
+        });
+      }
+
+      var targets = [typeof window !== 'undefined' ? window : null, typeof self !== 'undefined' ? self : null, typeof globalThis !== 'undefined' ? globalThis : null];
+      for (var i = 0; i < targets.length; i++) {
+        var t = targets[i];
+        if (t) {
+          if (!t.crypto) {
+            try { t.crypto = {}; } catch (e) {}
+          }
+          if (t.crypto && !t.crypto.randomUUID) {
+            try {
+              Object.defineProperty(t.crypto, 'randomUUID', {
+                value: generateUUID,
+                writable: true,
+                configurable: true,
+                enumerable: true
+              });
+            } catch (e) {
+              t.crypto.randomUUID = generateUUID;
+            }
+          }
+        }
+      }
+
+      if (typeof Crypto !== 'undefined' && Crypto.prototype && !Crypto.prototype.randomUUID) {
+        try {
+          Object.defineProperty(Crypto.prototype, 'randomUUID', {
+            value: generateUUID,
+            writable: true,
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {}
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 font-sans antialiased text-slate-800">
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

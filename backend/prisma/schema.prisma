@@ -1,0 +1,334 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMINISTRADOR
+  VENDEDOR
+  CAJERO
+  REPARTIDOR
+}
+
+enum TipoCliente {
+  NATURAL
+  EMPRESA
+}
+
+enum TipoComprobante {
+  NOTA_VENTA
+  BOLETA
+  FACTURA
+}
+
+enum MetodoPago {
+  EFECTIVO
+  TARJETA
+  YAPE_PLIN
+  TRANSFERENCIA
+  PAGO_MIXTO
+  FIADO
+}
+
+enum TipoKardex {
+  ENTRADA
+  SALIDA
+}
+
+enum EstadoEntrega {
+  PENDIENTE
+  EN_CAMINO
+  ENTREGADO
+  CANCELADO
+}
+
+enum TipoMovimientoCredito {
+  CARGO
+  ABONO
+}
+
+enum EstadoCaja {
+  ABIERTA
+  CERRADA
+}
+
+enum EstadoCotizacion {
+  PENDIENTE
+  CONVERTIDO
+  CANCELADO
+}
+
+model Usuario {
+  id        Int      @id @default(autoincrement())
+  name      String
+  user      String   @unique
+  pass      String
+  role      Role     @default(VENDEDOR)
+  modules   Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ventasAsignadas   Venta[]        @relation("VendedorVentas")
+  entregasAsignadas Entrega[]      @relation("RepartidorEntregas")
+  cajasChicas       CajaChica[]
+  cotizaciones      Cotizacion[]   @relation("VendedorCotizaciones")
+
+  @@map("usuarios")
+}
+
+model Producto {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  unit      String   @default("Unidad")
+  stock     Int      @default(0)
+  minStock  Int      @default(10)
+  price     Float    @default(0.0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  detallesVenta      DetalleVenta[]
+  kardexRecords      MovimientoKardex[]
+  detallesEntrega    DetalleEntrega[]
+  detallesCompra     DetalleCompra[]
+  detallesCotizacion DetalleCotizacion[]
+
+  @@map("productos")
+}
+
+model Cliente {
+  id        Int         @id @default(autoincrement())
+  type      TipoCliente @default(NATURAL)
+  doc       String      @unique
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  maxCredit Float       @default(1000.0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  ventas         Venta[]
+  entregas       Entrega[]
+  cotizaciones   Cotizacion[]
+  creditoCliente CreditoCliente?
+
+  @@map("clientes")
+}
+
+model Venta {
+  id        Int             @id @default(autoincrement())
+  docType   TipoComprobante @default(NOTA_VENTA)
+  numDoc    String          @unique
+  payMethod MetodoPago      @default(EFECTIVO)
+  mixCash   Float?          @default(0)
+  mixDigital Float?         @default(0)
+  payCode   String?
+  total     Float           @default(0)
+  status    String          @default("COMPLETADO")
+  createdAt DateTime        @default(now())
+
+  clienteId Int?
+  cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  vendedorId Int?
+  vendedor   Usuario? @relation("VendedorVentas", fields: [vendedorId], references: [id], onDelete: SetNull)
+
+  cajaId Int?
+  caja   CajaChica? @relation(fields: [cajaId], references: [id], onDelete: SetNull)
+
+  detalles DetalleVenta[]
+
+  @@map("ventas")
+}
+
+model DetalleVenta {
+  id        Int   @id @default(autoincrement())
+  quantity  Int
+  unitPrice Float
+  subtotal  Float
+
+  ventaId Int
+  venta   Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+
+  @@map("detalle_ventas")
+}
+
+model MovimientoKardex {
+  id         Int        @id @default(autoincrement())
+  type       TipoKardex
+  qty        Int
+  stockAfter Int
+  ref        String
+  createdAt  DateTime   @default(now())
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@map("movimientos_kardex")
+}
+
+model Entrega {
+  id        Int           @id @default(autoincrement())
+  ref       String        @unique
+  address   String
+  status    EstadoEntrega @default(PENDIENTE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  clienteId Int
+  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  repartidorId Int?
+  repartidor   Usuario? @relation("RepartidorEntregas", fields: [repartidorId], references: [id], onDelete: SetNull)
+
+  detalles DetalleEntrega[]
+
+  @@map("entregas")
+}
+
+model DetalleEntrega {
+  id       Int @id @default(autoincrement())
+  quantity Int
+
+  entregaId Int
+  entrega   Entrega @relation(fields: [entregaId], references: [id], onDelete: Cascade)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+
+  @@map("detalle_entregas")
+}
+
+model CreditoCliente {
+  id           Int      @id @default(autoincrement())
+  debtTotal    Float    @default(0)
+  maxCredit    Float    @default(1000.0)
+  lastPurchase DateTime @default(now())
+
+  clienteId Int     @unique
+  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  abonos AbonoCredito[]
+
+  @@map("creditos_cliente")
+}
+
+model AbonoCredito {
+  id        Int                   @id @default(autoincrement())
+  amount    Float
+  docRef    String
+  desc      String?
+  type      TipoMovimientoCredito @default(ABONO)
+  createdAt DateTime              @default(now())
+
+  creditoId Int
+  credito   CreditoCliente @relation(fields: [creditoId], references: [id], onDelete: Cascade)
+
+  @@map("abonos_credito")
+}
+
+model CajaChica {
+  id               Int        @id @default(autoincrement())
+  montoInicial     Float      @default(0)
+  ventasEfectivo   Float      @default(0)
+  ventasDigital    Float      @default(0)
+  montoCierreConteo Float?   @default(0)
+  diferencia       Float?     @default(0)
+  estado           EstadoCaja @default(ABIERTA)
+  createdAt        DateTime   @default(now())
+  closedAt         DateTime?
+
+  usuarioId Int
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  ventas Venta[]
+
+  @@map("cajas_chicas")
+}
+
+model Proveedor {
+  id        Int      @id @default(autoincrement())
+  ruc       String   @unique
+  name      String
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  compras Compra[]
+
+  @@map("proveedores")
+}
+
+model Compra {
+  id        Int      @id @default(autoincrement())
+  numDoc    String
+  total     Float    @default(0)
+  createdAt DateTime @default(now())
+
+  proveedorId Int
+  proveedor   Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
+
+  detalles DetalleCompra[]
+
+  @@map("compras")
+}
+
+model DetalleCompra {
+  id        Int   @id @default(autoincrement())
+  quantity  Int
+  unitPrice Float
+  subtotal  Float
+
+  compraId Int
+  compra   Compra @relation(fields: [compraId], references: [id], onDelete: Cascade)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+
+  @@map("detalle_compras")
+}
+
+model Cotizacion {
+  id        Int              @id @default(autoincrement())
+  numDoc    String           @unique
+  total     Float            @default(0)
+  validDays Int              @default(7)
+  status    EstadoCotizacion @default(PENDIENTE)
+  createdAt DateTime         @default(now())
+
+  clienteId Int?
+  cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  vendedorId Int?
+  vendedor   Usuario? @relation("VendedorCotizaciones", fields: [vendedorId], references: [id], onDelete: SetNull)
+
+  detalles DetalleCotizacion[]
+
+  @@map("cotizaciones")
+}
+
+model DetalleCotizacion {
+  id        Int   @id @default(autoincrement())
+  quantity  Int
+  unitPrice Float
+  subtotal  Float
+
+  cotizacionId Int
+  cotizacion   Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+
+  @@map("detalle_cotizaciones")
+}

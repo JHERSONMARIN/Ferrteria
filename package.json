@@ -1,0 +1,9 @@
+{
+  "name": "sistema-para-ferreteria",
+  "version": "4.8.0",
+  "private": true,
+  "scripts": {
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  }
+}
