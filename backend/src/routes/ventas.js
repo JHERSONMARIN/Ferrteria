@@ -149,6 +149,29 @@ router.post('/', async (req, res) => {
           data: { stock: { decrement: item.qty } }
         });
 
+        // Actualizar montos de caja
+        const cajaAbierta = await tx.cajaChica.findFirst({
+          where: { estado: 'ABIERTA' },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        console.log('Caja abierta:', cajaAbierta);
+
+        if (!cajaAbierta) {
+          throw new Error('No hay una caja abierta para registrar la venta.');
+        }
+
+        await tx.cajaChica.update({
+          where: { id: cajaAbierta.id },
+          data: {
+            ventasEfectivo: { increment: payMethodEnum === 'EFECTIVO' ? itemSubtotal : (payMethodEnum === 'PAGO_MIXTO' ? item.mixCash || 0 : 0),
+            },
+            ventasDigital: {
+              increment: payMethodEnum !== 'EFECTIVO' ? itemSubtotal : (payMethodEnum === 'PAGO_MIXTO' ? item.mixDigital || 0 : 0),
+            }
+          }
+        });
+
         // Registro Kardex
         await tx.movimientoKardex.create({
           data: {

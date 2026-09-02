@@ -22,9 +22,29 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   const [showCotizacionesModal, setShowCotizacionesModal] = useState(false);
   const [cotizacionesList, setCotizacionesList] = useState([]);
 
+  // Estado de caja
+  const [estadoCaja, setEstadoCaja] = useState({ abierta: false, caja: null });
+
   useEffect(() => {
     loadInitialData();
-  }, []);
+
+    if (currentUser) {
+      loadEstadoCaja();
+    }
+  }, [currentUser]);
+
+  const loadEstadoCaja = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(`/caja/estado-actual?usuarioId=${currentUser.id}`);
+      setEstadoCaja(data);
+      return data;
+    } catch (err) {
+      console.error('Error cargando estado de caja:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadInitialData = async () => {
     try {
@@ -97,6 +117,11 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
   const handleCheckout = async () => {
+    const cajaActual = await loadEstadoCaja();
+    if (!cajaActual.abierta) {
+      return alert('No se puede realizar ventas sin tener la caja abierta.');
+    }
+
     if (cart.length === 0) return alert('El carrito está vacío.');
 
     let matchedClient = null;
@@ -154,8 +179,11 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
           setTimeout(() => {
             window.print();
           }, 300);
+
+          window.dispatchEvent(new Event('venta-registrada'));
         }
 
+        await loadEstadoCaja();
         alert(`¡Venta completada con éxito! Comprobante: ${res.venta.numDoc}`);
         setCart([]);
         setCustomerInput('');

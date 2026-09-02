@@ -10,6 +10,21 @@ export default function CajaPage({ currentUser }) {
   useEffect(() => {
     if (currentUser) {
       loadEstadoCaja();
+
+      const actualizarCaja = () => loadEstadoCaja();
+      const alVolverAPestana = () => {
+        if (document.visibilityState === 'visible') {
+          loadEstadoCaja();
+        }
+      };
+
+      window.addEventListener('venta-registrada', actualizarCaja);
+      document.addEventListener('visibilitychange', alVolverAPestana);
+
+      return () => {
+        window.removeEventListener('venta-registrada', actualizarCaja);
+        document.removeEventListener('visibilitychange', alVolverAPestana);
+      };
     }
   }, [currentUser]);
 
