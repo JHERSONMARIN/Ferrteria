@@ -8,24 +8,19 @@ export default function CajaPage({ currentUser }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (currentUser) {
-      loadEstadoCaja();
+    if (!currentUser) return;
 
-      const actualizarCaja = () => loadEstadoCaja();
-      const alVolverAPestana = () => {
-        if (document.visibilityState === 'visible') {
-          loadEstadoCaja();
-        }
-      };
+    loadEstadoCaja();
 
-      window.addEventListener('venta-registrada', actualizarCaja);
-      document.addEventListener('visibilitychange', alVolverAPestana);
+    const intervalo = setInterval(loadEstadoCaja, 3000);
 
-      return () => {
-        window.removeEventListener('venta-registrada', actualizarCaja);
-        document.removeEventListener('visibilitychange', alVolverAPestana);
-      };
-    }
+    const actualizarCaja = () => loadEstadoCaja();
+    window.addEventListener('venta-registrada', actualizarCaja);
+
+    return () => {
+      clearInterval(intervalo);
+      window.removeEventListener('venta-registrada', actualizarCaja);
+    };
   }, [currentUser]);
 
   const loadEstadoCaja = async () => {

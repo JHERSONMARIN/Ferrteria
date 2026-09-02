@@ -56,7 +56,7 @@ router.get('/', async (req, res) => {
 // POST /api/ventas (Procesar Venta Atómica con Kardex & Validación de Límite de Crédito)
 router.post('/', async (req, res) => {
   try {
-    const { docType, payMethod, mixCash, mixDigital, payCode, clienteId, vendedorId, cart } = req.body;
+    const { docType, payMethod, mixCash, mixDigital, payCode, clienteId, vendedorId, cart, usuarioCajaId } = req.body;
 
     if (!cart || !Array.isArray(cart) || cart.length === 0) {
       return res.status(400).json({ error: 'El carrito de venta no puede estar vacío.' });
@@ -114,6 +114,21 @@ router.post('/', async (req, res) => {
         }
       }
 
+      // Verificar si hay una caja abierta para el usuario
+      const cajaAbierta = await tx.cajaChica.findFirst({
+        where: {
+          usuarioId: Number(usuarioCajaId || vendedorId),
+          estado: 'ABIERTA',
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      if (!cajaAbierta) {
+        throw new Error('No hay una caja abierta para este usuario.');
+      }
+
       // 4. Crear Venta
       const venta = await tx.venta.create({
         data: {
@@ -126,8 +141,30 @@ router.post('/', async (req, res) => {
           total: totalVenta,
           clienteId: clienteId ? parseInt(clienteId) : null,
           vendedorId: vendedorId ? parseInt(vendedorId) : null,
+          cajaId: cajaAbierta.id,
         }
       });
+
+      // Datos de la venta
+      const efectivoVenta =
+        payMethodEnum === 'EFECTIVO'
+          ? totalVenta
+          : payMethodEnum === 'PAGO_MIXTO'
+            ? Number(mixCash) || 0
+            : 0;
+
+      const digitalVenta =
+        ['TARJETA', 'YAPE_PLIN', 'TRANSFERENCIA'].includes(payMethodEnum)
+          ? totalVenta
+          : payMethodEnum === 'PAGO_MIXTO'
+            ? Number(mixDigital) || 0
+            : 0;
+
+      if (payMethodEnum === 'PAGO_MIXTO') {
+        if (Math.abs(efectivoVenta + digitalVenta - totalVenta) > 0.01) {
+          throw new Error('El pago mixto no coincide con el total de la venta.');
+        }
+      }
 
       // 5. Crear DetalleVenta, Descontar Stock y Log Kardex por cada item
       for (const item of cart) {
@@ -149,29 +186,6 @@ router.post('/', async (req, res) => {
           data: { stock: { decrement: item.qty } }
         });
 
-        // Actualizar montos de caja
-        const cajaAbierta = await tx.cajaChica.findFirst({
-          where: { estado: 'ABIERTA' },
-          orderBy: { createdAt: 'desc' }
-        });
-
-        console.log('Caja abierta:', cajaAbierta);
-
-        if (!cajaAbierta) {
-          throw new Error('No hay una caja abierta para registrar la venta.');
-        }
-
-        await tx.cajaChica.update({
-          where: { id: cajaAbierta.id },
-          data: {
-            ventasEfectivo: { increment: payMethodEnum === 'EFECTIVO' ? itemSubtotal : (payMethodEnum === 'PAGO_MIXTO' ? item.mixCash || 0 : 0),
-            },
-            ventasDigital: {
-              increment: payMethodEnum !== 'EFECTIVO' ? itemSubtotal : (payMethodEnum === 'PAGO_MIXTO' ? item.mixDigital || 0 : 0),
-            }
-          }
-        });
-
         // Registro Kardex
         await tx.movimientoKardex.create({
           data: {
@@ -182,6 +196,22 @@ router.post('/', async (req, res) => {
             ref: `Venta ${numDoc}`,
           }
         });
+
+        // Actualizar Caja con ventas acumuladas
+        const usuarioCajaId = vendedorId ? parseInt(vendedorId) : null;
+
+        if (!usuarioCajaId) {
+          throw new Error('No se pudo identificar al usuario de caja.');
+        }
+
+        const cajaAbierta = await tx.cajaChica.findFirst({
+          where: {
+            usuarioId: usuarioCajaId,
+            estado: 'ABIERTA',
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
       }
 
       // 6. Si la venta es al FIADO, actualizar estado de cuenta del cliente

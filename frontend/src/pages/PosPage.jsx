@@ -148,6 +148,7 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
       mixCash: parseFloat(mixCash) || 0,
       mixDigital: parseFloat(mixDigital) || 0,
       payCode,
+      usuarioCajaId: currentUser ? currentUser.id : null,
       clienteId: matchedClient ? matchedClient.id : null,
       vendedorId: matchedSeller ? matchedSeller.id : (currentUser ? currentUser.id : null),
       cart
@@ -158,6 +159,8 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
       const res = await api.post('/ventas', payload);
 
       if (res.success && res.venta) {
+        window.dispatchEvent(new Event('venta-registrada'));
+
         if (onTriggerPrint) {
           onTriggerPrint({
             businessName: 'FERRESYS S.A.C.',
@@ -180,7 +183,6 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
             window.print();
           }, 300);
 
-          window.dispatchEvent(new Event('venta-registrada'));
         }
 
         await loadEstadoCaja();
