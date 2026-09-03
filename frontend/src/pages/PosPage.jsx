@@ -18,12 +18,16 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   const [mixCash, setMixCash] = useState('');
   const [mixDigital, setMixDigital] = useState('');
 
+  // Datos del cliente
+  const [customerName, setCustomerName] = useState('');
+  const [customerDni, setCustomerDni] = useState('');
+  const [customerRuc, setCustomerRuc] = useState('');
+
   // Modales
   const [showCotizacionesModal, setShowCotizacionesModal] = useState(false);
   const [cotizacionesList, setCotizacionesList] = useState([]);
 
-  // Estado de caja
-  const [estadoCaja, setEstadoCaja] = useState({ abierta: false, caja: null });
+  const [estadoCaja, setEstadoCaja] = useState(null);
 
   useEffect(() => {
     loadInitialData();
@@ -169,9 +173,9 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
             docTitle: docType === 'Factura' ? 'FACTURA ELECTRÓNICA' : (docType === 'Boleta' ? 'BOLETA DE VENTA' : 'NOTA DE VENTA'),
             numDoc: res.venta.numDoc,
             dateStr: new Date().toLocaleString('es-PE'),
-            customerName: matchedClient ? matchedClient.name : 'Público General',
-            customerDoc: matchedClient ? matchedClient.doc : '00000000',
-            docLabelTitle: matchedClient && matchedClient.type === 'EMPRESA' ? 'RUC' : 'DNI',
+            customerName: matchedClient ? matchedClient.name : customerName || 'Público General',
+            customerDoc: matchedClient ? matchedClient.doc : customerDni || customerRuc || '00000000',
+            docLabelTitle: matchedClient ? (matchedClient.type === 'EMPRESA' ? 'RUC' : 'DNI') : customerDni ? 'DNI' : 'RUC',
             sellerName: sellerName || 'General',
             payMethod,
             items: cart,
@@ -185,13 +189,18 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
 
         }
 
-        await loadEstadoCaja();
         alert(`¡Venta completada con éxito! Comprobante: ${res.venta.numDoc}`);
         setCart([]);
         setCustomerInput('');
         setPayCode('');
         setMixCash('');
         setMixDigital('');
+        // Reset customer details
+        setCustomerName('');
+        setCustomerDni('');
+        setCustomerRuc('');
+        
+        await loadEstadoCaja();
         await loadInitialData();
       }
     } catch (err) {
@@ -230,9 +239,9 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
             docTitle: 'PROFORMA / COTIZACIÓN',
             numDoc: res.cotizacion.numDoc,
             dateStr: new Date().toLocaleString('es-PE'),
-            customerName: matchedClient ? matchedClient.name : 'Público General',
-            customerDoc: matchedClient ? matchedClient.doc : '00000000',
-            docLabelTitle: matchedClient && matchedClient.type === 'EMPRESA' ? 'RUC' : 'DNI',
+            customerName: matchedClient ? matchedClient.name : customerName || 'Público General',
+            customerDoc: matchedClient ? matchedClient.doc : customerDni || customerRuc || '00000000',
+            docLabelTitle: matchedClient ? (matchedClient.type === 'EMPRESA' ? 'RUC' : 'DNI') : customerDni ? 'DNI' : 'RUC',
             sellerName: sellerName || 'General',
             payMethod: 'COTIZACIÓN (Válido 7 días)',
             items: cart,
@@ -341,6 +350,30 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
           </div>
 
           <div className="p-3 bg-slate-50 border-b border-gray-200 text-sm flex flex-col gap-2">
+            <div className="grid grid-cols-1 gap-2">
+              <div className="relative w-full flex-1">
+                <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400"></i>
+                <input
+                  list="pos-customer-list"
+                  value={customerInput}
+                  onChange={e => setCustomerInput(e.target.value)}
+                  placeholder="Buscar cliente por DNI/RUC o Nombre..."
+                  className="w-full pl-8 px-3 py-2 border border-gray-300 rounded outline-none bg-white font-medium focus:border-orange-500 text-xs"
+                />
+                <button
+                  onClick={() => setCustomerInput('')}
+                  className="absolute right-2 top-2 text-slate-400 hover:text-red-500"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+                <datalist id="pos-customer-list">
+                  {clients.map(c => (
+                    <option key={c.id} value={`${c.doc} - ${c.name}`} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+            
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={docType}
@@ -366,34 +399,30 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
               </select>
             </div>
 
-            <div className="grid grid-cols-1 gap-2">
-              <div className="relative w-full">
-                <input
-                  list="pos-customer-list"
-                  value={customerInput}
-                  onChange={e => setCustomerInput(e.target.value)}
-                  placeholder="Buscar por DNI/RUC o Nombre..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded outline-none bg-white font-medium focus:border-orange-500 text-xs"
-                />
-                <datalist id="pos-customer-list">
-                  {clients.map(c => (
-                    <option key={c.id} value={`${c.doc} - ${c.name}`} />
-                  ))}
-                </datalist>
-              </div>
+            {/* Datos del cliente */}
+            { customerInput === '' && docType !== 'Nota de Venta' && (
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2">
+                  <input
+                    type="text"
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                    placeholder="Apellidos y nombres del cliente..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded outline-none text-xs"
+                  />
+                </div>
 
-              <div>
-                <select
-                  value={sellerName}
-                  onChange={e => setSellerName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded outline-none font-medium bg-white text-xs"
-                >
-                  {sellers.map(s => (
-                    <option key={s.id} value={s.name}>{s.name} ({s.role})</option>
-                  ))}
-                </select>
+                <div className="col-span-1">
+                  <input
+                    type="text"
+                    value={docType === 'Boleta' ? customerDni : customerRuc}
+                    onChange={e => docType === 'Boleta' ? setCustomerDni(e.target.value) : setCustomerRuc(e.target.value)}
+                    placeholder={docType === 'Boleta' ? "DNI del cliente..." : "RUC del cliente..."}
+                    className="w-full px-3 py-2 border border-gray-300 rounded outline-none text-xs"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {payMethod === 'Yape/Plin' && (
               <input
