@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
 
 export default function PosPage({ currentUser, onTriggerPrint }) {
@@ -29,6 +29,16 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
 
   const [estadoCaja, setEstadoCaja] = useState(null);
 
+  // Categorías
+  const [showCategoriasModal, setShowCategoriasModal] = useState(false);
+  const containerRef = useRef(null);
+  const measureRef = useRef(null);
+  const [visibleCategories, setVisibleCategories] = useState([]);
+  const [showMore, setShowMore] = useState(false);
+  // Datos de prueba para las categorias
+  const categories = [ 'Todas', 'Herramientas', 'Tornillería y fijaciones', 'Electricidad', 'Plomería', 'Pinturas y acabados', 'Adhesivos y selladores', 'Cerrajería', 'Ferretería general', 'Seguridad', 'Jardinería', 'Accesorios y consumibles', ];
+
+
   useEffect(() => {
     loadInitialData();
 
@@ -36,6 +46,63 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
       loadEstadoCaja();
     }
   }, [currentUser]);
+
+  // Calcular categorías visibles según el ancho del contenedor
+  useEffect(() => {
+    const calculateVisibleCategories = () => {
+      const container = containerRef.current;
+      const measureContainer = measureRef.current;
+      if (!container || !measureContainer) return;
+
+      const containerWidth = container.clientWidth;
+      const buttons = Array.from(
+        measureContainer.querySelectorAll('[data-measure-category]')
+      );
+      if (!buttons.length) return;
+
+      // Ancho aproximado del botón "Más..."
+      const moreButtonWidth = 65;
+      const gap = 8;
+
+      let totalWidth = 0;
+      const visible = [];
+
+      for (let i = 0; i < buttons.length; i++) {
+        const buttonWidth = buttons[i].offsetWidth;
+        const remainingCategories = buttons.length - (i + 1);
+
+        // Espacio de reserva para "Más..."
+        const reservedMore = remainingCategories > 0 ? moreButtonWidth + gap : 0;
+
+        const newWidth =
+          totalWidth +
+          (visible.length > 0 ? gap : 0) +
+          buttonWidth +
+          reservedMore;
+
+        if (newWidth <= containerWidth) {
+          visible.push(categories[i]);
+          totalWidth += (visible.length > 1 ? gap : 0) + buttonWidth;
+        } else {
+          break;
+        }
+      }
+
+      setVisibleCategories(visible);
+      setShowMore(visible.length < categories.length);
+    };
+    requestAnimationFrame(calculateVisibleCategories);
+
+    const observer = new ResizeObserver(() => {
+      requestAnimationFrame(calculateVisibleCategories);
+    });
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [categories]);
 
   const loadEstadoCaja = async () => {
     try {
@@ -298,6 +365,7 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   return (
     <div className="tab-content active h-full flex flex-col p-4 overflow-hidden">
       <div className="flex-1 flex flex-col xl:flex-row gap-4 overflow-hidden">
+        
         {/* Panel Izquierdo: Catálogo y Búsqueda */}
         <div className="flex-1 flex flex-col h-full bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100 bg-slate-50 flex justify-between items-center gap-3">
@@ -320,6 +388,58 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
           </div>
 
           <div className="flex-1 p-4 overflow-y-auto">
+            {/* Panel de categorías */}
+            <div className="relative mb-4">
+              {/* Categorías */}
+              <div ref={containerRef} className="flex items-center justify-between gap-2 overflow-hidden" >
+                <div className="flex items-center gap-2 overflow-hidden">
+                  {visibleCategories.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setSearch(cat === 'Todas' ? '' : cat)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 whitespace-nowrap ${
+                        (cat === 'Todas' && search === '') || search === cat
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Botón Más */}
+                {showMore && (
+                  <button
+                    onClick={() => {
+                      showCategoriasModal ? setShowCategoriasModal(false) : setShowCategoriasModal(true);
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 whitespace-nowrap bg-slate-900 hover:bg-slate-800 text-white"
+                  >
+                    Más...
+                  </button>
+                )}
+              </div>
+
+              {/* Contenedor invisible para medir */}
+              <div
+                ref={measureRef}
+                className="absolute left-0 top-0 invisible pointer-events-none flex items-center gap-2"
+                style={{ width: 'max-content' }}
+              >
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    data-measure-category
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 whitespace-nowrap"
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* Panel de productos */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {filteredProducts.map(prod => (
                 <div
@@ -553,6 +673,40 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal todas las categorias */}
+      {showCategoriasModal && (
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+              <h3 className="font-bold text-lg"><i className="fa-solid fa-list mr-2"></i> Todas las Categorías</h3>
+              <button onClick={() => setShowCategoriasModal(false)} className="text-slate-300 hover:text-white">
+                <i className="fa-solid fa-xmark text-xl"></i>
+              </button>
+            </div>
+            <div className="p-4 flex-1 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-2">
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => {
+                      setSearch(cat === 'Todas' ? '' : cat);
+                      setShowCategoriasModal(false);
+                    }}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap ${
+                      (cat === 'Todas' && search === '') || search === cat
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
