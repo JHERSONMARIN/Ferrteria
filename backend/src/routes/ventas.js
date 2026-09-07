@@ -166,6 +166,17 @@ router.post('/', async (req, res) => {
         }
       }
 
+      // Actualizar CajaChica acumulando efectivo y digital (una sola vez por venta)
+      if (payMethodEnum !== 'FIADO' && (efectivoVenta > 0 || digitalVenta > 0)) {
+        await tx.cajaChica.update({
+          where: { id: cajaAbierta.id },
+          data: {
+            ventasEfectivo: { increment: efectivoVenta },
+            ventasDigital: { increment: digitalVenta }
+          }
+        });
+      }
+
       // 5. Crear DetalleVenta, Descontar Stock y Log Kardex por cada item
       for (const item of cart) {
         const itemSubtotal = item.price * item.qty;
@@ -196,22 +207,6 @@ router.post('/', async (req, res) => {
             ref: `Venta ${numDoc}`,
           }
         });
-
-        // Actualizar Caja con ventas acumuladas
-        const usuarioCajaId = vendedorId ? parseInt(vendedorId) : null;
-
-        if (!usuarioCajaId) {
-          throw new Error('No se pudo identificar al usuario de caja.');
-        }
-
-        const cajaAbierta = await tx.cajaChica.findFirst({
-          where: {
-            usuarioId: usuarioCajaId,
-            estado: 'ABIERTA',
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-
       }
 
       // 6. Si la venta es al FIADO, actualizar estado de cuenta del cliente

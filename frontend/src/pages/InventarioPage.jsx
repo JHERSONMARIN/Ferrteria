@@ -11,10 +11,26 @@ export default function InventarioPage() {
   const [code, setCode] = useState('');
   const [unit, setUnit] = useState('Unidad');
   const [name, setName] = useState('');
+  const [category, setCategory] = useState('Ferretería general');
   const [stock, setStock] = useState('');
   const [minStock, setMinStock] = useState('10');
   const [price, setPrice] = useState('');
   const [searchingBarcode, setSearchingBarcode] = useState(false);
+
+  const categoriesOptions = [
+    'Ferretería general',
+    'Herramientas',
+    'Tornillería y fijaciones',
+    'Electricidad',
+    'Plomería',
+    'Pinturas y acabados',
+    'Adhesivos y selladores',
+    'Cerrajería',
+    'Seguridad',
+    'Jardinería',
+    'Accesorios y consumibles',
+    'General',
+  ];
 
   useEffect(() => {
     loadProducts();
@@ -36,6 +52,7 @@ export default function InventarioPage() {
     const exportData = products.map(p => ({
       'Código': p.code,
       'Producto': p.name,
+      'Categoría': p.category || 'General',
       'Unidad': p.unit,
       'Stock Real': p.stock,
       'Stock Mínimo': p.minStock || 10,
@@ -55,6 +72,7 @@ export default function InventarioPage() {
         setName(res.product.name);
         setUnit(res.product.unit);
         setPrice(res.product.price);
+        if (res.product.category) setCategory(res.product.category);
       } else if (res.name) {
         setName(res.name);
       }
@@ -76,6 +94,7 @@ export default function InventarioPage() {
         code: code.trim(),
         name: name.trim(),
         unit,
+        category,
         stock: parseInt(stock),
         minStock: parseInt(minStock) || 10,
         price: parseFloat(price)
@@ -83,6 +102,7 @@ export default function InventarioPage() {
       setShowModal(false);
       setCode('');
       setName('');
+      setCategory('Ferretería general');
       setStock('');
       setMinStock('10');
       setPrice('');
@@ -125,6 +145,7 @@ export default function InventarioPage() {
               <tr>
                 <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Producto</th>
+                <th className="px-4 py-3">Categoría</th>
                 <th className="px-4 py-3">Unidad</th>
                 <th className="px-4 py-3">Stock Real</th>
                 <th className="px-4 py-3 text-center">Estado Alerta</th>
@@ -138,6 +159,11 @@ export default function InventarioPage() {
                   <tr key={p.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-mono text-xs">{p.code}</td>
                     <td className="px-4 py-3 font-bold text-slate-800">{p.name}</td>
+                    <td className="px-4 py-3 text-xs text-slate-600 font-medium">
+                      <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                        {p.category || 'General'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-xs">{p.unit}</td>
                     <td className={`px-4 py-3 font-bold ${isLowStock ? 'text-red-600' : 'text-slate-800'}`}>
                       {p.stock}
@@ -218,6 +244,18 @@ export default function InventarioPage() {
                   placeholder={searchingBarcode ? "Buscando en internet..." : ""}
                   className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
                 />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Categoría</label>
+                <select
+                  value={category}
+                  onChange={e => setCategory(e.target.value)}
+                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 bg-white text-sm"
+                >
+                  {categoriesOptions.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>

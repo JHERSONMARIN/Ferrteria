@@ -90,6 +90,7 @@ model Producto {
   stock     Int      @default(0)
   minStock  Int      @default(10)
   price     Float    @default(0.0)
+  category  String   @default("General")
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

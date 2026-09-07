@@ -16,6 +16,7 @@ router.get('/', async (req, res) => {
         unit: true,
         stock: true,
         price: true,
+        category: true,
       },
       orderBy: { name: 'asc' }
     });
@@ -25,10 +26,26 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/productos/categorias
+router.get('/categorias', async (req, res) => {
+  try {
+    const categories = await prisma.producto.findMany({
+      where: { active: true },
+      select: { category: true },
+      distinct: ['category'],
+      orderBy: { category: 'asc' }
+    });
+    const categoryList = categories.map(c => c.category).filter(Boolean);
+    res.json(categoryList);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al listar categorías.' });
+  }
+});
+
 // POST /api/productos
 router.post('/', async (req, res) => {
   try {
-    const { code, name, unit, stock, price } = req.body;
+    const { code, name, unit, stock, price, category } = req.body;
     if (!code || !name || isNaN(stock) || isNaN(price)) {
       return res.status(400).json({ error: 'Completa todos los campos obligatorios.' });
     }
@@ -45,6 +62,7 @@ router.post('/', async (req, res) => {
           unit: unit || 'Unidad',
           stock: stockNum,
           price: priceNum,
+          category: category && category.trim() ? category.trim() : 'General',
         }
       });
 
@@ -79,7 +97,7 @@ router.get('/barcode/:code', async (req, res) => {
     // 1. Buscar primero en base de datos local
     const local = await prisma.producto.findUnique({
       where: { code: barcode },
-      select: { id: true, code: true, name: true, unit: true, stock: true, price: true }
+      select: { id: true, code: true, name: true, unit: true, stock: true, price: true, category: true }
     });
 
     if (local) {

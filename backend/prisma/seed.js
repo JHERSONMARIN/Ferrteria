@@ -51,16 +51,16 @@ async function main() {
 
   // 2. Productos iniciales
   const defaultProducts = [
-    { code: '77501', name: 'Cemento Sol', unit: 'Bolsa', stock: 120, price: 28.50 },
-    { code: '77502', name: 'Fierro Corrugado 1/2"', unit: 'Unidad', stock: 45, price: 35.00 },
-    { code: '77503', name: 'Cable THW 14 AWG', unit: 'Metro', stock: 500, price: 1.50 },
-    { code: '77504', name: 'Pintura Látex Vencedor', unit: 'Galón', stock: 12, price: 145.00 }
+    { code: '77501', name: 'Cemento Sol', unit: 'Bolsa', stock: 120, price: 28.50, category: 'Ferretería general' },
+    { code: '77502', name: 'Fierro Corrugado 1/2"', unit: 'Unidad', stock: 45, price: 35.00, category: 'Ferretería general' },
+    { code: '77503', name: 'Cable THW 14 AWG', unit: 'Metro', stock: 500, price: 1.50, category: 'Electricidad' },
+    { code: '77504', name: 'Pintura Látex Vencedor', unit: 'Galón', stock: 12, price: 145.00, category: 'Pinturas y acabados' }
   ];
 
   for (const prod of defaultProducts) {
     const createdProd = await prisma.producto.upsert({
       where: { code: prod.code },
-      update: {},
+      update: { category: prod.category },
       create: prod,
     });
 

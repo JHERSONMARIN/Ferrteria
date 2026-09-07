@@ -30,13 +30,26 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   const [estadoCaja, setEstadoCaja] = useState(null);
 
   // Categorías
+  const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [showCategoriasModal, setShowCategoriasModal] = useState(false);
   const containerRef = useRef(null);
   const measureRef = useRef(null);
   const [visibleCategories, setVisibleCategories] = useState([]);
   const [showMore, setShowMore] = useState(false);
-  // Datos de prueba para las categorias
-  const categories = [ 'Todas', 'Herramientas', 'Tornillería y fijaciones', 'Electricidad', 'Plomería', 'Pinturas y acabados', 'Adhesivos y selladores', 'Cerrajería', 'Ferretería general', 'Seguridad', 'Jardinería', 'Accesorios y consumibles', ];
+
+  const defaultCategoriesList = [
+    'Herramientas', 'Tornillería y fijaciones', 'Electricidad', 'Plomería',
+    'Pinturas y acabados', 'Adhesivos y selladores', 'Cerrajería',
+    'Ferretería general', 'Seguridad', 'Jardinería', 'Accesorios y consumibles', 'General'
+  ];
+
+  const categories = [
+    'Todas',
+    ...Array.from(new Set([
+      ...defaultCategoriesList,
+      ...products.map(p => p.category).filter(Boolean)
+    ]))
+  ];
 
 
   useEffect(() => {
@@ -138,10 +151,14 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
     }
   };
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.code.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredProducts = products.filter(p => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.code.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory =
+      selectedCategory === 'Todas' || (p.category || 'General') === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
 
   const addToCart = (product) => {
     if (product.stock <= 0) {
@@ -396,9 +413,9 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
                   {visibleCategories.map((cat) => (
                     <button
                       key={cat}
-                      onClick={() => setSearch(cat === 'Todas' ? '' : cat)}
+                      onClick={() => setSelectedCategory(cat)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 whitespace-nowrap ${
-                        (cat === 'Todas' && search === '') || search === cat
+                        selectedCategory === cat
                           ? 'bg-orange-500 text-white'
                           : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                       }`}
@@ -694,11 +711,11 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
                   <button
                     key={cat}
                     onClick={() => {
-                      setSearch(cat === 'Todas' ? '' : cat);
+                      setSelectedCategory(cat);
                       setShowCategoriasModal(false);
                     }}
                     className={`px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap ${
-                      (cat === 'Todas' && search === '') || search === cat
+                      selectedCategory === cat
                         ? 'bg-orange-500 text-white'
                         : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                     }`}
