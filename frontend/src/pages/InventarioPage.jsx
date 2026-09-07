@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import { exportToExcel } from '../utils/excelExport.js';
 
-export default function InventarioPage() {
+export default function InventarioPage({ activeTab = 'inventory' }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [viewMode, setViewMode] = useState(activeTab === 'categories' ? 'categories' : 'products');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('Todas');
 
   // Formulario nuevo producto
   const [code, setCode] = useState('');
@@ -16,6 +19,10 @@ export default function InventarioPage() {
   const [minStock, setMinStock] = useState('10');
   const [price, setPrice] = useState('');
   const [searchingBarcode, setSearchingBarcode] = useState(false);
+
+  useEffect(() => {
+    setViewMode(activeTab === 'categories' ? 'categories' : 'products');
+  }, [activeTab]);
 
   const categoriesOptions = [
     'Ferretería general',
@@ -47,6 +54,26 @@ export default function InventarioPage() {
       setLoading(false);
     }
   };
+
+  const filteredProducts = products.filter(p => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.code.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCat =
+      filterCategory === 'Todas' || (p.category || 'General') === filterCategory;
+    return matchesSearch && matchesCat;
+  });
+
+  // Agrupar métricas por categoría
+  const categoryStats = categoriesOptions.map(cat => {
+    const prods = products.filter(p => (p.category || 'General') === cat);
+    const totalStock = prods.reduce((sum, p) => sum + p.stock, 0);
+    return {
+      name: cat,
+      count: prods.length,
+      totalStock,
+    };
+  });
 
   const handleExportExcel = () => {
     const exportData = products.map(p => ({
@@ -118,74 +145,194 @@ export default function InventarioPage() {
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col min-h-full">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+        {/* Header con Sub-pestañas */}
+        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50">
           <div>
-            <h3 className="font-bold text-slate-800 text-lg">Catálogo de Productos</h3>
-            <p className="text-xs text-slate-500">Gestión de inventario con alertas de stock mínimo y exportación a Excel.</p>
+            <div className="flex items-center gap-2 mb-1">
+              <button
+                onClick={() => setViewMode('products')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${
+                  viewMode === 'products'
+                    ? 'bg-orange-600 text-white shadow-sm'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <i className="fa-solid fa-box"></i> Lista de Productos
+              </button>
+              <button
+                onClick={() => setViewMode('categories')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 ${
+                  viewMode === 'categories'
+                    ? 'bg-orange-600 text-white shadow-sm'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <i className="fa-solid fa-tags"></i> Categorías ({categoriesOptions.length})
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              {viewMode === 'products'
+                ? 'Gestión de inventario con alertas de stock mínimo y exportación a Excel.'
+                : 'Resumen y organización de productos por familias y categorías de ferretería.'}
+            </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full md:w-auto justify-end">
             <button
               onClick={handleExportExcel}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow transition-colors"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-file-excel mr-2"></i>Exportar Excel
+              <i className="fa-solid fa-file-excel"></i> Exportar Excel
             </button>
             <button
               onClick={() => setShowModal(true)}
-              className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors"
+              className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-plus mr-2"></i>Agregar Producto
+              <i className="fa-solid fa-plus"></i> Agregar Producto
             </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-100 text-slate-500 text-xs uppercase shadow-sm">
-              <tr>
-                <th className="px-4 py-3">Código</th>
-                <th className="px-4 py-3">Producto</th>
-                <th className="px-4 py-3">Categoría</th>
-                <th className="px-4 py-3">Unidad</th>
-                <th className="px-4 py-3">Stock Real</th>
-                <th className="px-4 py-3 text-center">Estado Alerta</th>
-                <th className="px-4 py-3">Precio</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm divide-y divide-gray-100">
-              {products.map(p => {
-                const isLowStock = p.stock <= (p.minStock || 10);
-                return (
-                  <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-mono text-xs">{p.code}</td>
-                    <td className="px-4 py-3 font-bold text-slate-800">{p.name}</td>
-                    <td className="px-4 py-3 text-xs text-slate-600 font-medium">
-                      <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
-                        {p.category || 'General'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs">{p.unit}</td>
-                    <td className={`px-4 py-3 font-bold ${isLowStock ? 'text-red-600' : 'text-slate-800'}`}>
-                      {p.stock}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {isLowStock ? (
-                        <span className="bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-xs font-bold flex items-center justify-center gap-1 w-max mx-auto">
-                          <i className="fa-solid fa-triangle-exclamation"></i> Stock Bajo (Mín: {p.minStock || 10})
-                        </span>
-                      ) : (
-                        <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold">
-                          Normal
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-semibold">S/ {p.price.toFixed(2)}</td>
+        {/* Vista 1: Lista de Productos */}
+        {viewMode === 'products' && (
+          <>
+            {/* Filtros de Productos */}
+            <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-3 items-center justify-between">
+              <div className="relative flex-1 w-full">
+                <i className="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por código o nombre de producto..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg outline-none focus:border-orange-500 text-sm"
+                />
+              </div>
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <label className="text-xs font-bold text-slate-500 whitespace-nowrap">Filtrar por Categoría:</label>
+                <select
+                  value={filterCategory}
+                  onChange={e => setFilterCategory(e.target.value)}
+                  className="border border-gray-200 p-2 rounded-lg text-sm outline-none focus:border-orange-500 bg-white text-slate-700 font-medium"
+                >
+                  <option value="Todas">Todas las Categorías</option>
+                  {categoriesOptions.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Tabla de Productos */}
+            <div className="overflow-x-auto flex-1">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-100 text-slate-500 text-xs uppercase shadow-sm">
+                  <tr>
+                    <th className="px-4 py-3">Código</th>
+                    <th className="px-4 py-3">Producto</th>
+                    <th className="px-4 py-3">Categoría</th>
+                    <th className="px-4 py-3">Unidad</th>
+                    <th className="px-4 py-3">Stock Real</th>
+                    <th className="px-4 py-3 text-center">Estado Alerta</th>
+                    <th className="px-4 py-3">Precio</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="text-sm divide-y divide-gray-100">
+                  {filteredProducts.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="text-center py-8 text-slate-400 font-medium">
+                        No se encontraron productos en el inventario.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredProducts.map(p => {
+                      const isLowStock = p.stock <= (p.minStock || 10);
+                      return (
+                        <tr key={p.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 font-mono text-xs text-slate-600">{p.code}</td>
+                          <td className="px-4 py-3 font-bold text-slate-800">{p.name}</td>
+                          <td className="px-4 py-3 text-xs text-slate-600 font-medium">
+                            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                              {p.category || 'General'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-600">{p.unit}</td>
+                          <td className={`px-4 py-3 font-bold ${isLowStock ? 'text-red-600' : 'text-slate-800'}`}>
+                            {p.stock}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {isLowStock ? (
+                              <span className="bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-xs font-bold flex items-center justify-center gap-1 w-max mx-auto">
+                                <i className="fa-solid fa-triangle-exclamation"></i> Stock Bajo (Mín: {p.minStock || 10})
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold">
+                                Normal
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-800">S/ {p.price.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* Vista 2: Matriz / Gestión de Categorías */}
+        {viewMode === 'categories' && (
+          <div className="p-6 flex-1 bg-slate-50/50">
+            <h4 className="font-bold text-slate-700 text-md mb-4 flex items-center gap-2">
+              <i className="fa-solid fa-layer-group text-orange-500"></i> Familias y Categorías de Ferretería
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {categoryStats.map(stat => (
+                <div
+                  key={stat.name}
+                  className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="w-9 h-9 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center font-bold text-sm">
+                        <i className="fa-solid fa-tag"></i>
+                      </span>
+                      <span className="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded-full">
+                        {stat.count} productos
+                      </span>
+                    </div>
+                    <h5 className="font-bold text-slate-800 text-base">{stat.name}</h5>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Stock Total Acumulado: <strong className="text-slate-700">{stat.totalStock} unidades</strong>
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-gray-100 flex gap-2">
+                    <button
+                      onClick={() => {
+                        setFilterCategory(stat.name);
+                        setViewMode('products');
+                      }}
+                      className="flex-1 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 rounded-lg transition-colors flex items-center justify-center gap-1"
+                    >
+                      <i className="fa-solid fa-eye"></i> Ver Productos
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCategory(stat.name);
+                        setShowModal(true);
+                      }}
+                      className="text-xs font-bold bg-orange-50 hover:bg-orange-100 text-orange-600 px-2.5 py-1.5 rounded-lg transition-colors"
+                      title="Agregar producto a esta categoría"
+                    >
+                      <i className="fa-solid fa-plus"></i>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Nuevo Producto */}

@@ -55,7 +55,8 @@ export default function App() {
   // Si el usuario cambia de tab a uno al que no tiene acceso, redirigirlo al primero accesible
   useEffect(() => {
     if (currentUser && currentUser.modules && currentUser.modules.length > 0) {
-      if (!currentUser.modules.includes(activeTab)) {
+      const isAllowed = currentUser.modules.includes(activeTab) || (activeTab === 'categories' && currentUser.modules.includes('inventory'));
+      if (!isAllowed) {
         setActiveTab(currentUser.modules[0]);
       }
     }
@@ -106,7 +107,8 @@ export default function App() {
   const pageTitles = {
     'pos': 'Punto de Venta',
     'caja': 'Arqueo y Control de Caja Chica',
-    'inventory': 'Almacén',
+    'inventory': 'Almacén - Productos',
+    'categories': 'Almacén - Categorías de Productos',
     'kardex': 'Kardex / Movimientos de Almacén',
     'compras': 'Compras a Proveedores',
     'deliveries': 'Entregas',
@@ -189,7 +191,9 @@ export default function App() {
                 />
               )}
               {activeTab === 'caja' && <CajaPage currentUser={currentUser} />}
-              {activeTab === 'inventory' && <InventarioPage />}
+              {(activeTab === 'inventory' || activeTab === 'categories') && (
+                <InventarioPage activeTab={activeTab} />
+              )}
               {activeTab === 'kardex' && <KardexPage />}
               {activeTab === 'compras' && <ComprasPage />}
               {activeTab === 'deliveries' && (
