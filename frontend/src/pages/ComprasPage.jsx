@@ -13,6 +13,13 @@ export default function ComprasPage() {
   // Modales
   const [showCompraModal, setShowCompraModal] = useState(false);
   const [showProveedorModal, setShowProveedorModal] = useState(false);
+  const [selectedCompra, setSelectedCompra] = useState(null); // Detalle de compra del historial
+
+  // Histórico de variación de costos: buscador + producto seleccionado (panel derecho)
+  const [costSearch, setCostSearch] = useState('');
+  const [selectedCostCode, setSelectedCostCode] = useState(null);
+
+  const IGV_RATE = 0.18;
 
   // Form Proveedor
   const [provRuc, setProvRuc] = useState('');
@@ -187,23 +194,58 @@ export default function ComprasPage() {
 
   const compraTotal = compraCart.reduce((acc, i) => acc + (i.qty * i.cost), 0);
 
-  // Aplanar detalles de compra para vista de Variación de Costos
-  const costHistoryItems = [];
-  compras.forEach(c => {
+  // Histórico de Variación de Costos: agrupa las compras por producto en orden
+  // cronológico y calcula la variación del costo unitario frente a la compra anterior.
+  const comprasAsc = [...compras].sort((a, b) => a.id - b.id);
+  const costVariationMap = new Map();
+  comprasAsc.forEach(c => {
     c.detalles.forEach(d => {
-      costHistoryItems.push({
-        compraId: c.id,
-        numDoc: c.numDoc,
+      const key = d.producto.code;
+      if (!costVariationMap.has(key)) {
+        costVariationMap.set(key, { code: key, name: d.producto.name, purchases: [] });
+      }
+      costVariationMap.get(key).purchases.push({
         date: c.date,
+        numDoc: c.numDoc,
         provider: c.provider,
-        productCode: d.producto.code,
-        productName: d.producto.name,
         quantity: d.quantity,
         unitCost: d.unitPrice,
-        subtotal: d.subtotal,
       });
     });
   });
+
+  const costVariation = Array.from(costVariationMap.values()).map(g => {
+    const purchases = g.purchases.map((p, i) => {
+      const prev = i > 0 ? g.purchases[i - 1].unitCost : null;
+      const delta = prev !== null ? p.unitCost - prev : null;
+      const pct = prev ? (delta / prev) * 100 : null;
+      return { ...p, delta, pct };
+    });
+    const costs = purchases.map(p => p.unitCost);
+    const firstCost = costs[0];
+    const lastCost = costs[costs.length - 1];
+    const totalDelta = lastCost - firstCost;
+    const totalPct = firstCost ? (totalDelta / firstCost) * 100 : null;
+    return {
+      ...g,
+      purchases,
+      firstCost,
+      lastCost,
+      minCost: Math.min(...costs),
+      maxCost: Math.max(...costs),
+      totalDelta,
+      totalPct,
+      timesPurchased: purchases.length,
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+
+  const costVariationFiltered = costVariation.filter(p => {
+    const q = costSearch.trim().toLowerCase();
+    if (!q) return true;
+    return p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q);
+  });
+
+  const selectedCostProduct = costVariation.find(p => p.code === selectedCostCode) || null;
 
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
@@ -267,7 +309,11 @@ export default function ComprasPage() {
                   </tr>
                 ) : (
                   compras.map(c => (
-                    <tr key={c.id} className="hover:bg-slate-50 border-b border-gray-100">
+                    <tr
+                      key={c.id}
+                      onClick={() => setSelectedCompra(c)}
+                      className="hover:bg-orange-50 border-b border-gray-100 cursor-pointer transition-colors"
+                    >
                       <td className="px-4 py-3 text-xs text-slate-500">{c.date}</td>
                       <td className="px-4 py-3 font-mono text-xs font-bold">{c.numDoc}</td>
                       <td className="px-4 py-3 font-bold text-slate-700">
@@ -276,7 +322,10 @@ export default function ComprasPage() {
                       <td className="px-4 py-3 text-xs text-slate-600">
                         {c.detalles.map(d => `${d.quantity}x ${d.producto.name}`).join(', ')}
                       </td>
-                      <td className="px-4 py-3 text-right font-black text-slate-800">S/ {c.total.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-black text-slate-800">
+                        S/ {c.total.toFixed(2)}
+                        <i className="fa-solid fa-chevron-right text-slate-300 ml-2"></i>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -284,43 +333,176 @@ export default function ComprasPage() {
             </table>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-100 text-slate-500 text-xs uppercase shadow-sm">
-                <tr>
-                  <th className="px-4 py-3">Fecha</th>
-                  <th className="px-4 py-3">Código</th>
-                  <th className="px-4 py-3">Producto</th>
-                  <th className="px-4 py-3">Proveedor</th>
-                  <th className="px-4 py-3 font-mono">Factura Ref</th>
-                  <th className="px-4 py-3 text-right">Cant.</th>
-                  <th className="px-4 py-3 text-right">Costo Unitario (S/)</th>
-                  <th className="px-4 py-3 text-right">Subtotal (S/)</th>
-                </tr>
-              </thead>
-              <tbody className="text-sm divide-y divide-gray-100">
-                {costHistoryItems.length === 0 ? (
-                  <tr>
-                    <td colSpan="8" className="px-4 py-6 text-center text-slate-400">
-                      No hay historial de costos registrado.
-                    </td>
-                  </tr>
+          <div className="flex flex-col lg:flex-row h-[calc(100dvh-13rem)] lg:h-[calc(100vh-15rem)] min-h-[360px] lg:min-h-[400px] overflow-hidden">
+            {/* Columna izquierda: buscador + lista compacta */}
+            <div className={`flex-col min-h-0 lg:flex-1 lg:border-r border-gray-100 ${selectedCostProduct ? 'hidden lg:flex' : 'flex'}`}>
+              <div className="p-3 border-b border-gray-100 bg-white shrink-0">
+                <div className="relative w-full lg:max-w-sm">
+                  <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                  <input
+                    type="text"
+                    value={costSearch}
+                    onChange={e => setCostSearch(e.target.value)}
+                    placeholder="Buscar producto por nombre o código..."
+                    className="w-full border border-gray-300 bg-white pl-9 pr-3 py-2 rounded-lg outline-none focus:border-orange-500 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto min-h-0">
+                {costVariationFiltered.length === 0 ? (
+                  <div className="px-4 py-10 text-center text-slate-400">
+                    <i className="fa-solid fa-chart-line text-2xl mb-2 block"></i>
+                    {costVariation.length === 0
+                      ? 'Aún no hay compras registradas para analizar la variación de costos.'
+                      : 'Ningún producto coincide con la búsqueda.'}
+                  </div>
                 ) : (
-                  costHistoryItems.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 border-b border-gray-100">
-                      <td className="px-4 py-3 text-xs text-slate-500">{item.date}</td>
-                      <td className="px-4 py-3 font-mono text-xs font-semibold">{item.productCode}</td>
-                      <td className="px-4 py-3 font-bold text-slate-800">{item.productName}</td>
-                      <td className="px-4 py-3 text-xs font-medium text-slate-700">{item.provider}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{item.numDoc}</td>
-                      <td className="px-4 py-3 text-right font-semibold">{item.quantity}</td>
-                      <td className="px-4 py-3 text-right font-black text-orange-600">S/ {item.unitCost.toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right font-bold text-slate-800">S/ {item.subtotal.toFixed(2)}</td>
-                    </tr>
-                  ))
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-100 text-slate-500 text-xs uppercase sticky top-0 z-10 shadow-sm">
+                      <tr>
+                        <th className="px-3 sm:px-4 py-3">Producto</th>
+                        <th className="px-4 py-3 text-center hidden sm:table-cell">Compras</th>
+                        <th className="px-3 sm:px-4 py-3 text-right">Costo Actual</th>
+                        <th className="px-3 sm:px-4 py-3 text-right">Variación Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-sm divide-y divide-gray-100">
+                      {costVariationFiltered.map(prod => {
+                        const up = prod.totalDelta > 0.0001;
+                        const down = prod.totalDelta < -0.0001;
+                        const trendColor = up ? 'text-red-600' : down ? 'text-emerald-600' : 'text-slate-500';
+                        const trendIcon = up ? 'fa-arrow-trend-up' : down ? 'fa-arrow-trend-down' : 'fa-minus';
+                        const isSelected = selectedCostCode === prod.code;
+
+                        return (
+                          <tr
+                            key={prod.code}
+                            onClick={() => setSelectedCostCode(prod.code)}
+                            className={`cursor-pointer transition-colors ${isSelected ? 'bg-orange-50 border-l-4 border-orange-500' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+                          >
+                            <td className="px-3 sm:px-4 py-3">
+                              <div className="font-bold text-slate-800 leading-tight">{prod.name}</div>
+                              <span className="font-mono text-xs text-slate-400">{prod.code}</span>
+                              <span className="sm:hidden text-[11px] text-slate-400"> · {prod.timesPurchased} compras</span>
+                            </td>
+                            <td className="px-4 py-3 text-center text-slate-600 font-semibold hidden sm:table-cell">{prod.timesPurchased}</td>
+                            <td className="px-3 sm:px-4 py-3 text-right font-black text-slate-800 whitespace-nowrap">S/ {prod.lastCost.toFixed(2)}</td>
+                            <td className={`px-3 sm:px-4 py-3 text-right font-bold whitespace-nowrap ${trendColor}`}>
+                              <i className={`fa-solid ${trendIcon} mr-1`}></i>
+                              {prod.totalDelta >= 0 ? '+' : '−'}S/ {Math.abs(prod.totalDelta).toFixed(2)}
+                              {prod.totalPct !== null && (
+                                <span className="text-xs hidden sm:inline"> ({prod.totalPct >= 0 ? '+' : '−'}{Math.abs(prod.totalPct).toFixed(1)}%)</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 )}
-              </tbody>
-            </table>
+              </div>
+            </div>
+
+            {/* Panel derecho: detalle del producto seleccionado */}
+            <div className={`flex-col min-h-0 w-full lg:w-[420px] shrink-0 bg-slate-50 border-t lg:border-t-0 lg:border-l border-gray-200 ${selectedCostProduct ? 'flex' : 'hidden lg:flex'}`}>
+              {!selectedCostProduct ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 text-center">
+                  <i className="fa-solid fa-arrow-pointer text-2xl mb-2"></i>
+                  <p className="text-sm">Selecciona un producto para ver su historial de compras.</p>
+                </div>
+              ) : (() => {
+                const prod = selectedCostProduct;
+                const up = prod.totalDelta > 0.0001;
+                const down = prod.totalDelta < -0.0001;
+                const trendColor = up ? 'text-red-600' : down ? 'text-emerald-600' : 'text-slate-500';
+                const trendBg = up ? 'bg-red-50 border-red-200' : down ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-100 border-slate-200';
+                const trendIcon = up ? 'fa-arrow-trend-up' : down ? 'fa-arrow-trend-down' : 'fa-minus';
+                return (
+                  <>
+                    <div className="p-4 border-b border-gray-200 bg-white shrink-0">
+                      <div className="flex items-start gap-2 rounded-lg">
+                        <span className="w-8 h-8 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 mt-0.5">
+                          <i className="fa-solid fa-tag text-xs"></i>
+                        </span>
+                        <div>
+                          <h4 className="font-bold text-slate-800 leading-tight">{prod.name}</h4>
+                          <span className="font-mono text-xs text-slate-400">{prod.code}</span>
+                        </div>
+
+                        <button
+                          onClick={() => setSelectedCostCode(null)}
+                          className="ml-auto text-slate-400 hover:text-orange-600 shrink-0 mt-0.5 w-8 h-8 flex items-center justify-center"
+                          title="Cerrar detalle"
+                        >
+                          <i className="fa-solid fa-xmark text-lg"></i>
+                        </button>
+                      </div>
+                      <div className="p-1 border-b border-gray-200 bg-white shrink-0"></div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-slate-50 rounded-lg border border-gray-100 p-2">
+                          <p className="text-slate-400 font-bold uppercase text-[10px]">Costo Actual</p>
+                          <p className="font-black text-slate-800 text-sm">S/ {prod.lastCost.toFixed(2)}</p>
+                        </div>
+                        <div className={`rounded-lg border p-2 ${trendBg}`}>
+                          <p className="text-slate-400 font-bold uppercase text-[10px]">Variación Total</p>
+                          <p className={`font-black text-sm ${trendColor}`}>
+                            <i className={`fa-solid ${trendIcon} mr-1`}></i>
+                            {prod.totalDelta >= 0 ? '+' : '−'}S/ {Math.abs(prod.totalDelta).toFixed(2)}
+                            {prod.totalPct !== null && ` (${prod.totalPct >= 0 ? '+' : '−'}${Math.abs(prod.totalPct).toFixed(1)}%)`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                        <span>1ra: <strong className="text-slate-700">S/ {prod.firstCost.toFixed(2)}</strong></span>
+                        <span>Mín: <strong className="text-slate-700">S/ {prod.minCost.toFixed(2)}</strong></span>
+                        <span>Máx: <strong className="text-slate-700">S/ {prod.maxCost.toFixed(2)}</strong></span>
+                        <span>{prod.timesPurchased} compras</span>
+                      </div>
+                    </div>
+
+                    {/* Lista scrolleable de compras */}
+                    <div className="flex-1 overflow-y-auto min-h-0 p-3">
+                      <div className="flex flex-col gap-2">
+                        {[...prod.purchases].reverse().map((p, i) => {
+                          const pu = p.delta !== null && p.delta > 0.0001;
+                          const pd = p.delta !== null && p.delta < -0.0001;
+                          const cellColor = pu ? 'text-red-600' : pd ? 'text-emerald-600' : 'text-slate-400';
+                          const icon = pu ? 'fa-caret-up' : pd ? 'fa-caret-down' : 'fa-minus';
+                          return (
+                            <div key={i} className="bg-white rounded-lg border border-gray-200 p-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-slate-500">{p.date}</span>
+                                <span className="font-black text-slate-800">S/ {p.unitCost.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between items-center mt-1">
+                                <span className="font-mono text-xs text-slate-600">{p.numDoc}</span>
+                                <span className={`text-xs font-bold ${cellColor}`}>
+                                  {p.delta === null ? (
+                                    <span className="text-slate-300">— base</span>
+                                  ) : (
+                                    <>
+                                      <i className={`fa-solid ${icon} mr-1`}></i>
+                                      {p.delta >= 0 ? '+' : '−'}S/ {Math.abs(p.delta).toFixed(2)}
+                                      {p.pct !== null && ` (${p.pct >= 0 ? '+' : '−'}${Math.abs(p.pct).toFixed(1)}%)`}
+                                    </>
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center mt-1 text-xs text-slate-500">
+                                <span>{p.provider}</span>
+                                <span>Cant: <strong className="text-slate-700">{p.quantity}</strong></span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
           </div>
         )}
       </div>
@@ -525,6 +707,77 @@ export default function ComprasPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Detalle de Compra */}
+      {selectedCompra && (() => {
+        const totalConIgv = selectedCompra.total || 0;
+        const baseImponible = totalConIgv / (1 + IGV_RATE);
+        const igv = totalConIgv - baseImponible;
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                <div>
+                  <h3 className="font-bold text-lg"><i className="fa-solid fa-file-invoice-dollar mr-2"></i> Detalle de Compra</h3>
+                  <p className="text-slate-300 text-xs mt-0.5">
+                    {selectedCompra.numDoc} · {selectedCompra.provider}
+                    <span className="text-slate-400"> ({selectedCompra.providerRuc})</span> · {selectedCompra.date}
+                  </p>
+                </div>
+                <button onClick={() => setSelectedCompra(null)} className="text-slate-300 hover:text-white">
+                  <i className="fa-solid fa-xmark text-xl"></i>
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-auto p-4 bg-gray-50">
+                <table className="w-full text-left border-collapse bg-white shadow-sm rounded-lg overflow-hidden">
+                  <thead className="bg-slate-100 text-slate-500 text-xs uppercase">
+                    <tr>
+                      <th className="px-3 py-2">Código</th>
+                      <th className="px-3 py-2">Producto</th>
+                      <th className="px-3 py-2 text-right">Cantidad</th>
+                      <th className="px-3 py-2 text-right">Costo Unit. (S/)</th>
+                      <th className="px-3 py-2 text-right">Subtotal (S/)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm divide-y divide-gray-100">
+                    {selectedCompra.detalles.map((d, idx) => (
+                      <tr key={idx}>
+                        <td className="px-3 py-2 font-mono text-xs">{d.producto.code}</td>
+                        <td className="px-3 py-2 font-semibold text-slate-800">{d.producto.name}</td>
+                        <td className="px-3 py-2 text-right font-bold">{d.quantity}</td>
+                        <td className="px-3 py-2 text-right">S/ {d.unitPrice.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-bold text-slate-800">S/ {d.subtotal.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="p-4 bg-white border-t shrink-0">
+                <div className="ml-auto w-full max-w-xs text-sm">
+                  <div className="flex justify-between py-1 text-slate-600">
+                    <span>Op. Gravada:</span>
+                    <span className="font-semibold">S/ {baseImponible.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 text-slate-600">
+                    <span>IGV (18%):</span>
+                    <span className="font-semibold">S/ {igv.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-t mt-1 text-slate-900 font-black text-lg">
+                    <span>Total:</span>
+                    <span className="text-orange-600">S/ {totalConIgv.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 border-t flex justify-end shrink-0">
+                <button onClick={() => setSelectedCompra(null)} className="px-4 py-2 font-bold text-slate-600 bg-slate-200 rounded-lg text-sm">Cerrar</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -15,6 +15,7 @@ router.get('/', async (req, res) => {
         name: true,
         unit: true,
         stock: true,
+        minStock: true,
         price: true,
         category: true,
       },
@@ -87,6 +88,47 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Ya existe un producto registrado con este código.' });
     }
     res.status(500).json({ error: 'Error al registrar producto.' });
+  }
+});
+
+// PUT /api/productos/:id (Editar datos del producto; el stock se ajusta vía Kardex)
+router.put('/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { code, name, unit, price, category, minStock } = req.body;
+
+    if (!code || !code.trim() || !name || !name.trim()) {
+      return res.status(400).json({ error: 'El código y el nombre son obligatorios.' });
+    }
+    if (price === undefined || isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
+      return res.status(400).json({ error: 'El precio debe ser un número mayor a 0.' });
+    }
+
+    const updated = await prisma.producto.update({
+      where: { id },
+      data: {
+        code: code.trim(),
+        name: name.trim(),
+        unit: unit || 'Unidad',
+        price: parseFloat(price),
+        category: category && category.trim() ? category.trim() : 'General',
+        minStock: minStock !== undefined && !isNaN(parseInt(minStock)) ? parseInt(minStock) : undefined,
+      },
+      select: {
+        id: true, code: true, name: true, unit: true,
+        stock: true, minStock: true, price: true, category: true,
+      },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(400).json({ error: 'Ya existe otro producto con este código.' });
+    }
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Producto no encontrado.' });
+    }
+    res.status(500).json({ error: 'Error al actualizar producto.' });
   }
 });
 

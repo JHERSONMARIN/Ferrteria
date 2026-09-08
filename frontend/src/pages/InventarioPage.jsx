@@ -8,6 +8,7 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null); // null = crear, id = editar
   const [viewMode, setViewMode] = useState(activeTab === 'categories' ? 'categories' : 'products');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('Todas');
@@ -123,6 +124,43 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
     exportToExcel(exportData, 'Inventario_Productos');
   };
 
+  const resetForm = () => {
+    setCode('');
+    setName('');
+    setCategory('Ferretería general');
+    setStock('');
+    setMinStock('10');
+    setPrice('');
+    setUnit('Unidad');
+    setErrors({});
+  };
+
+  const openCreateModal = (presetCategory) => {
+    resetForm();
+    setEditingId(null);
+    if (presetCategory) setCategory(presetCategory);
+    setShowModal(true);
+  };
+
+  const openEditModal = (p) => {
+    setEditingId(p.id);
+    setErrors({});
+    setCode(p.code);
+    setName(p.name);
+    setUnit(p.unit || 'Unidad');
+    setCategory(p.category || 'General');
+    setStock(String(p.stock));
+    setMinStock(String(p.minStock ?? 10));
+    setPrice(String(p.price));
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingId(null);
+    setErrors({});
+  };
+
   const handleSearchBarcode = async () => {
     if (!code.trim()) return;
     try {
@@ -149,25 +187,30 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
 
     try {
       setLoading(true);
-      await api.post('/productos', {
-        code: code.trim(),
-        name: name.trim(),
-        unit,
-        category,
-        stock: parseInt(stock),
-        minStock: parseInt(minStock) || 10,
-        price: parseFloat(price)
-      });
-      setShowModal(false);
-      setErrors({});
-      setCode('');
-      setName('');
-      setCategory('Ferretería general');
-      setStock('');
-      setMinStock('10');
-      setPrice('');
+      if (editingId) {
+        await api.put(`/productos/${editingId}`, {
+          code: code.trim(),
+          name: name.trim(),
+          unit,
+          category,
+          minStock: parseInt(minStock) || 10,
+          price: parseFloat(price),
+        });
+      } else {
+        await api.post('/productos', {
+          code: code.trim(),
+          name: name.trim(),
+          unit,
+          category,
+          stock: parseInt(stock),
+          minStock: parseInt(minStock) || 10,
+          price: parseFloat(price),
+        });
+      }
+      closeModal();
+      resetForm();
       await loadProducts();
-      alert('Producto registrado exitosamente.');
+      alert(editingId ? 'Producto actualizado correctamente.' : 'Producto registrado exitosamente.');
     } catch (err) {
       alert('Error guardando producto: ' + err.message);
     } finally {
@@ -217,7 +260,7 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
               <i className="fa-solid fa-file-excel"></i> Exportar Excel
             </button>
             <button
-              onClick={() => setShowModal(true)}
+              onClick={() => openCreateModal()}
               className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2"
             >
               <i className="fa-solid fa-plus"></i> Agregar Producto
@@ -267,12 +310,13 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
                     <th className="px-4 py-3">Stock Real</th>
                     <th className="px-4 py-3 text-center">Estado Alerta</th>
                     <th className="px-4 py-3">Precio</th>
+                    <th className="px-4 py-3 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="text-sm divide-y divide-gray-100">
                   {filteredProducts.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="text-center py-8 text-slate-400 font-medium">
+                      <td colSpan="8" className="text-center py-8 text-slate-400 font-medium">
                         No se encontraron productos en el inventario.
                       </td>
                     </tr>
@@ -304,6 +348,15 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
                             )}
                           </td>
                           <td className="px-4 py-3 font-semibold text-slate-800">S/ {p.price.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              onClick={() => openEditModal(p)}
+                              className="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-2.5 py-1 rounded shadow-sm"
+                              title="Editar producto"
+                            >
+                              <i className="fa-solid fa-pen-to-square mr-1"></i> Editar
+                            </button>
+                          </td>
                         </tr>
                       );
                     })
@@ -351,10 +404,7 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
                       <i className="fa-solid fa-eye"></i> Ver Productos
                     </button>
                     <button
-                      onClick={() => {
-                        setCategory(stat.name);
-                        setShowModal(true);
-                      }}
+                      onClick={() => openCreateModal(stat.name)}
                       className="text-xs font-bold bg-orange-50 hover:bg-orange-100 text-orange-600 px-2.5 py-1.5 rounded-lg transition-colors"
                       title="Agregar producto a esta categoría"
                     >
@@ -373,8 +423,11 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
-              <h3 className="font-bold text-lg"><i className="fa-solid fa-box-open mr-2"></i> Nuevo Producto</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-300 hover:text-white">
+              <h3 className="font-bold text-lg">
+                <i className={`fa-solid ${editingId ? 'fa-pen-to-square' : 'fa-box-open'} mr-2`}></i>
+                {editingId ? 'Editar Producto' : 'Nuevo Producto'}
+              </h3>
+              <button onClick={closeModal} className="text-slate-300 hover:text-white">
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
@@ -394,8 +447,8 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
                     />
                     <button
                       onClick={handleSearchBarcode}
-                      disabled={searchingBarcode}
-                      className="bg-slate-200 text-slate-600 px-3 rounded hover:bg-slate-300 text-xs"
+                      disabled={searchingBarcode || !!editingId}
+                      className="bg-slate-200 text-slate-600 px-3 rounded hover:bg-slate-300 text-xs disabled:opacity-50"
                     >
                       <i className="fa-solid fa-magnifying-glass"></i>
                     </button>
@@ -444,16 +497,21 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Stock Inicial</label>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">
+                    {editingId ? 'Stock Actual' : 'Stock Inicial'}
+                  </label>
                   <input
                     type="number"
                     min="0"
                     step="1"
                     value={stock}
+                    disabled={!!editingId}
                     onChange={e => { setStock(e.target.value); clearError('stock'); }}
-                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.stock)}`}
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.stock)} ${editingId ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
                   />
-                  <FieldError msg={errors.stock} />
+                  {editingId
+                    ? <p className="text-[11px] text-slate-400 mt-1">Ajusta el stock desde el módulo Kardex.</p>
+                    : <FieldError msg={errors.stock} />}
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Stock Mínimo</label>
@@ -482,8 +540,10 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
               </div>
             </div>
             <div className="p-4 bg-slate-50 border-t flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 font-bold text-slate-600 bg-slate-200 rounded-lg text-sm">Cancelar</button>
-              <button onClick={handleSaveProduct} disabled={loading} className="px-4 py-2 font-bold text-white bg-orange-600 rounded-lg text-sm">Guardar</button>
+              <button onClick={closeModal} className="px-4 py-2 font-bold text-slate-600 bg-slate-200 rounded-lg text-sm">Cancelar</button>
+              <button onClick={handleSaveProduct} disabled={loading} className="px-4 py-2 font-bold text-white bg-orange-600 rounded-lg text-sm">
+                {editingId ? 'Guardar Cambios' : 'Guardar'}
+              </button>
             </div>
           </div>
         </div>
