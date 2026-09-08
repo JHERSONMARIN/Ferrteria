@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
+import FieldError from '../components/FieldError.jsx';
+import { borderClass } from '../utils/validators.js';
 
 export default function EntregasPage({ onTriggerPrint }) {
   const [deliveries, setDeliveries] = useState([]);
@@ -17,6 +19,25 @@ export default function EntregasPage({ onTriggerPrint }) {
   const [productInput, setProductInput] = useState('');
   const [productQty, setProductQty] = useState('1');
   const [deliveryCart, setDeliveryCart] = useState([]);
+  const [errors, setErrors] = useState({});
+  const [itemErrors, setItemErrors] = useState({});
+
+  const clearError = (f) => setErrors(prev => ({ ...prev, [f]: '' }));
+  const clearItemError = (f) => setItemErrors(prev => ({ ...prev, [f]: '' }));
+
+  const validateDelivery = () => {
+    const e = {};
+    if (!selectedClientId) e.client = 'Seleccione un cliente.';
+
+    const clientObj = clients.find(c => c.id.toString() === selectedClientId);
+    if (!deliveryAddress.trim() && !(clientObj && clientObj.address)) {
+      e.address = 'Ingrese una dirección de entrega (el cliente no tiene una registrada).';
+    }
+    if (deliveryCart.length === 0) e.cart = 'La entrega debe tener al menos un producto.';
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   const wakeLockRef = useRef(null);
   const isFetchingRef = useRef(false);
@@ -109,6 +130,8 @@ export default function EntregasPage({ onTriggerPrint }) {
       setProductInput('');
       setProductQty('1');
       setDeliveryCart([]);
+      setErrors({});
+      setItemErrors({});
       setShowModal(true);
     } catch (err) {
       alert('Error cargando catálogo para delivery: ' + err.message);
@@ -116,23 +139,32 @@ export default function EntregasPage({ onTriggerPrint }) {
   };
 
   const handleAddDeliveryItem = () => {
-    if (!productInput.trim()) return alert('Ingrese un producto.');
+    const e = {};
     const qty = parseInt(productQty);
-    if (isNaN(qty) || qty <= 0) return alert('Cantidad inválida.');
 
-    const prod = products.find(p => `${p.code} - ${p.name}` === productInput.trim()) ||
-      products.find(p => p.code === productInput.trim() || p.name.toLowerCase().includes(productInput.trim().toLowerCase()));
+    if (!productInput.trim()) e.product = 'Ingrese un producto.';
+    if (productQty === '' || isNaN(qty)) e.qty = 'Ingrese la cantidad.';
+    else if (!Number.isInteger(Number(productQty)) || qty <= 0) e.qty = 'Cantidad entera mayor a 0.';
 
-    if (!prod) return alert('Producto no encontrado.');
-    if (qty > prod.stock) return alert(`Stock insuficiente. Disponible: ${prod.stock}`);
+    const prod = !e.product && (
+      products.find(p => `${p.code} - ${p.name}` === productInput.trim()) ||
+      products.find(p => p.code === productInput.trim() || p.name.toLowerCase().includes(productInput.trim().toLowerCase()))
+    );
+    if (!e.product && !prod) e.product = 'Producto no encontrado.';
 
+    if (prod && !e.qty) {
+      const exist = deliveryCart.find(item => item.id === prod.id);
+      const totalQty = (exist ? exist.qty : 0) + qty;
+      if (totalQty > prod.stock) e.qty = `Stock insuficiente. Disponible: ${prod.stock}.`;
+    }
+
+    setItemErrors(e);
+    if (Object.keys(e).length > 0) return;
+
+    setErrors(prev => ({ ...prev, cart: '' }));
     setDeliveryCart(prev => {
       const exist = prev.find(item => item.id === prod.id);
       if (exist) {
-        if (exist.qty + qty > prod.stock) {
-          alert('Supera el stock disponible.');
-          return prev;
-        }
         return prev.map(item => item.id === prod.id ? { ...item, qty: item.qty + qty } : item);
       }
       return [...prev, { id: prod.id, name: prod.name, qty: qty, price: prod.price }];
@@ -147,8 +179,7 @@ export default function EntregasPage({ onTriggerPrint }) {
   };
 
   const handleProcessDelivery = async () => {
-    if (!selectedClientId) return alert('Seleccione un cliente.');
-    if (deliveryCart.length === 0) return alert('La entrega debe tener al menos un producto.');
+    if (!validateDelivery()) return;
 
     const clientObj = clients.find(c => c.id.toString() === selectedClientId);
 
@@ -263,7 +294,7 @@ export default function EntregasPage({ onTriggerPrint }) {
         })}
       </div>
 
-      {/* Modal Programar Entrega */}
+      {/* Modal Programar Entrega */} 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -303,43 +334,54 @@ export default function EntregasPage({ onTriggerPrint }) {
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Dirección de Entrega</label>
                 <input
                   type="text"
+                  maxLength={200}
                   value={deliveryAddress}
-                  onChange={e => setDeliveryAddress(e.target.value)}
+                  onChange={e => { setDeliveryAddress(e.target.value); clearError('address'); }}
                   placeholder="Ej: Av. Los Rosales 123..."
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.address)}`}
                 />
+                <FieldError msg={errors.address} />
               </div>
             </div>
 
-            <div className="p-4 border-b border-gray-100 flex gap-2 shrink-0 bg-white items-center">
-              <div className="flex-1 relative">
-                <i className="fa-solid fa-barcode absolute left-3 top-3 text-orange-500"></i>
-                <input
-                  list="deliv-prod-list"
-                  value={productInput}
-                  onChange={e => setProductInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddDeliveryItem()}
-                  placeholder="Escanear código o buscar nombre..."
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded outline-none focus:border-orange-500 bg-white text-sm"
-                />
-                <datalist id="deliv-prod-list">
-                  {products.map(p => (
-                    <option key={p.id} value={`${p.code} - ${p.name}`}>Disp: {p.stock}</option>
-                  ))}
-                </datalist>
+            <div className="p-4 border-b border-gray-100 shrink-0 bg-white">
+              <div className="flex gap-2 items-start">
+                <div className="flex-1 relative">
+                  <i className="fa-solid fa-barcode absolute left-3 top-3 text-orange-500"></i>
+                  <input
+                    list="deliv-prod-list"
+                    value={productInput}
+                    onChange={e => { setProductInput(e.target.value); clearItemError('product'); }}
+                    onKeyDown={e => e.key === 'Enter' && handleAddDeliveryItem()}
+                    placeholder="Escanear código o buscar nombre..."
+                    className={`w-full pl-9 pr-3 py-2 border rounded outline-none bg-white text-sm ${borderClass(itemErrors.product)}`}
+                  />
+                  <datalist id="deliv-prod-list">
+                    {products.map(p => (
+                      <option key={p.id} value={`${p.code} - ${p.name}`}>{p.name} - Disp: {p.stock}</option>
+                    ))}
+                  </datalist>
+                  <FieldError msg={itemErrors.product} />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={productQty}
+                    onChange={e => { setProductQty(e.target.value); clearItemError('qty'); }}
+                    className={`w-20 border p-2 rounded outline-none text-sm ${borderClass(itemErrors.qty)}`}
+                  />
+                  <FieldError msg={itemErrors.qty} />
+                </div>
+                <button
+                  onClick={handleAddDeliveryItem}
+                  className="bg-slate-800 text-white font-bold px-4 py-2 rounded shadow hover:bg-slate-700 text-sm h-[38px]"
+                >
+                  Agregar
+                </button>
               </div>
-              <input
-                type="number"
-                value={productQty}
-                onChange={e => setProductQty(e.target.value)}
-                className="w-20 border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
-              />
-              <button
-                onClick={handleAddDeliveryItem}
-                className="bg-slate-800 text-white font-bold px-4 py-2 rounded shadow hover:bg-slate-700 text-sm"
-              >
-                Agregar
-              </button>
+              <FieldError msg={errors.cart} />
             </div>
 
             <div className="flex-1 overflow-auto p-4 bg-gray-50">

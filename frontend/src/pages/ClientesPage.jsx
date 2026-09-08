@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
+import FieldError from '../components/FieldError.jsx';
+import { borderClass } from '../utils/validators.js';
 
 export default function ClientesPage() {
   const [clients, setClients] = useState([]);
@@ -14,6 +16,38 @@ export default function ClientesPage() {
   const [cliEmail, setCliEmail] = useState('');
   const [cliAddress, setCliAddress] = useState('');
   const [maxCredit, setMaxCredit] = useState('1000');
+  const [errors, setErrors] = useState({});
+
+  const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
+
+  const validateClient = () => {
+    const e = {};
+    const doc = cliDoc.trim();
+    if (!doc) {
+      e.doc = 'El documento es obligatorio.';
+    } else if (cliType === 'Empresa' && !/^\d{11}$/.test(doc)) {
+      e.doc = 'El RUC debe tener exactamente 11 dígitos.';
+    } else if (cliType === 'Natural' && !/^\d{8}$/.test(doc)) {
+      e.doc = 'El DNI debe tener exactamente 8 dígitos.';
+    }
+
+    if (!cliName.trim()) e.name = 'El nombre / razón social es obligatorio.';
+    else if (cliName.trim().length < 3) e.name = 'Debe tener al menos 3 caracteres.';
+
+    if (cliPhone.trim() && !/^\+?\d[\d\s-]{5,14}$/.test(cliPhone.trim()))
+      e.phone = 'Teléfono inválido (6 a 15 dígitos).';
+
+    if (cliEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cliEmail.trim()))
+      e.email = 'Correo electrónico inválido.';
+
+    const mc = parseFloat(maxCredit);
+    if (maxCredit === '' || isNaN(mc)) e.maxCredit = 'Ingrese un monto válido.';
+    else if (mc < 0) e.maxCredit = 'El límite no puede ser negativo.';
+    else if (mc > 1000000) e.maxCredit = 'El límite es demasiado alto.';
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   useEffect(() => {
     loadClients();
@@ -32,9 +66,7 @@ export default function ClientesPage() {
   };
 
   const handleSaveClient = async () => {
-    if (!cliDoc.trim() || !cliName.trim()) {
-      return alert('El Documento y Nombre/Razón Social son obligatorios.');
-    }
+    if (!validateClient()) return;
 
     try {
       setLoading(true);
@@ -49,6 +81,7 @@ export default function ClientesPage() {
       });
 
       setShowModal(false);
+      setErrors({});
       setCliDoc('');
       setCliName('');
       setCliPhone('');
@@ -159,7 +192,7 @@ export default function ClientesPage() {
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Tipo Cliente</label>
                   <select
                     value={cliType}
-                    onChange={e => setCliType(e.target.value)}
+                    onChange={e => { setCliType(e.target.value); clearError('doc'); }}
                     className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 bg-white text-sm"
                   >
                     <option value="Natural">Persona Natural</option>
@@ -170,45 +203,57 @@ export default function ClientesPage() {
                   <label className="text-xs font-bold text-slate-500 mb-1 block">DNI / RUC</label>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    maxLength={11}
                     value={cliDoc}
-                    onChange={e => setCliDoc(e.target.value)}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm font-medium"
+                    onChange={e => { setCliDoc(e.target.value.replace(/\D/g, '')); clearError('doc'); }}
+                    className={`w-full border p-2 rounded outline-none text-sm font-medium ${borderClass(errors.doc)}`}
                   />
+                  <FieldError msg={errors.doc} />
                 </div>
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Nombre / Razón Social</label>
                 <input
                   type="text"
+                  maxLength={120}
                   value={cliName}
-                  onChange={e => setCliName(e.target.value)}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                  onChange={e => { setCliName(e.target.value); clearError('name'); }}
+                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.name)}`}
                 />
+                <FieldError msg={errors.name} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Teléfono</label>
                   <input
                     type="text"
+                    inputMode="tel"
+                    maxLength={15}
                     value={cliPhone}
-                    onChange={e => setCliPhone(e.target.value)}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                    onChange={e => { setCliPhone(e.target.value); clearError('phone'); }}
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.phone)}`}
                   />
+                  <FieldError msg={errors.phone} />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Límite de Crédito (S/)</label>
                   <input
                     type="number"
+                    min="0"
+                    step="10"
                     value={maxCredit}
-                    onChange={e => setMaxCredit(e.target.value)}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm font-bold"
+                    onChange={e => { setMaxCredit(e.target.value); clearError('maxCredit'); }}
+                    className={`w-full border p-2 rounded outline-none text-sm font-bold ${borderClass(errors.maxCredit)}`}
                   />
+                  <FieldError msg={errors.maxCredit} />
                 </div>
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Dirección</label>
                 <input
                   type="text"
+                  maxLength={200}
                   value={cliAddress}
                   onChange={e => setCliAddress(e.target.value)}
                   className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"

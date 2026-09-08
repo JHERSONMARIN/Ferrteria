@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import { exportToExcel } from '../utils/excelExport.js';
+import FieldError from '../components/FieldError.jsx';
+import { borderClass } from '../utils/validators.js';
 
 export default function InventarioPage({ activeTab = 'inventory' }) {
   const [products, setProducts] = useState([]);
@@ -19,6 +21,38 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
   const [minStock, setMinStock] = useState('10');
   const [price, setPrice] = useState('');
   const [searchingBarcode, setSearchingBarcode] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
+
+  const validateProduct = () => {
+    const e = {};
+    if (!code.trim()) e.code = 'El código es obligatorio.';
+    else if (code.trim().length < 2) e.code = 'El código debe tener al menos 2 caracteres.';
+
+    if (!name.trim()) e.name = 'El nombre del producto es obligatorio.';
+    else if (name.trim().length < 2) e.name = 'El nombre debe tener al menos 2 caracteres.';
+
+    if (!category) e.category = 'Seleccione una categoría.';
+
+    const stockNum = Number(stock);
+    if (stock === '' || isNaN(stockNum)) e.stock = 'Ingrese el stock inicial.';
+    else if (!Number.isInteger(stockNum)) e.stock = 'El stock debe ser un número entero.';
+    else if (stockNum < 0) e.stock = 'El stock no puede ser negativo.';
+
+    const minNum = Number(minStock);
+    if (minStock === '' || isNaN(minNum)) e.minStock = 'Ingrese el stock mínimo.';
+    else if (!Number.isInteger(minNum)) e.minStock = 'Debe ser un número entero.';
+    else if (minNum < 0) e.minStock = 'No puede ser negativo.';
+
+    const priceNum = parseFloat(price);
+    if (price === '' || isNaN(priceNum)) e.price = 'Ingrese el precio.';
+    else if (priceNum <= 0) e.price = 'El precio debe ser mayor a 0.';
+    else if (priceNum > 1000000) e.price = 'El precio es demasiado alto.';
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   useEffect(() => {
     setViewMode(activeTab === 'categories' ? 'categories' : 'products');
@@ -111,9 +145,7 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
   };
 
   const handleSaveProduct = async () => {
-    if (!code.trim() || !name.trim() || stock === '' || price === '') {
-      return alert('Complete todos los campos obligatorios.');
-    }
+    if (!validateProduct()) return;
 
     try {
       setLoading(true);
@@ -127,6 +159,7 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
         price: parseFloat(price)
       });
       setShowModal(false);
+      setErrors({});
       setCode('');
       setName('');
       setCategory('Ferretería general');
@@ -352,11 +385,12 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
                   <div className="flex gap-2">
                     <input
                       type="text"
+                      maxLength={40}
                       value={code}
-                      onChange={e => setCode(e.target.value)}
+                      onChange={e => { setCode(e.target.value); clearError('code'); }}
                       onKeyDown={e => e.key === 'Enter' && handleSearchBarcode()}
                       placeholder="Escanea aquí..."
-                      className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                      className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.code)}`}
                     />
                     <button
                       onClick={handleSearchBarcode}
@@ -366,6 +400,7 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
                       <i className="fa-solid fa-magnifying-glass"></i>
                     </button>
                   </div>
+                  <FieldError msg={errors.code} />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Unidad</label>
@@ -386,52 +421,63 @@ export default function InventarioPage({ activeTab = 'inventory' }) {
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Nombre del Producto</label>
                 <input
                   type="text"
+                  maxLength={120}
                   value={name}
-                  onChange={e => setName(e.target.value)}
+                  onChange={e => { setName(e.target.value); clearError('name'); }}
                   placeholder={searchingBarcode ? "Buscando en internet..." : ""}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.name)}`}
                 />
+                <FieldError msg={errors.name} />
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Categoría</label>
                 <select
                   value={category}
-                  onChange={e => setCategory(e.target.value)}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 bg-white text-sm"
+                  onChange={e => { setCategory(e.target.value); clearError('category'); }}
+                  className={`w-full border p-2 rounded outline-none bg-white text-sm ${borderClass(errors.category)}`}
                 >
                   {categoriesOptions.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
+                <FieldError msg={errors.category} />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Stock Inicial</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={stock}
-                    onChange={e => setStock(e.target.value)}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                    onChange={e => { setStock(e.target.value); clearError('stock'); }}
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.stock)}`}
                   />
+                  <FieldError msg={errors.stock} />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Stock Mínimo</label>
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={minStock}
-                    onChange={e => setMinStock(e.target.value)}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                    onChange={e => { setMinStock(e.target.value); clearError('minStock'); }}
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.minStock)}`}
                   />
+                  <FieldError msg={errors.minStock} />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Precio (S/)</label>
                   <input
                     type="number"
                     step="0.10"
+                    min="0"
                     value={price}
-                    onChange={e => setPrice(e.target.value)}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                    onChange={e => { setPrice(e.target.value); clearError('price'); }}
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.price)}`}
                   />
+                  <FieldError msg={errors.price} />
                 </div>
               </div>
             </div>

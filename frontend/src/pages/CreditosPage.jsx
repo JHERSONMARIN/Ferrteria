@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
+import FieldError from '../components/FieldError.jsx';
+import { borderClass } from '../utils/validators.js';
 
 export default function CreditosPage() {
   const [creditos, setCreditos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCredito, setSelectedCredito] = useState(null);
   const [abonoAmount, setAbonoAmount] = useState('');
+  const [abonoError, setAbonoError] = useState('');
 
   useEffect(() => {
     loadCreditos();
@@ -26,16 +29,20 @@ export default function CreditosPage() {
   const handleOpenModal = (cred) => {
     setSelectedCredito(cred);
     setAbonoAmount('');
+    setAbonoError('');
   };
 
   const handleRegisterAbono = async (amountToPay) => {
     const val = amountToPay || parseFloat(abonoAmount);
     if (isNaN(val) || val <= 0) {
-      return alert('Ingresa un monto válido.');
+      setAbonoError('Ingrese un monto de abono mayor a 0.');
+      return;
     }
-    if (selectedCredito && val > selectedCredito.debt) {
-      return alert('El abono no puede ser mayor a la deuda actual.');
+    if (selectedCredito && val > selectedCredito.debt + 0.001) {
+      setAbonoError(`El abono no puede superar la deuda actual (S/ ${selectedCredito.debt.toFixed(2)}).`);
+      return;
     }
+    setAbonoError('');
 
     try {
       setLoading(true);
@@ -142,29 +149,34 @@ export default function CreditosPage() {
               </div>
             </div>
 
-            <div className="p-4 border-b border-gray-100 flex gap-2 shrink-0 bg-white items-center">
-              <input
-                type="number"
-                step="0.50"
-                value={abonoAmount}
-                onChange={e => setAbonoAmount(e.target.value)}
-                placeholder="Monto de abono en S/..."
-                className="flex-1 px-3 py-2 border border-gray-300 rounded outline-none focus:border-orange-500 text-sm font-bold"
-              />
-              <button
-                onClick={() => handleRegisterAbono()}
-                disabled={loading}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded shadow text-sm"
-              >
-                Registrar Abono
-              </button>
-              <button
-                onClick={handleSaldarTodo}
-                disabled={loading}
-                className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded shadow text-sm"
-              >
-                Saldar Deuda Total
-              </button>
+            <div className="p-4 border-b border-gray-100 shrink-0 bg-white">
+              <div className="flex gap-2 items-center">
+                <input
+                  type="number"
+                  step="0.50"
+                  min="0"
+                  max={selectedCredito.debt}
+                  value={abonoAmount}
+                  onChange={e => { setAbonoAmount(e.target.value); setAbonoError(''); }}
+                  placeholder="Monto de abono en S/..."
+                  className={`flex-1 px-3 py-2 border rounded outline-none text-sm font-bold ${borderClass(abonoError)}`}
+                />
+                <button
+                  onClick={() => handleRegisterAbono()}
+                  disabled={loading}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded shadow text-sm"
+                >
+                  Registrar Abono
+                </button>
+                <button
+                  onClick={handleSaldarTodo}
+                  disabled={loading}
+                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded shadow text-sm"
+                >
+                  Saldar Deuda Total
+                </button>
+              </div>
+              <FieldError msg={abonoError} />
             </div>
 
             <div className="flex-1 overflow-auto p-4 bg-gray-50">

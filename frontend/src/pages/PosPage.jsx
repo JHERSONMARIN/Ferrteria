@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
+import FieldError from '../components/FieldError.jsx';
+import { borderClass } from '../utils/validators.js';
 
 export default function PosPage({ currentUser, onTriggerPrint }) {
   const [products, setProducts] = useState([]);
@@ -22,6 +24,10 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   const [customerName, setCustomerName] = useState('');
   const [customerDni, setCustomerDni] = useState('');
   const [customerRuc, setCustomerRuc] = useState('');
+
+  // Errores de validación del cobro
+  const [checkoutErrors, setCheckoutErrors] = useState({});
+  const clearCheckoutError = (f) => setCheckoutErrors(prev => ({ ...prev, [f]: '' }));
 
   // Modales
   const [showCotizacionesModal, setShowCotizacionesModal] = useState(false);
@@ -221,9 +227,36 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
       );
     }
 
+    // Validación de datos de cobro
+    const ce = {};
     if (payMethod === 'Fiado' && !matchedClient) {
-      return alert('Para ventas al FIADO debe seleccionar un cliente registrado.');
+      ce.customer = 'Para ventas al FIADO debe seleccionar un cliente registrado.';
     }
+
+    if (!matchedClient && docType !== 'Nota de Venta') {
+      if (!customerName.trim()) ce.customerName = 'Ingrese los datos del cliente.';
+      if (docType === 'Boleta' && !/^\d{8}$/.test(customerDni.trim()))
+        ce.customerDoc = 'El DNI debe tener 8 dígitos.';
+      if (docType === 'Factura' && !/^\d{11}$/.test(customerRuc.trim()))
+        ce.customerDoc = 'El RUC debe tener 11 dígitos.';
+    }
+
+    if (payMethod === 'Yape/Plin' && !payCode.trim()) {
+      ce.payCode = 'Ingrese el N° de operación de Yape/Plin.';
+    }
+
+    if (payMethod === 'Pago Mixto') {
+      const cashNum = parseFloat(mixCash);
+      const digNum = parseFloat(mixDigital);
+      if (mixCash === '' || isNaN(cashNum) || cashNum < 0) ce.mixCash = 'Monto en efectivo inválido.';
+      if (mixDigital === '' || isNaN(digNum) || digNum < 0) ce.mixDigital = 'Monto digital inválido.';
+      if (!ce.mixCash && !ce.mixDigital && Math.abs((cashNum + digNum) - cartTotal) > 0.01) {
+        ce.mixDigital = `La suma de ambos montos debe ser S/ ${cartTotal.toFixed(2)}.`;
+      }
+    }
+
+    setCheckoutErrors(ce);
+    if (Object.keys(ce).length > 0) return;
 
     let matchedSeller = null;
     if (sellerName.trim()) {
@@ -279,6 +312,7 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
         setPayCode('');
         setMixCash('');
         setMixDigital('');
+        setCheckoutErrors({});
         // Reset customer details
         setCustomerName('');
         setCustomerDni('');
@@ -538,55 +572,78 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
 
             {/* Datos del cliente */}
             { customerInput === '' && docType !== 'Nota de Venta' && (
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-2">
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={e => setCustomerName(e.target.value)}
-                    placeholder="Apellidos y nombres del cliente..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded outline-none text-xs"
-                  />
-                </div>
+              <div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <input
+                      type="text"
+                      maxLength={120}
+                      value={customerName}
+                      onChange={e => { setCustomerName(e.target.value); clearCheckoutError('customerName'); }}
+                      placeholder="Apellidos y nombres del cliente..."
+                      className={`w-full px-3 py-2 border rounded outline-none text-xs ${borderClass(checkoutErrors.customerName)}`}
+                    />
+                  </div>
 
-                <div className="col-span-1">
-                  <input
-                    type="text"
-                    value={docType === 'Boleta' ? customerDni : customerRuc}
-                    onChange={e => docType === 'Boleta' ? setCustomerDni(e.target.value) : setCustomerRuc(e.target.value)}
-                    placeholder={docType === 'Boleta' ? "DNI del cliente..." : "RUC del cliente..."}
-                    className="w-full px-3 py-2 border border-gray-300 rounded outline-none text-xs"
-                  />
+                  <div className="col-span-1">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={docType === 'Boleta' ? 8 : 11}
+                      value={docType === 'Boleta' ? customerDni : customerRuc}
+                      onChange={e => {
+                        const v = e.target.value.replace(/\D/g, '');
+                        docType === 'Boleta' ? setCustomerDni(v) : setCustomerRuc(v);
+                        clearCheckoutError('customerDoc');
+                      }}
+                      placeholder={docType === 'Boleta' ? "DNI del cliente..." : "RUC del cliente..."}
+                      className={`w-full px-3 py-2 border rounded outline-none text-xs ${borderClass(checkoutErrors.customerDoc)}`}
+                    />
+                  </div>
                 </div>
+                <FieldError msg={checkoutErrors.customerName || checkoutErrors.customerDoc} />
               </div>
             )}
 
+            <FieldError msg={checkoutErrors.customer} />
+
             {payMethod === 'Yape/Plin' && (
-              <input
-                type="text"
-                value={payCode}
-                onChange={e => setPayCode(e.target.value)}
-                placeholder="N° de Operación Yape/Plin..."
-                className="w-full px-3 py-2 border border-gray-300 rounded outline-none text-xs font-mono"
-              />
+              <div>
+                <input
+                  type="text"
+                  maxLength={40}
+                  value={payCode}
+                  onChange={e => { setPayCode(e.target.value); clearCheckoutError('payCode'); }}
+                  placeholder="N° de Operación Yape/Plin..."
+                  className={`w-full px-3 py-2 border rounded outline-none text-xs font-mono ${borderClass(checkoutErrors.payCode)}`}
+                />
+                <FieldError msg={checkoutErrors.payCode} />
+              </div>
             )}
 
             {payMethod === 'Pago Mixto' && (
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="number"
-                  value={mixCash}
-                  onChange={e => setMixCash(e.target.value)}
-                  placeholder="S/ Efectivo"
-                  className="px-3 py-2 border border-gray-300 rounded outline-none text-xs"
-                />
-                <input
-                  type="number"
-                  value={mixDigital}
-                  onChange={e => setMixDigital(e.target.value)}
-                  placeholder="S/ Digital"
-                  className="px-3 py-2 border border-gray-300 rounded outline-none text-xs"
-                />
+              <div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.10"
+                    value={mixCash}
+                    onChange={e => { setMixCash(e.target.value); clearCheckoutError('mixCash'); clearCheckoutError('mixDigital'); }}
+                    placeholder="S/ Efectivo"
+                    className={`px-3 py-2 border rounded outline-none text-xs ${borderClass(checkoutErrors.mixCash)}`}
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.10"
+                    value={mixDigital}
+                    onChange={e => { setMixDigital(e.target.value); clearCheckoutError('mixDigital'); clearCheckoutError('mixCash'); }}
+                    placeholder="S/ Digital"
+                    className={`px-3 py-2 border rounded outline-none text-xs ${borderClass(checkoutErrors.mixDigital)}`}
+                  />
+                </div>
+                <FieldError msg={checkoutErrors.mixCash || checkoutErrors.mixDigital} />
               </div>
             )}
           </div>

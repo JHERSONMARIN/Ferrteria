@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
+import FieldError from '../components/FieldError.jsx';
+import { borderClass } from '../utils/validators.js';
 
 export default function ComprasPage() {
   const [compras, setCompras] = useState([]);
@@ -26,6 +28,40 @@ export default function ComprasPage() {
   const [productCost, setProductCost] = useState('');
   const [compraCart, setCompraCart] = useState([]);
 
+  // Errores de validación
+  const [provErrors, setProvErrors] = useState({});
+  const [compraErrors, setCompraErrors] = useState({});
+  const [itemErrors, setItemErrors] = useState({});
+
+  const clearProvError = (f) => setProvErrors(p => ({ ...p, [f]: '' }));
+  const clearCompraError = (f) => setCompraErrors(p => ({ ...p, [f]: '' }));
+  const clearItemError = (f) => setItemErrors(p => ({ ...p, [f]: '' }));
+
+  const validateProveedor = () => {
+    const e = {};
+    if (!provRuc.trim()) e.ruc = 'El RUC es obligatorio.';
+    else if (!/^\d{11}$/.test(provRuc.trim())) e.ruc = 'El RUC debe tener exactamente 11 dígitos.';
+
+    if (!provName.trim()) e.name = 'La razón social / nombre es obligatoria.';
+    else if (provName.trim().length < 3) e.name = 'Debe tener al menos 3 caracteres.';
+
+    if (provPhone.trim() && !/^\+?\d[\d\s-]{5,14}$/.test(provPhone.trim()))
+      e.phone = 'Teléfono inválido (6 a 15 dígitos).';
+
+    setProvErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const validateCompra = () => {
+    const e = {};
+    if (!selectedProveedorId) e.proveedor = 'Seleccione un proveedor.';
+    if (!numDoc.trim()) e.numDoc = 'Ingrese el N° de factura / guía.';
+    else if (numDoc.trim().length < 3) e.numDoc = 'El número de documento es demasiado corto.';
+    if (compraCart.length === 0) e.cart = 'Agregue al menos un producto a la compra.';
+    setCompraErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   useEffect(() => {
     loadInitialData();
   }, []);
@@ -49,9 +85,7 @@ export default function ComprasPage() {
   };
 
   const handleSaveProveedor = async () => {
-    if (!provRuc.trim() || !provName.trim()) {
-      return alert('RUC y Nombre de proveedor son obligatorios.');
-    }
+    if (!validateProveedor()) return;
 
     try {
       setLoading(true);
@@ -63,6 +97,7 @@ export default function ComprasPage() {
       });
 
       setShowProveedorModal(false);
+      setProvErrors({});
       setProvRuc('');
       setProvName('');
       setProvPhone('');
@@ -85,23 +120,33 @@ export default function ComprasPage() {
     setProductQty('1');
     setProductCost('');
     setCompraCart([]);
+    setProvErrors({});
+    setCompraErrors({});
+    setItemErrors({});
     setShowCompraModal(true);
   };
 
   const handleAddCompraItem = () => {
-    if (!productInput.trim()) return alert('Seleccione un producto.');
+    const e = {};
     const qty = parseInt(productQty);
     const cost = parseFloat(productCost);
 
-    if (isNaN(qty) || qty <= 0 || isNaN(cost) || cost < 0) {
-      return alert('Cantidad y costo unitario de compra válidos requeridos.');
-    }
+    if (!productInput.trim()) e.product = 'Seleccione un producto.';
+    if (productQty === '' || isNaN(qty)) e.qty = 'Ingrese la cantidad.';
+    else if (!Number.isInteger(Number(productQty)) || qty <= 0) e.qty = 'Cantidad entera mayor a 0.';
+    if (productCost === '' || isNaN(cost)) e.cost = 'Ingrese el costo unitario.';
+    else if (cost < 0) e.cost = 'El costo no puede ser negativo.';
 
-    const prod = productos.find(p => `${p.code} - ${p.name}` === productInput.trim()) ||
-      productos.find(p => p.code === productInput.trim() || p.name.toLowerCase().includes(productInput.trim().toLowerCase()));
+    const prod = !e.product && (
+      productos.find(p => `${p.code} - ${p.name}` === productInput.trim()) ||
+      productos.find(p => p.code === productInput.trim() || p.name.toLowerCase().includes(productInput.trim().toLowerCase()))
+    );
+    if (!e.product && !prod) e.product = 'Producto no encontrado en el catálogo.';
 
-    if (!prod) return alert('Producto no encontrado.');
+    setItemErrors(e);
+    if (Object.keys(e).length > 0) return;
 
+    setCompraErrors(p => ({ ...p, cart: '' }));
     setCompraCart(prev => {
       const exist = prev.find(item => item.id === prod.id);
       if (exist) {
@@ -120,9 +165,7 @@ export default function ComprasPage() {
   };
 
   const handleSaveCompra = async () => {
-    if (!selectedProveedorId || !numDoc.trim() || compraCart.length === 0) {
-      return alert('Seleccione un proveedor, ingrese el número de factura/guía y agregue al menos un producto.');
-    }
+    if (!validateCompra()) return;
 
     try {
       setLoading(true);
@@ -297,33 +340,42 @@ export default function ComprasPage() {
                 <label className="text-xs font-bold text-slate-500 mb-1 block">RUC del Proveedor</label>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  maxLength={11}
                   value={provRuc}
-                  onChange={e => setProvRuc(e.target.value)}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                  onChange={e => { setProvRuc(e.target.value.replace(/\D/g, '')); clearProvError('ruc'); }}
+                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(provErrors.ruc)}`}
                 />
+                <FieldError msg={provErrors.ruc} />
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Razón Social / Nombre</label>
                 <input
                   type="text"
+                  maxLength={120}
                   value={provName}
-                  onChange={e => setProvName(e.target.value)}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                  onChange={e => { setProvName(e.target.value); clearProvError('name'); }}
+                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(provErrors.name)}`}
                 />
+                <FieldError msg={provErrors.name} />
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Teléfono</label>
                 <input
                   type="text"
+                  inputMode="tel"
+                  maxLength={15}
                   value={provPhone}
-                  onChange={e => setProvPhone(e.target.value)}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                  onChange={e => { setProvPhone(e.target.value); clearProvError('phone'); }}
+                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(provErrors.phone)}`}
                 />
+                <FieldError msg={provErrors.phone} />
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Dirección</label>
                 <input
                   type="text"
+                  maxLength={200}
                   value={provAddress}
                   onChange={e => setProvAddress(e.target.value)}
                   className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
@@ -353,62 +405,79 @@ export default function ComprasPage() {
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Proveedor</label>
                 <select
                   value={selectedProveedorId}
-                  onChange={e => setSelectedProveedorId(e.target.value)}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 bg-white text-sm"
+                  onChange={e => { setSelectedProveedorId(e.target.value); clearCompraError('proveedor'); }}
+                  className={`w-full border p-2 rounded outline-none bg-white text-sm ${borderClass(compraErrors.proveedor)}`}
                 >
+                  <option value="">-- Seleccionar proveedor --</option>
                   {proveedores.map(p => (
                     <option key={p.id} value={p.id}>{p.name} (RUC: {p.ruc})</option>
                   ))}
                 </select>
+                <FieldError msg={compraErrors.proveedor} />
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">N° Factura / Guía de Remisión</label>
                 <input
                   type="text"
+                  maxLength={30}
                   value={numDoc}
-                  onChange={e => setNumDoc(e.target.value)}
+                  onChange={e => { setNumDoc(e.target.value); clearCompraError('numDoc'); }}
                   placeholder="Ej: F001-000458"
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm font-medium"
+                  className={`w-full border p-2 rounded outline-none text-sm font-medium ${borderClass(compraErrors.numDoc)}`}
                 />
+                <FieldError msg={compraErrors.numDoc} />
               </div>
             </div>
 
-            <div className="p-4 border-b border-gray-100 flex gap-2 shrink-0 bg-white items-center">
-              <div className="flex-1 relative">
-                <input
-                  list="compra-prod-list"
-                  value={productInput}
-                  onChange={e => setProductInput(e.target.value)}
-                  placeholder="Buscar producto..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded outline-none focus:border-orange-500 bg-white text-sm"
-                />
-                <datalist id="compra-prod-list">
-                  {productos.map(p => (
-                    <option key={p.id} value={`${p.code} - ${p.name}`} />
-                  ))}
-                </datalist>
+            <div className="p-4 border-b border-gray-100 shrink-0 bg-white">
+              <div className="flex gap-2 items-start">
+                <div className="flex-1 relative">
+                  <input
+                    list="compra-prod-list"
+                    value={productInput}
+                    onChange={e => { setProductInput(e.target.value); clearItemError('product'); }}
+                    placeholder="Buscar producto..."
+                    className={`w-full px-3 py-2 border rounded outline-none bg-white text-sm ${borderClass(itemErrors.product)}`}
+                  />
+                  <datalist id="compra-prod-list">
+                    {productos.map(p => (
+                      <option key={p.id} value={`${p.code} - ${p.name}`} />
+                    ))}
+                  </datalist>
+                  <FieldError msg={itemErrors.product} />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={productQty}
+                    onChange={e => { setProductQty(e.target.value); clearItemError('qty'); }}
+                    placeholder="Cant."
+                    className={`w-20 border p-2 rounded outline-none text-sm ${borderClass(itemErrors.qty)}`}
+                  />
+                  <FieldError msg={itemErrors.qty} />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    step="0.10"
+                    min="0"
+                    value={productCost}
+                    onChange={e => { setProductCost(e.target.value); clearItemError('cost'); }}
+                    placeholder="Costo S/"
+                    className={`w-24 border p-2 rounded outline-none text-sm ${borderClass(itemErrors.cost)}`}
+                  />
+                  <FieldError msg={itemErrors.cost} />
+                </div>
+                <button
+                  onClick={handleAddCompraItem}
+                  className="bg-slate-800 text-white font-bold px-4 py-2 rounded shadow hover:bg-slate-700 text-sm h-[38px]"
+                >
+                  Agregar
+                </button>
               </div>
-              <input
-                type="number"
-                value={productQty}
-                onChange={e => setProductQty(e.target.value)}
-                placeholder="Cant."
-                className="w-20 border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
-              />
-              <input
-                type="number"
-                step="0.10"
-                value={productCost}
-                onChange={e => setProductCost(e.target.value)}
-                placeholder="Costo S/"
-                className="w-24 border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
-              />
-              <button
-                onClick={handleAddCompraItem}
-                className="bg-slate-800 text-white font-bold px-4 py-2 rounded shadow hover:bg-slate-700 text-sm"
-              >
-                Agregar
-              </button>
+              <FieldError msg={compraErrors.cart} />
             </div>
 
             <div className="flex-1 overflow-auto p-4 bg-gray-50">

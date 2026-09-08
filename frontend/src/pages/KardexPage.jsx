@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import { exportToExcel } from '../utils/excelExport.js';
+import FieldError from '../components/FieldError.jsx';
+import { borderClass } from '../utils/validators.js';
 
 export default function KardexPage() {
   const [kardexRecords, setKardexRecords] = useState([]);
@@ -14,6 +16,30 @@ export default function KardexPage() {
   const [qty, setQty] = useState('1');
   const [ref, setRef] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
+
+  const validateMovement = () => {
+    const e = {};
+    if (!selectedProdId) e.producto = 'Seleccione un producto.';
+
+    const qtyNum = Number(qty);
+    if (qty === '' || isNaN(qtyNum)) e.qty = 'Ingrese la cantidad.';
+    else if (!Number.isInteger(qtyNum)) e.qty = 'La cantidad debe ser un número entero.';
+    else if (qtyNum <= 0) e.qty = 'La cantidad debe ser mayor a 0.';
+    else if (type === 'SALIDA') {
+      const prod = products.find(p => p.id.toString() === selectedProdId.toString());
+      if (prod && qtyNum > prod.stock) {
+        e.qty = `Stock insuficiente para la salida. Disponible: ${prod.stock}.`;
+      }
+    }
+
+    if (ref.trim() && ref.trim().length < 3) e.ref = 'El motivo debe tener al menos 3 caracteres.';
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   useEffect(() => {
     loadProducts();
@@ -61,13 +87,12 @@ export default function KardexPage() {
     }
     setQty('1');
     setRef('');
+    setErrors({});
     setShowModal(true);
   };
 
   const handleSaveMovement = async () => {
-    if (!selectedProdId || !qty || parseInt(qty) <= 0) {
-      return alert('Ingrese un producto y cantidad válida.');
-    }
+    if (!validateMovement()) return;
 
     try {
       setLoading(true);
@@ -186,20 +211,22 @@ export default function KardexPage() {
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Producto</label>
                 <select
                   value={selectedProdId}
-                  onChange={e => setSelectedProdId(e.target.value)}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 bg-white text-sm"
+                  onChange={e => { setSelectedProdId(e.target.value); clearError('producto'); clearError('qty'); }}
+                  className={`w-full border p-2 rounded outline-none bg-white text-sm ${borderClass(errors.producto)}`}
                 >
+                  <option value="">-- Seleccionar producto --</option>
                   {products.map(p => (
                     <option key={p.id} value={p.id}>{p.name} (Stock: {p.stock})</option>
                   ))}
                 </select>
+                <FieldError msg={errors.producto} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Tipo de Movimiento</label>
                   <select
                     value={type}
-                    onChange={e => setType(e.target.value)}
+                    onChange={e => { setType(e.target.value); clearError('qty'); }}
                     className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 bg-white text-sm"
                   >
                     <option value="ENTRADA">Entrada (Ingreso)</option>
@@ -211,21 +238,25 @@ export default function KardexPage() {
                   <input
                     type="number"
                     min="1"
+                    step="1"
                     value={qty}
-                    onChange={e => setQty(e.target.value)}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                    onChange={e => { setQty(e.target.value); clearError('qty'); }}
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.qty)}`}
                   />
+                  <FieldError msg={errors.qty} />
                 </div>
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Motivo / Documento Ref.</label>
                 <input
                   type="text"
+                  maxLength={120}
                   value={ref}
-                  onChange={e => setRef(e.target.value)}
+                  onChange={e => { setRef(e.target.value); clearError('ref'); }}
                   placeholder="Ej: Compra a Proveedor / Merma por rotura"
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.ref)}`}
                 />
+                <FieldError msg={errors.ref} />
               </div>
             </div>
             <div className="p-4 bg-slate-50 border-t flex justify-end gap-3">

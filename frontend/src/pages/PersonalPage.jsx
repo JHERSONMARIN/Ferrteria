@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
+import FieldError from '../components/FieldError.jsx';
+import { borderClass } from '../utils/validators.js';
 
 export default function PersonalPage() {
   const [staff, setStaff] = useState([]);
@@ -12,6 +14,27 @@ export default function PersonalPage() {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [modules, setModules] = useState(['pos']);
+  const [errors, setErrors] = useState({});
+
+  const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
+
+  const validateStaff = () => {
+    const e = {};
+    if (!name.trim()) e.name = 'El nombre es obligatorio.';
+    else if (name.trim().length < 3) e.name = 'Debe tener al menos 3 caracteres.';
+
+    if (!user.trim()) e.user = 'El usuario es obligatorio.';
+    else if (!/^[a-zA-Z0-9._-]{3,20}$/.test(user.trim()))
+      e.user = 'Entre 3 y 20 caracteres: letras, números, punto, guion o guion bajo.';
+
+    if (!pass.trim()) e.pass = 'La contraseña es obligatoria.';
+    else if (pass.length < 4) e.pass = 'La contraseña debe tener al menos 4 caracteres.';
+
+    if (modules.length === 0) e.modules = 'Seleccione al menos un módulo de acceso.';
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   const moduleOptions = [
     { value: 'pos', label: 'Punto de Venta' },
@@ -44,15 +67,11 @@ export default function PersonalPage() {
     setModules(prev =>
       prev.includes(val) ? prev.filter(m => m !== val) : [...prev, val]
     );
+    clearError('modules');
   };
 
   const handleSaveStaff = async () => {
-    if (!name.trim() || !user.trim() || !pass.trim()) {
-      return alert('Ingrese el nombre, usuario y contraseña del personal.');
-    }
-    if (modules.length === 0) {
-      return alert('Debe seleccionar al menos un módulo para que el usuario pueda ingresar.');
-    }
+    if (!validateStaff()) return;
 
     try {
       setLoading(true);
@@ -65,6 +84,7 @@ export default function PersonalPage() {
       });
 
       setShowModal(false);
+      setErrors({});
       setName('');
       setUser('');
       setPass('');
@@ -165,31 +185,36 @@ export default function PersonalPage() {
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Nombres y Apellidos</label>
                 <input
                   type="text"
+                  maxLength={80}
                   value={name}
-                  onChange={e => setName(e.target.value)}
+                  onChange={e => { setName(e.target.value); clearError('name'); }}
                   placeholder="Ej: Juan Pérez"
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.name)}`}
                 />
+                <FieldError msg={errors.name} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Usuario (Login)</label>
                   <input
                     type="text"
+                    maxLength={20}
                     value={user}
-                    onChange={e => setUser(e.target.value)}
+                    onChange={e => { setUser(e.target.value); clearError('user'); }}
                     placeholder="Ej: jperez"
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.user)}`}
                   />
+                  <FieldError msg={errors.user} />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Contraseña</label>
                   <input
                     type="password"
                     value={pass}
-                    onChange={e => setPass(e.target.value)}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                    onChange={e => { setPass(e.target.value); clearError('pass'); }}
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.pass)}`}
                   />
+                  <FieldError msg={errors.pass} />
                 </div>
               </div>
               <div>
@@ -206,7 +231,7 @@ export default function PersonalPage() {
                 </select>
               </div>
 
-              <div className="bg-slate-50 p-3 rounded border border-gray-200">
+              <div className={`bg-slate-50 p-3 rounded border ${errors.modules ? 'border-red-400' : 'border-gray-200'}`}>
                 <label className="text-xs font-bold text-slate-700 mb-2 block">Módulos Permitidos (Accesos)</label>
                 <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
                   {moduleOptions.map(opt => (
@@ -220,6 +245,7 @@ export default function PersonalPage() {
                     </label>
                   ))}
                 </div>
+                <FieldError msg={errors.modules} />
               </div>
             </div>
 

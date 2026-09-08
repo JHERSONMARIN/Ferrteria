@@ -1,11 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
+import FieldError from '../components/FieldError.jsx';
+import { borderClass } from '../utils/validators.js';
 
 export default function CajaPage({ currentUser }) {
   const [estadoCaja, setEstadoCaja] = useState({ abierta: false, caja: null });
   const [montoInicial, setMontoInicial] = useState('');
   const [montoConteo, setMontoConteo] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
+
+  const validateMonto = (value, field) => {
+    const n = parseFloat(value);
+    let msg = '';
+    if (value === '' || isNaN(n)) msg = 'Ingrese un monto válido.';
+    else if (n < 0) msg = 'El monto no puede ser negativo.';
+    else if (n > 1000000) msg = 'El monto es demasiado alto.';
+    setErrors(prev => ({ ...prev, [field]: msg }));
+    return msg === '';
+  };
 
   useEffect(() => {
     if (!currentUser) return;
@@ -36,10 +49,8 @@ export default function CajaPage({ currentUser }) {
   };
 
   const handleAbrirCaja = async () => {
+    if (!validateMonto(montoInicial, 'montoInicial')) return;
     const m = parseFloat(montoInicial);
-    if (isNaN(m) || m < 0) {
-      return alert('Ingrese un monto inicial válido.');
-    }
 
     try {
       setLoading(true);
@@ -59,10 +70,8 @@ export default function CajaPage({ currentUser }) {
   };
 
   const handleCerrarCaja = async () => {
+    if (!validateMonto(montoConteo, 'montoConteo')) return;
     const conteo = parseFloat(montoConteo);
-    if (isNaN(conteo) || conteo < 0) {
-      return alert('Ingrese el monto en efectivo contado.');
-    }
 
     if (!window.confirm('¿Confirmar el cierre de caja y arqueo final?')) return;
 
@@ -118,11 +127,13 @@ export default function CajaPage({ currentUser }) {
               <input
                 type="number"
                 step="0.50"
+                min="0"
                 value={montoInicial}
-                onChange={e => setMontoInicial(e.target.value)}
+                onChange={e => { setMontoInicial(e.target.value); setErrors(p => ({ ...p, montoInicial: '' })); }}
                 placeholder="Ej: 100.00"
-                className="w-full border border-gray-300 p-3 rounded-lg outline-none focus:border-orange-500 font-bold text-lg text-slate-800"
+                className={`w-full border p-3 rounded-lg outline-none font-bold text-lg text-slate-800 ${borderClass(errors.montoInicial)}`}
               />
+              <FieldError msg={errors.montoInicial} />
             </div>
             <button
               onClick={handleAbrirCaja}
@@ -187,11 +198,13 @@ export default function CajaPage({ currentUser }) {
                 <input
                   type="number"
                   step="0.10"
+                  min="0"
                   value={montoConteo}
-                  onChange={e => setMontoConteo(e.target.value)}
+                  onChange={e => { setMontoConteo(e.target.value); setErrors(p => ({ ...p, montoConteo: '' })); }}
                   placeholder="Ej: 250.00"
-                  className="w-full border border-gray-300 p-3 rounded-lg outline-none focus:border-orange-500 font-bold text-xl text-slate-800"
+                  className={`w-full border p-3 rounded-lg outline-none font-bold text-xl text-slate-800 ${borderClass(errors.montoConteo)}`}
                 />
+                <FieldError msg={errors.montoConteo} />
               </div>
 
               {montoConteo !== '' && !isNaN(parseFloat(montoConteo)) && (

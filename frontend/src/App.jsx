@@ -12,6 +12,7 @@ import PersonalPage from './pages/PersonalPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import CajaPage from './pages/CajaPage.jsx';
 import ComprasPage from './pages/ComprasPage.jsx';
+import FieldError from './components/FieldError.jsx';
 import { api } from './api.js';
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
   const [loginUser, setLoginUser] = useState('admin');
   const [loginPass, setLoginPass] = useState('1234');
   const [loginError, setLoginError] = useState('');
+  const [loginFieldErrors, setLoginFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState('pos');
@@ -66,9 +68,19 @@ export default function App() {
     if (e) e.preventDefault();
     setLoginError('');
 
-    if (!loginUser.trim() || !loginPass.trim()) {
-      return setLoginError('Ingrese usuario y contraseña.');
+    const fieldErrors = {};
+    if (!loginUser.trim()) {
+      fieldErrors.user = 'Ingrese su usuario.';
+    } else if (loginUser.trim().length < 3) {
+      fieldErrors.user = 'El usuario debe tener al menos 3 caracteres.';
     }
+    if (!loginPass.trim()) {
+      fieldErrors.pass = 'Ingrese su contraseña.';
+    } else if (loginPass.length < 4) {
+      fieldErrors.pass = 'La contraseña debe tener al menos 4 caracteres.';
+    }
+    setLoginFieldErrors(fieldErrors);
+    if (Object.keys(fieldErrors).length > 0) return;
 
     try {
       setLoading(true);
@@ -140,18 +152,20 @@ export default function App() {
                 <input
                   type="text"
                   value={loginUser}
-                  onChange={e => setLoginUser(e.target.value)}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm font-medium"
+                  onChange={e => { setLoginUser(e.target.value); setLoginFieldErrors(p => ({ ...p, user: '' })); }}
+                  className={`w-full border p-2 rounded outline-none text-sm font-medium ${loginFieldErrors.user ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-orange-500'}`}
                 />
+                <FieldError msg={loginFieldErrors.user} />
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Contraseña</label>
                 <input
                   type="password"
                   value={loginPass}
-                  onChange={e => setLoginPass(e.target.value)}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm font-medium"
+                  onChange={e => { setLoginPass(e.target.value); setLoginFieldErrors(p => ({ ...p, pass: '' })); }}
+                  className={`w-full border p-2 rounded outline-none text-sm font-medium ${loginFieldErrors.pass ? 'border-red-400 focus:border-red-500' : 'border-gray-300 focus:border-orange-500'}`}
                 />
+                <FieldError msg={loginFieldErrors.pass} />
               </div>
               <button
                 type="submit"
