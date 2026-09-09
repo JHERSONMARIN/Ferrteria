@@ -4,6 +4,7 @@ import Header from './components/Header.jsx';
 import TicketPrint from './components/TicketPrint.jsx';
 import PosPage from './pages/PosPage.jsx';
 import InventarioPage from './pages/InventarioPage.jsx';
+import CategoriasPage from './pages/CategoriasPage.jsx';
 import KardexPage from './pages/KardexPage.jsx';
 import EntregasPage from './pages/EntregasPage.jsx';
 import ClientesPage from './pages/ClientesPage.jsx';
@@ -29,6 +30,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('pos');
   const [ticketData, setTicketData] = useState(null);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Todas');
 
   // Heartbeat cada 8s para sincronizar roles y estado activo del usuario
   useEffect(() => {
@@ -116,6 +118,13 @@ export default function App() {
     }
   };
 
+  const handleSwitchTab = (tabId) => {
+    if (tabId === 'inventory') {
+      setSelectedCategoryFilter('Todas');
+    }
+    setActiveTab(tabId);
+  };
+
   const pageTitles = {
     'pos': 'Punto de Venta',
     'caja': 'Arqueo y Control de Caja Chica',
@@ -185,7 +194,7 @@ export default function App() {
         <div className="print:hidden h-screen flex overflow-hidden">
           <Sidebar
             activeTab={activeTab}
-            onSwitchTab={setActiveTab}
+            onSwitchTab={handleSwitchTab}
             user={currentUser}
           />
 
@@ -205,8 +214,23 @@ export default function App() {
                 />
               )}
               {activeTab === 'caja' && <CajaPage currentUser={currentUser} />}
-              {(activeTab === 'inventory' || activeTab === 'categories') && (
-                <InventarioPage activeTab={activeTab} />
+              {activeTab === 'inventory' && (
+                <InventarioPage
+                  initialCategory={selectedCategoryFilter}
+                  onNavigateToCategories={() => setActiveTab('categories')}
+                />
+              )}
+              {activeTab === 'categories' && (
+                <CategoriasPage
+                  onSelectCategory={(catName) => {
+                    setSelectedCategoryFilter(catName);
+                    setActiveTab('inventory');
+                  }}
+                  onNavigateToProducts={() => {
+                    setSelectedCategoryFilter('Todas');
+                    setActiveTab('inventory');
+                  }}
+                />
               )}
               {activeTab === 'kardex' && <KardexPage />}
               {activeTab === 'compras' && <ComprasPage />}

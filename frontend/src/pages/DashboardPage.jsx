@@ -88,12 +88,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Últimas Transacciones */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-slate-50">
-          <h3 className="font-bold text-slate-800">Últimas Transacciones</h3>
-        </div>
+      <div className="overflow-y-auto max-h-[22vh]">
         <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-100 text-slate-500 text-xs uppercase shadow-sm">
+          <thead className="bg-slate-100 text-slate-500 text-xs uppercase sticky top-0 z-10 shadow-sm">
             <tr>
               <th className="px-4 py-3">Documento</th>
               <th className="px-4 py-3">Cliente</th>
@@ -104,7 +101,7 @@ export default function DashboardPage() {
           </thead>
           <tbody className="text-sm divide-y divide-gray-100">
             {stats.recentSales.map((s, idx) => (
-              <tr key={idx}>
+              <tr key={idx} className="hover:bg-slate-50 transition-colors">
                 <td className="px-4 py-3">
                   <span className="text-xs font-bold bg-gray-200 px-2 py-1 rounded">{s.doc}</span>
                 </td>

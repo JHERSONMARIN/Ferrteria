@@ -379,9 +379,9 @@ export default function ComprasPage() {
                           <tr
                             key={prod.code}
                             onClick={() => setSelectedCostCode(prod.code)}
-                            className={`cursor-pointer transition-colors ${isSelected ? 'bg-orange-50 border-l-4 border-orange-500' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
+                            className={`cursor-pointer transition-colors ${isSelected ? 'bg-orange-50' : 'hover:bg-slate-50'}`}
                           >
-                            <td className="px-3 sm:px-4 py-3">
+                            <td className={`px-3 sm:px-4 py-3 border-l-4 border-b-4 ${isSelected ? 'border-orange-500' : 'border-transparent'}`}>
                               <div className="font-bold text-slate-800 leading-tight">{prod.name}</div>
                               <span className="font-mono text-xs text-slate-400">{prod.code}</span>
                               <span className="sm:hidden text-[11px] text-slate-400"> · {prod.timesPurchased} compras</span>
@@ -462,7 +462,7 @@ export default function ComprasPage() {
                       </div>
                     </div>
 
-                    {/* Lista scrolleable de compras */}
+                    {/* Lista de compras */}
                     <div className="flex-1 overflow-y-auto min-h-0 p-3">
                       <div className="flex flex-col gap-2">
                         {[...prod.purchases].reverse().map((p, i) => {
@@ -769,10 +769,6 @@ export default function ComprasPage() {
                     <span className="text-orange-600">S/ {totalConIgv.toFixed(2)}</span>
                   </div>
                 </div>
-              </div>
-
-              <div className="p-4 bg-slate-50 border-t flex justify-end shrink-0">
-                <button onClick={() => setSelectedCompra(null)} className="px-4 py-2 font-bold text-slate-600 bg-slate-200 rounded-lg text-sm">Cerrar</button>
               </div>
             </div>
           </div>

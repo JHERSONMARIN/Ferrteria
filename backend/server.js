@@ -15,6 +15,7 @@ import cajaRoutes from './src/routes/caja.js';
 import proveedoresRoutes from './src/routes/proveedores.js';
 import comprasRoutes from './src/routes/compras.js';
 import cotizacionesRoutes from './src/routes/cotizaciones.js';
+import categoriesRoutes from './src/routes/categories.js';
 
 dotenv.config();
 
@@ -38,6 +39,7 @@ app.use('/api/personal', personalRoutes);
 app.use('/api/clientes', consultaDocRoutes);
 app.use('/api/clientes', clientesRoutes);
 app.use('/api/productos', productosRoutes);
+app.use('/api/categorias', categoriesRoutes);
 app.use('/api/kardex', kardexRoutes);
 app.use('/api/ventas', ventasRoutes);
 app.use('/api/entregas', entregasRoutes);

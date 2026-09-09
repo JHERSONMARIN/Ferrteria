@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
@@ -7,6 +7,7 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   const [products, setProducts] = useState([]);
   const [clients, setClients] = useState([]);
   const [sellers, setSellers] = useState([]);
+  const [dbCategories, setDbCategories] = useState([]);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -24,6 +25,16 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   const [customerName, setCustomerName] = useState('');
   const [customerDni, setCustomerDni] = useState('');
   const [customerRuc, setCustomerRuc] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerType, setCustomerType] = useState('NATURAL');
+  const [searchingDoc, setSearchingDoc] = useState(false);
+
+  // Control de vuelto/cambio
+  const [receivedCash, setReceivedCash] = useState('');
+
+  // Validaciones
+  const [formErrors, setFormErrors] = useState({});
 
   // Errores de validación del cobro
   const [checkoutErrors, setCheckoutErrors] = useState({});
@@ -43,19 +54,12 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   const [visibleCategories, setVisibleCategories] = useState([]);
   const [showMore, setShowMore] = useState(false);
 
-  const defaultCategoriesList = [
-    'Herramientas', 'Tornillería y fijaciones', 'Electricidad', 'Plomería',
-    'Pinturas y acabados', 'Adhesivos y selladores', 'Cerrajería',
-    'Ferretería general', 'Seguridad', 'Jardinería', 'Accesorios y consumibles', 'General'
-  ];
-
-  const categories = [
-    'Todas',
-    ...Array.from(new Set([
-      ...defaultCategoriesList,
-      ...products.map(p => p.category).filter(Boolean)
-    ]))
-  ];
+  const categories = useMemo(() => {
+    const fromDb = dbCategories.map(c => c.name);
+    const fromProds = products.map(p => p.category).filter(Boolean);
+    const unique = Array.from(new Set([...fromDb, ...fromProds]));
+    return ['Todas', ...(unique.length > 0 ? unique : ['General'])];
+  }, [dbCategories, products]);
 
 
   useEffect(() => {
@@ -139,14 +143,16 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [prodsData, clientsData, staffData] = await Promise.all([
+      const [prodsData, clientsData, staffData, catsData] = await Promise.all([
         api.get('/productos'),
         api.get('/clientes'),
-        api.get('/personal')
+        api.get('/personal'),
+        api.get('/categorias').catch(() => [])
       ]);
-      setProducts(prodsData);
-      setClients(clientsData);
-      setSellers(staffData.filter(s => s.role === 'VENDEDOR' || s.role === 'ADMINISTRADOR'));
+      setProducts(prodsData || []);
+      setClients(clientsData || []);
+      setSellers((staffData || []).filter(s => s.role === 'VENDEDOR' || s.role === 'ADMINISTRADOR'));
+      setDbCategories(catsData || []);
       if (currentUser) {
         setSellerName(currentUser.name);
       }

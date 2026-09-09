@@ -61,7 +61,7 @@ router.get('/stats', async (req, res) => {
 
     // Últimas ventas
     const recentSales = await prisma.venta.findMany({
-      take: 7,
+      take: 10,
       orderBy: { id: 'desc' },
       select: {
         id: true,

@@ -90,10 +90,12 @@ model Producto {
   stock     Int      @default(0)
   minStock  Int      @default(10)
   price     Float    @default(0.0)
-  category  String   @default("General")
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  category    String   @default("General")
+  categoriaId Int?
+  categoria   Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   detallesVenta      DetalleVenta[]
   kardexRecords      MovimientoKardex[]
@@ -102,6 +104,21 @@ model Producto {
   detallesCotizacion DetalleCotizacion[]
 
   @@map("productos")
+}
+
+model Categoria {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  description String?
+  icon        String?    @default("fa-tag")
+  color       String?    @default("orange")
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  productos   Producto[]
+
+  @@map("categorias")
 }
 
 model Cliente {

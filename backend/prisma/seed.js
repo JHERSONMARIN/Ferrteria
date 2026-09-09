@@ -49,7 +49,34 @@ async function main() {
 
   console.log('✅ Usuarios creados');
 
-  // 2. Productos iniciales
+  // 2. Categorías iniciales de ferretería
+  const defaultCategories = [
+    { name: 'Ferretería general', icon: 'fa-hammer', color: 'orange', description: 'Materiales básicos de construcción y ferretería' },
+    { name: 'Herramientas', icon: 'fa-wrench', color: 'blue', description: 'Herramientas manuales y eléctricas para trabajo pesado' },
+    { name: 'Tornillería y fijaciones', icon: 'fa-screwdriver', color: 'slate', description: 'Tornillos, clavos, pernos, tarugos y anclajes' },
+    { name: 'Electricidad', icon: 'fa-bolt', color: 'yellow', description: 'Cables, tomacorrientes, interruptores e iluminación' },
+    { name: 'Plomería', icon: 'fa-faucet-drip', color: 'cyan', description: 'Tuberías, conexiones PVC, griferías y válvulas' },
+    { name: 'Pinturas y acabados', icon: 'fa-paint-roller', color: 'purple', description: 'Esmaltes, látex, brochas, rodillos y solventes' },
+    { name: 'Adhesivos y selladores', icon: 'fa-bottle-droplet', color: 'emerald', description: 'Siliconas, pegamentos de contacto y masillas' },
+    { name: 'Cerrajería', icon: 'fa-key', color: 'amber', description: 'Cerraduras, candados, bisagras y pasadores' },
+    { name: 'Seguridad', icon: 'fa-shield-halved', color: 'red', description: 'EPP, cascos, guantes, lentes y arneses' },
+    { name: 'Jardinería', icon: 'fa-seedling', color: 'green', description: 'Mangueras, aspersores, palas y accesorios de jardín' },
+    { name: 'Accesorios y consumibles', icon: 'fa-boxes-packing', color: 'indigo', description: 'Cintas, lijas, discos de corte y consumibles' },
+    { name: 'General', icon: 'fa-layer-group', color: 'gray', description: 'Productos generales y diversos' },
+  ];
+
+  const categoryMap = {};
+  for (const cat of defaultCategories) {
+    const createdCat = await prisma.categoria.upsert({
+      where: { name: cat.name },
+      update: { icon: cat.icon, color: cat.color, description: cat.description },
+      create: cat,
+    });
+    categoryMap[cat.name] = createdCat.id;
+  }
+  console.log('✅ Categorías de ferretería sembradas');
+
+  // 3. Productos iniciales
   const defaultProducts = [
     { code: '77501', name: 'Cemento Sol', unit: 'Bolsa', stock: 120, price: 28.50, category: 'Ferretería general' },
     { code: '77502', name: 'Fierro Corrugado 1/2"', unit: 'Unidad', stock: 45, price: 35.00, category: 'Ferretería general' },
@@ -58,10 +85,11 @@ async function main() {
   ];
 
   for (const prod of defaultProducts) {
+    const catId = categoryMap[prod.category] || null;
     const createdProd = await prisma.producto.upsert({
       where: { code: prod.code },
-      update: { category: prod.category },
-      create: prod,
+      update: { category: prod.category, categoriaId: catId },
+      create: { ...prod, categoriaId: catId },
     });
 
     // Registrar kardex inicial si tiene stock

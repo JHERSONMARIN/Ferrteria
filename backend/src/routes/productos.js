@@ -30,15 +30,27 @@ router.get('/', async (req, res) => {
 // GET /api/productos/categorias
 router.get('/categorias', async (req, res) => {
   try {
-    const categories = await prisma.producto.findMany({
+    const dbCategories = await prisma.categoria.findMany({
+      where: { active: true },
+      select: { name: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const distinctProductCategories = await prisma.producto.findMany({
       where: { active: true },
       select: { category: true },
       distinct: ['category'],
-      orderBy: { category: 'asc' }
+      orderBy: { category: 'asc' },
     });
-    const categoryList = categories.map(c => c.category).filter(Boolean);
-    res.json(categoryList);
+
+    const set = new Set([
+      ...dbCategories.map(c => c.name),
+      ...distinctProductCategories.map(p => p.category).filter(Boolean),
+    ]);
+
+    res.json(Array.from(set));
   } catch (error) {
+    console.error('[productos.js] Error al listar categorías:', error);
     res.status(500).json({ error: 'Error al listar categorías.' });
   }
 });
@@ -46,15 +58,30 @@ router.get('/categorias', async (req, res) => {
 // POST /api/productos
 router.post('/', async (req, res) => {
   try {
-    const { code, name, unit, stock, price, category } = req.body;
+    const { code, name, unit, stock, price, category, categoriaId } = req.body;
     if (!code || !name || isNaN(stock) || isNaN(price)) {
       return res.status(400).json({ error: 'Completa todos los campos obligatorios.' });
     }
 
-    const stockNum = parseInt(stock);
+    const stockNum = parseInt(stock, 10);
     const priceNum = parseFloat(price);
+    const categoryName = category && category.trim() ? category.trim() : 'General';
 
-    // Operación atómica en caso de registrar stock inicial en Kardex
+    // Resolver Categoria relacional
+    let resolvedCatId = categoriaId ? parseInt(categoriaId, 10) : null;
+    if (!resolvedCatId && categoryName) {
+      let catRecord = await prisma.categoria.findUnique({
+        where: { name: categoryName },
+      });
+      if (!catRecord) {
+        catRecord = await prisma.categoria.create({
+          data: { name: categoryName },
+        });
+      }
+      resolvedCatId = catRecord.id;
+    }
+
+    // Operación atómica para registrar producto y stock inicial en Kardex
     const product = await prisma.$transaction(async (tx) => {
       const p = await tx.producto.create({
         data: {
@@ -63,8 +90,9 @@ router.post('/', async (req, res) => {
           unit: unit || 'Unidad',
           stock: stockNum,
           price: priceNum,
-          category: category && category.trim() ? category.trim() : 'General',
-        }
+          category: categoryName,
+          categoriaId: resolvedCatId,
+        },
       });
 
       if (stockNum > 0) {
@@ -75,7 +103,7 @@ router.post('/', async (req, res) => {
             qty: stockNum,
             stockAfter: stockNum,
             ref: 'Stock Inicial al Registrar',
-          }
+          },
         });
       }
 
@@ -87,6 +115,7 @@ router.post('/', async (req, res) => {
     if (error.code === 'P2002') {
       return res.status(400).json({ error: 'Ya existe un producto registrado con este código.' });
     }
+    console.error('[productos.js] Error al registrar producto:', error);
     res.status(500).json({ error: 'Error al registrar producto.' });
   }
 });
@@ -94,14 +123,29 @@ router.post('/', async (req, res) => {
 // PUT /api/productos/:id (Editar datos del producto; el stock se ajusta vía Kardex)
 router.put('/:id', async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    const { code, name, unit, price, category, minStock } = req.body;
+    const id = parseInt(req.params.id, 10);
+    const { code, name, unit, price, category, categoriaId, minStock } = req.body;
 
     if (!code || !code.trim() || !name || !name.trim()) {
       return res.status(400).json({ error: 'El código y el nombre son obligatorios.' });
     }
     if (price === undefined || isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
       return res.status(400).json({ error: 'El precio debe ser un número mayor a 0.' });
+    }
+
+    const categoryName = category && category.trim() ? category.trim() : 'General';
+    let resolvedCatId = categoriaId ? parseInt(categoriaId, 10) : null;
+
+    if (!resolvedCatId && categoryName) {
+      let catRecord = await prisma.categoria.findUnique({
+        where: { name: categoryName },
+      });
+      if (!catRecord) {
+        catRecord = await prisma.categoria.create({
+          data: { name: categoryName },
+        });
+      }
+      resolvedCatId = catRecord.id;
     }
 
     const updated = await prisma.producto.update({
@@ -111,12 +155,13 @@ router.put('/:id', async (req, res) => {
         name: name.trim(),
         unit: unit || 'Unidad',
         price: parseFloat(price),
-        category: category && category.trim() ? category.trim() : 'General',
-        minStock: minStock !== undefined && !isNaN(parseInt(minStock)) ? parseInt(minStock) : undefined,
+        category: categoryName,
+        categoriaId: resolvedCatId,
+        minStock: minStock !== undefined && !isNaN(parseInt(minStock, 10)) ? parseInt(minStock, 10) : undefined,
       },
       select: {
         id: true, code: true, name: true, unit: true,
-        stock: true, minStock: true, price: true, category: true,
+        stock: true, minStock: true, price: true, category: true, categoriaId: true,
       },
     });
 
@@ -128,6 +173,7 @@ router.put('/:id', async (req, res) => {
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Producto no encontrado.' });
     }
+    console.error('[productos.js] Error al actualizar producto:', error);
     res.status(500).json({ error: 'Error al actualizar producto.' });
   }
 });
