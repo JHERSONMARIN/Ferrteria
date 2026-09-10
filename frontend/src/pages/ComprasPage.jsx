@@ -381,7 +381,7 @@ export default function ComprasPage() {
                             onClick={() => setSelectedCostCode(prod.code)}
                             className={`cursor-pointer transition-colors ${isSelected ? 'bg-orange-50' : 'hover:bg-slate-50'}`}
                           >
-                            <td className={`px-3 sm:px-4 py-3 border-l-4 border-b-4 ${isSelected ? 'border-orange-500' : 'border-transparent'}`}>
+                            <td className={`px-3 sm:px-4 py-3 border-l-4 ${isSelected ? 'border-orange-500' : 'border-transparent'}`}>
                               <div className="font-bold text-slate-800 leading-tight">{prod.name}</div>
                               <span className="font-mono text-xs text-slate-400">{prod.code}</span>
                               <span className="sm:hidden text-[11px] text-slate-400"> · {prod.timesPurchased} compras</span>

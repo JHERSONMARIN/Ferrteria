@@ -78,6 +78,7 @@ model Usuario {
   entregasAsignadas Entrega[]      @relation("RepartidorEntregas")
   cajasChicas       CajaChica[]
   cotizaciones      Cotizacion[]   @relation("VendedorCotizaciones")
+  movimientosKardex MovimientoKardex[] @relation("UsuarioKardex")
 
   @@map("usuarios")
 }
@@ -192,6 +193,9 @@ model MovimientoKardex {
 
   productoId Int
   producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  usuarioId  Int?
+  usuario    Usuario? @relation("UsuarioKardex", fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@map("movimientos_kardex")
 }

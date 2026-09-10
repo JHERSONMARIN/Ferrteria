@@ -58,7 +58,7 @@ router.get('/categorias', async (req, res) => {
 // POST /api/productos
 router.post('/', async (req, res) => {
   try {
-    const { code, name, unit, stock, price, category, categoriaId } = req.body;
+    const { code, name, unit, stock, price, category, categoriaId, usuarioId } = req.body;
     if (!code || !name || isNaN(stock) || isNaN(price)) {
       return res.status(400).json({ error: 'Completa todos los campos obligatorios.' });
     }
@@ -103,6 +103,7 @@ router.post('/', async (req, res) => {
             qty: stockNum,
             stockAfter: stockNum,
             ref: 'Stock Inicial al Registrar',
+            usuarioId: usuarioId ? parseInt(usuarioId, 10) : null,
           },
         });
       }

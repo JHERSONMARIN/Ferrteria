@@ -12,17 +12,37 @@ router.get('/stats', async (req, res) => {
       _sum: { total: true },
       where: {
         payMethod: { not: 'FIADO' },
-        status: 'COMPLETADO'
-      }
+        status: 'COMPLETADO',
+      },
     });
 
     // Total créditos por cobrar (Fiado total acumulado en crédito)
     const creditosResult = await prisma.creditoCliente.aggregate({
-      _sum: { debtTotal: true }
+      _sum: { debtTotal: true },
     });
 
     // Total ventas realizadas
     const salesCount = await prisma.venta.count();
+
+    // Métricas macro de almacén e inventario
+    const products = await prisma.producto.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        stock: true,
+        minStock: true,
+        price: true,
+      },
+    });
+
+    const totalProductsCount = products.length;
+    const totalInventoryValue = products.reduce(
+      (sum, p) => sum + ((p.stock || 0) * (p.price || 0)),
+      0
+    );
+    const lowStockCount = products.filter(
+      (p) => (p.stock || 0) <= (p.minStock ?? 10)
+    ).length;
 
     // Eficiencia por vendedor
     const vendedores = await prisma.usuario.findMany({
@@ -35,18 +55,20 @@ router.get('/stats', async (req, res) => {
         name: true,
         role: true,
         ventasAsignadas: {
-          select: { total: true }
+          select: { total: true },
         },
         entregasAsignadas: {
-          select: { status: true }
-        }
-      }
+          select: { status: true },
+        },
+      },
     });
 
-    const vendedorStats = vendedores.map(v => {
+    const vendedorStats = vendedores.map((v) => {
       const totalVendido = v.ventasAsignadas.reduce((acc, curr) => acc + curr.total, 0);
       const entregasCount = v.entregasAsignadas.length;
-      const entregasCompletadas = v.entregasAsignadas.filter(e => e.status === 'ENTREGADO').length;
+      const entregasCompletadas = v.entregasAsignadas.filter(
+        (e) => e.status === 'ENTREGADO'
+      ).length;
 
       return {
         id: v.id,
@@ -59,7 +81,7 @@ router.get('/stats', async (req, res) => {
       };
     });
 
-    // Últimas ventas
+    // Últimas transacciones de venta
     const recentSales = await prisma.venta.findMany({
       take: 10,
       orderBy: { id: 'desc' },
@@ -71,11 +93,11 @@ router.get('/stats', async (req, res) => {
         total: true,
         createdAt: true,
         cliente: { select: { name: true } },
-        vendedor: { select: { name: true } }
-      }
+        vendedor: { select: { name: true } },
+      },
     });
 
-    const formattedRecentSales = recentSales.map(s => ({
+    const formattedRecentSales = recentSales.map((s) => ({
       doc: s.numDoc,
       customer: s.cliente ? s.cliente.name : 'Público General',
       seller: s.vendedor ? s.vendedor.name : 'General',
@@ -87,10 +109,14 @@ router.get('/stats', async (req, res) => {
       ingresosCaja: ingresosResult._sum.total || 0,
       deudaCreditos: creditosResult._sum.debtTotal || 0,
       salesCount,
+      totalProductsCount,
+      totalInventoryValue: Number(totalInventoryValue.toFixed(2)),
+      lowStockCount,
       vendedores: vendedorStats,
       recentSales: formattedRecentSales,
     });
   } catch (error) {
+    console.error('[dashboard.js] Error al obtener datos de dashboard:', error);
     res.status(500).json({ error: 'Error al obtener datos de dashboard.' });
   }
 });

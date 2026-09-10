@@ -205,6 +205,7 @@ router.post('/', async (req, res) => {
             qty: item.qty,
             stockAfter: updatedProd.stock,
             ref: `Venta ${numDoc}`,
+            usuarioId: vendedorId ? parseInt(vendedorId) : null,
           }
         });
       }

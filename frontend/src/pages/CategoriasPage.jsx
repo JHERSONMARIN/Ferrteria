@@ -59,7 +59,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
       setCategories(data || []);
     } catch (err) {
       console.error('Error cargando categorías desde API:', err);
-      alert('Error cargando familias y categorías: ' + err.message);
+      alert('Error cargando categorías: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -200,10 +200,10 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
               <span className="bg-orange-100 text-orange-700 px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
                 <i className="fa-solid fa-tags"></i> Almacén
               </span>
-              <h3 className="font-bold text-slate-800 text-lg">Familias y Categorías ({categories.length})</h3>
+              <h3 className="font-bold text-slate-800 text-lg">Categorías ({categories.length})</h3>
             </div>
             <p className="text-xs text-slate-500">
-              Organización centralizada de productos por familias comerciales, valorización de capital y control de rotación.
+              Organización centralizada de productos por categorías, valorización de capital y control de rotación.
             </p>
           </div>
 
@@ -232,7 +232,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
               <i className="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
               <input
                 type="text"
-                placeholder="Buscar familia o categoría por nombre o descripción..."
+                placeholder="Buscar categoría por nombre o descripción..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-orange-500 transition-colors"
@@ -260,7 +260,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {loading && categories.length === 0 ? (
               <div className="col-span-full text-center py-12 text-slate-400">
-                <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando familias y categorías...
+                <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando Categorías...
               </div>
             ) : filteredCategories.length === 0 ? (
               <div className="col-span-full text-center py-12 bg-white rounded-xl border border-gray-200 text-slate-400">
@@ -366,7 +366,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
               <div className="p-6 flex flex-col gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-600 mb-1 block">
-                    Nombre de la Familia / Categoría <span className="text-red-500">*</span>
+                    Nombre de la Categoría <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"

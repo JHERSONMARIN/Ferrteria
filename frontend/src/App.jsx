@@ -216,6 +216,7 @@ export default function App() {
               {activeTab === 'caja' && <CajaPage currentUser={currentUser} />}
               {activeTab === 'inventory' && (
                 <InventarioPage
+                  currentUser={currentUser}
                   initialCategory={selectedCategoryFilter}
                   onNavigateToCategories={() => setActiveTab('categories')}
                 />
@@ -232,7 +233,7 @@ export default function App() {
                   }}
                 />
               )}
-              {activeTab === 'kardex' && <KardexPage />}
+              {activeTab === 'kardex' && <KardexPage currentUser={currentUser} />}
               {activeTab === 'compras' && <ComprasPage />}
               {activeTab === 'deliveries' && (
                 <EntregasPage onTriggerPrint={setTicketData} />

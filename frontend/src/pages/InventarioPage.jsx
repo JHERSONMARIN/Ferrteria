@@ -4,7 +4,7 @@ import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 
-export default function InventarioPage({ initialCategory = 'Todas', onNavigateToCategories }) {
+export default function InventarioPage({ initialCategory = 'Todas', onNavigateToCategories, currentUser }) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -177,6 +177,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
           stock: parseInt(stock, 10),
           minStock: parseInt(minStock, 10) || 10,
           price: parseFloat(price),
+          usuarioId: currentUser?.id,
         });
       }
       closeModal();
