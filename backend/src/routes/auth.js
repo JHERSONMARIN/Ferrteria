@@ -55,10 +55,16 @@ router.get('/check/:id', async (req, res) => {
     });
 
     if (!usuario || !usuario.active) {
-      return res.status(401).json({ active: false, error: 'Usuario desactivado o no encontrado.' });
+      return res.json({ active: false, error: 'Usuario desactivado o no encontrado.' });
     }
 
-    res.json({ active: true, user: usuario });
+    res.json({
+      active: true,
+      user: usuario,
+      modules: usuario.modules,
+      role: usuario.role,
+      name: usuario.name,
+    });
   } catch (error) {
     res.status(500).json({ active: false, error: error.message });
   }

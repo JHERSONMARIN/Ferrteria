@@ -8,27 +8,53 @@ async function main() {
   // 1. Usuario Admin por defecto
   const adminUser = await prisma.usuario.upsert({
     where: { user: 'admin' },
-    update: {},
+    update: {
+      role: 'ADMINISTRADOR',
+      modules: ['pos', 'inventory', 'categories', 'kardex', 'deliveries', 'client-dir', 'customers', 'personal', 'dashboard', 'caja', 'compras'],
+      active: true,
+    },
     create: {
       name: 'Pedro Admin',
       user: 'admin',
       pass: '1234',
       role: 'ADMINISTRADOR',
-      modules: ['pos', 'inventory', 'kardex', 'deliveries', 'client-dir', 'customers', 'personal', 'dashboard', 'caja', 'compras'],
+      modules: ['pos', 'inventory', 'categories', 'kardex', 'deliveries', 'client-dir', 'customers', 'personal', 'dashboard', 'caja', 'compras'],
       active: true,
     },
   });
 
-  // Vendedor demo
+  // Vendedor demo (solo POS según requerimiento)
   const vendedorUser = await prisma.usuario.upsert({
     where: { user: 'vendedor1' },
-    update: {},
+    update: {
+      role: 'VENDEDOR',
+      modules: ['pos'],
+      active: true,
+    },
     create: {
       name: 'Juan Pérez',
       user: 'vendedor1',
       pass: '1234',
       role: 'VENDEDOR',
-      modules: ['pos', 'inventory', 'kardex', 'deliveries', 'client-dir'],
+      modules: ['pos'],
+      active: true,
+    },
+  });
+
+  // Cajero demo
+  const cajeroUser = await prisma.usuario.upsert({
+    where: { user: 'cajero1' },
+    update: {
+      role: 'CAJERO',
+      modules: ['pos', 'caja'],
+      active: true,
+    },
+    create: {
+      name: 'María Cajera',
+      user: 'cajero1',
+      pass: '1234',
+      role: 'CAJERO',
+      modules: ['pos', 'caja'],
       active: true,
     },
   });
@@ -36,7 +62,11 @@ async function main() {
   // Repartidor demo
   const repartidorUser = await prisma.usuario.upsert({
     where: { user: 'repartidor1' },
-    update: {},
+    update: {
+      role: 'REPARTIDOR',
+      modules: ['deliveries'],
+      active: true, 
+    },
     create: {
       name: 'Carlos Ruiz',
       user: 'repartidor1',
