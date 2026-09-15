@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
           }
         }
       },
-      orderBy: { id: 'desc' }
+      orderBy: { createdAt: 'desc' }
     });
 
     const formatted = cotizaciones.map(c => ({
@@ -196,6 +196,34 @@ router.post('/:id/convertir', async (req, res) => {
     res.json({ success: true, venta: ventaResult });
   } catch (error) {
     res.status(400).json({ error: error.message || 'Error al convertir cotización.' });
+  }
+});
+
+// DELETE /api/cotizaciones/:id (Cancelar / eliminar lógicamente una cotización)
+router.delete('/:id', async (req, res) => {
+  try {
+    const cotId = parseInt(req.params.id, 10);
+    if (isNaN(cotId)) return res.status(400).json({ error: 'ID de cotización no válido.' });
+
+    const cot = await prisma.cotizacion.findUnique({ where: { id: cotId } });
+    if (!cot) return res.status(404).json({ error: 'Cotización no encontrada.' });
+
+    if (cot.status === 'CONVERTIDO') {
+      return res.status(400).json({ error: 'No se puede eliminar: esta cotización ya fue convertida a venta.' });
+    }
+    if (cot.status === 'CANCELADO') {
+      return res.status(400).json({ error: 'Esta cotización ya se encuentra cancelada.' });
+    }
+
+    const updated = await prisma.cotizacion.update({
+      where: { id: cotId },
+      data: { status: 'CANCELADO' }
+    });
+
+    res.json({ success: true, message: 'Cotización eliminada (cancelada) exitosamente.', cotizacion: updated });
+  } catch (error) {
+    console.error('[cotizaciones.js] Error al eliminar cotización:', error);
+    res.status(400).json({ error: error.message || 'Error al eliminar la cotización.' });
   }
 });
 

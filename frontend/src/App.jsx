@@ -5,6 +5,7 @@ import TicketPrint from './components/TicketPrint.jsx';
 import PosPage from './pages/PosPage.jsx';
 import InventarioPage from './pages/InventarioPage.jsx';
 import CategoriasPage from './pages/CategoriasPage.jsx';
+import CotizacionesPage from './pages/CotizacionesPage.jsx';
 import KardexPage from './pages/KardexPage.jsx';
 import EntregasPage from './pages/EntregasPage.jsx';
 import ClientesPage from './pages/ClientesPage.jsx';
@@ -197,6 +198,7 @@ export default function App() {
     'caja': 'Arqueo y Control de Caja Chica',
     'inventory': 'Almacén - Productos',
     'categories': 'Almacén - Categorías de Productos',
+    'cotizaciones': 'Cotizaciones / Proformas',
     'kardex': 'Kardex / Movimientos de Almacén',
     'compras': 'Compras a Proveedores',
     'deliveries': 'Entregas',
@@ -336,6 +338,7 @@ export default function App() {
                   }}
                 />
               )}
+              {activeTab === 'cotizaciones' && <CotizacionesPage />}
               {activeTab === 'kardex' && <KardexPage currentUser={currentUser} />}
               {activeTab === 'compras' && <ComprasPage />}
               {activeTab === 'deliveries' && (

@@ -10,7 +10,7 @@ async function main() {
     where: { user: 'admin' },
     update: {
       role: 'ADMINISTRADOR',
-      modules: ['pos', 'inventory', 'categories', 'kardex', 'deliveries', 'client-dir', 'customers', 'personal', 'dashboard', 'caja', 'compras'],
+      modules: ['pos', 'inventory', 'categories', 'kardex', 'deliveries', 'client-dir', 'customers', 'personal', 'dashboard', 'caja', 'compras', 'cotizaciones'],
       active: true,
     },
     create: {
@@ -18,7 +18,7 @@ async function main() {
       user: 'admin',
       pass: '1234',
       role: 'ADMINISTRADOR',
-      modules: ['pos', 'inventory', 'categories', 'kardex', 'deliveries', 'client-dir', 'customers', 'personal', 'dashboard', 'caja', 'compras'],
+      modules: ['pos', 'inventory', 'categories', 'kardex', 'deliveries', 'client-dir', 'customers', 'personal', 'dashboard', 'caja', 'compras', 'cotizaciones'],
       active: true,
     },
   });
@@ -28,7 +28,7 @@ async function main() {
     where: { user: 'vendedor1' },
     update: {
       role: 'VENDEDOR',
-      modules: ['pos'],
+      modules: ['pos', 'cotizaciones'],
       active: true,
     },
     create: {
@@ -36,7 +36,7 @@ async function main() {
       user: 'vendedor1',
       pass: '1234',
       role: 'VENDEDOR',
-      modules: ['pos'],
+      modules: ['pos', 'cotizaciones'],
       active: true,
     },
   });
@@ -65,7 +65,7 @@ async function main() {
     update: {
       role: 'REPARTIDOR',
       modules: ['deliveries'],
-      active: true, 
+      active: true,
     },
     create: {
       name: 'Carlos Ruiz',

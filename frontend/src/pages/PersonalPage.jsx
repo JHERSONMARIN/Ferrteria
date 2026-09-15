@@ -22,6 +22,7 @@ export default function PersonalPage({ currentUser }) {
 
   const moduleOptions = [
     { value: 'pos', label: 'Punto de Venta', icon: 'fa-cash-register' },
+    { value: 'cotizaciones', label: 'Cotizaciones', icon: 'fa-file-invoice' },
     { value: 'caja', label: 'Arqueo de Caja', icon: 'fa-vault' },
     { value: 'inventory', label: 'Almacén (Productos)', icon: 'fa-box' },
     { value: 'categories', label: 'Categorías', icon: 'fa-tags' },
