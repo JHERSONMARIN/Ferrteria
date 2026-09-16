@@ -420,12 +420,12 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
   };
 
   return (
-    <div className="tab-content active h-full flex flex-col p-4 overflow-hidden">
-      <div className="flex-1 flex flex-col xl:flex-row gap-4 overflow-hidden">
-        
+    <div className="tab-content active h-full flex flex-col p-3 sm:p-4 overflow-y-auto xl:overflow-hidden">
+      <div className="flex-1 flex flex-col xl:flex-row gap-4 xl:overflow-hidden">
+
         {/* Panel Izquierdo: Catálogo y Búsqueda */}
-        <div className="flex-1 flex flex-col h-full bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 bg-slate-50 flex justify-between items-center gap-3">
+        <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 xl:h-full xl:overflow-hidden">
+          <div className="p-3 sm:p-4 border-b border-gray-100 bg-slate-50 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
             <div className="relative flex-1">
               <i className="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
               <input
@@ -438,13 +438,13 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
             </div>
             <button
               onClick={handleOpenCotizacionesModal}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-3 py-2 rounded-lg text-xs shadow transition-colors flex items-center gap-1.5 shrink-0"
+              className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-3 py-2 rounded-lg text-xs shadow transition-colors flex items-center justify-center gap-1.5 shrink-0"
             >
               <i className="fa-solid fa-file-invoice"></i> Cargar Cotización
             </button>
           </div>
 
-          <div className="flex-1 p-4 overflow-y-auto">
+          <div className="flex-1 p-3 sm:p-4 xl:overflow-y-auto">
             {/* Panel de categorías */}
             <div className="relative mb-4">
               {/* Categorías */}
@@ -497,7 +497,7 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
             </div>
             
             {/* Panel de productos */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
               {filteredProducts.map(prod => (
                 <div
                   key={prod.id}
@@ -521,7 +521,7 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
         </div>
 
         {/* Panel lateral de Carrito y Cobro */}
-        <div className="w-full xl:w-[400px] flex flex-col h-full bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden shrink-0">
+        <div className="w-full xl:w-[400px] flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 xl:h-full xl:overflow-hidden shrink-0">
           <div className="p-3 bg-slate-900 text-white font-bold flex justify-between items-center">
             <span><i className="fa-solid fa-receipt mr-2"></i> Detalle de Venta</span>
           </div>
@@ -707,7 +707,7 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
 
       {/* Modal Cotizaciones Pendientes */}
       {showCotizacionesModal && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
             <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
               <h3 className="font-bold text-lg"><i className="fa-solid fa-file-invoice mr-2"></i> Cotizaciones / Proformas Vigentes</h3>
@@ -715,8 +715,8 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
-            <div className="p-4 flex-1 overflow-y-auto">
-              <table className="w-full text-left border-collapse">
+            <div className="p-4 flex-1 overflow-y-auto overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[520px]">
                 <thead className="bg-slate-100 text-slate-500 text-xs uppercase">
                   <tr>
                     <th className="px-3 py-2">Documento</th>
@@ -760,7 +760,7 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
 
       {/* Modal todas las categorias */}
       {showCategoriasModal && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
             <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
               <h3 className="font-bold text-lg"><i className="fa-solid fa-list mr-2"></i> Todas las Categorías</h3>
@@ -769,7 +769,7 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
               </button>
             </div>
             <div className="p-4 flex-1 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {categories.map((cat) => (
                   <button
                     key={cat}

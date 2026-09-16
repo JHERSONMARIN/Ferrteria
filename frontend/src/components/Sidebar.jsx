@@ -1,7 +1,12 @@
 import React from 'react';
 
-export default function Sidebar({ activeTab, onSwitchTab, user }) {
+export default function Sidebar({ activeTab, onSwitchTab, user, open, onClose, onLogout }) {
   const allowedModules = user?.modules || [];
+
+  const handleSwitchTab = (tabId) => {
+    onSwitchTab(tabId);
+    if (onClose) onClose();
+  };
 
   const navItems = [
     { section: 'Operaciones', items: [
@@ -26,12 +31,33 @@ export default function Sidebar({ activeTab, onSwitchTab, user }) {
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 text-white flex flex-col transition-all z-20 shrink-0 h-screen">
-      <div className="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
-        <i className="fa-solid fa-screwdriver-wrench text-orange-500 text-xl mr-3"></i>
-        <span className="font-bold text-lg tracking-wide">
-          FerreSys <span className="text-xs text-orange-500 align-top">v4.8</span>
-        </span>
+    <>
+      {/* Fondo oscuro al abrir el menú en móvil/tablet */}
+      {open && (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 bg-slate-900/60 z-30 lg:hidden"
+        />
+      )}
+
+      <aside
+        className={`fixed lg:static inset-y-0 left-0 w-64 bg-slate-900 text-white flex flex-col z-40 shrink-0 h-screen transition-transform duration-200 ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        } lg:translate-x-0`}
+      >
+      <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950 shrink-0">
+        <div className="flex items-center min-w-0">
+          <i className="fa-solid fa-screwdriver-wrench text-orange-500 text-xl mr-3 shrink-0"></i>
+          <span className="font-bold text-lg tracking-wide truncate">
+            FerreSys <span className="text-xs text-orange-500 align-top">v4.8</span>
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-slate-400 hover:text-white lg:hidden shrink-0 ml-2"
+        >
+          <i className="fa-solid fa-xmark text-xl"></i>
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4 flex flex-col gap-1 px-3">
@@ -50,7 +76,7 @@ export default function Sidebar({ activeTab, onSwitchTab, user }) {
                   <React.Fragment key={item.id}>
                     <button
                       key={item.id}
-                      onClick={() => onSwitchTab(item.id)}
+                      onClick={() => handleSwitchTab(item.id)}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm font-medium transition-colors ${
                         isActive
                           ? 'bg-orange-600 text-white shadow-md'
@@ -68,7 +94,7 @@ export default function Sidebar({ activeTab, onSwitchTab, user }) {
                           return (
                             <button
                               key={subItem.id}
-                              onClick={() => onSwitchTab(subItem.id)}
+                              onClick={() => handleSwitchTab(subItem.id)}
                               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm font-medium transition-colors ${
                                 isSubActive
                                   ? 'bg-orange-800 text-white shadow-md'
@@ -89,6 +115,26 @@ export default function Sidebar({ activeTab, onSwitchTab, user }) {
           );
         })}
       </nav>
-    </aside>
+
+      {user && (
+        <div className="border-t border-slate-800 p-3 shrink-0">
+          <div className="flex items-center gap-2 px-2 py-1.5 mb-2 text-slate-300 min-w-0">
+            <i className="fa-solid fa-user text-slate-500 shrink-0"></i>
+            <div className="min-w-0">
+              <p className="text-sm font-bold truncate">{user.name}</p>
+              <p className="text-[10px] text-slate-500 uppercase truncate">{user.role}</p>
+            </div>
+          </div>
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm font-bold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+          >
+            <i className="fa-solid fa-right-from-bracket w-5"></i>
+            Cerrar Sesión
+          </button>
+        </div>
+      )}
+      </aside>
+    </>
   );
 }

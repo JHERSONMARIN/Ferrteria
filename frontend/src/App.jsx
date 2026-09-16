@@ -79,6 +79,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('pos');
   const [ticketData, setTicketData] = useState(null);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Todas');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Heartbeat cada 8s para sincronizar roles y estado activo del usuario
   useEffect(() => {
@@ -301,14 +302,17 @@ export default function App() {
             activeTab={activeTab}
             onSwitchTab={handleSwitchTab}
             user={currentUser}
+            open={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+            onLogout={handleLogout}
           />
 
-          <main className="flex-1 flex flex-col h-screen overflow-hidden">
+          <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
             <Header
               pageTitle={pageTitles[activeTab] || 'Punto de Venta'}
               user={currentUser}
-              onLogout={handleLogout}
               onResetDemo={handleResetDemo}
+              onToggleSidebar={() => setSidebarOpen(o => !o)}
             />
 
             <div className="flex-1 overflow-hidden relative w-full h-full bg-gray-50">
