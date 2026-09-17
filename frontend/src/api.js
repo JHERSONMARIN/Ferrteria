@@ -31,13 +31,21 @@ export async function apiFetch(endpoint, options = {}) {
       }
 
       let errorMsg = `Error HTTP ${response.status}`;
+      let codigo = null;
+      let data = null;
       try {
         const errJson = await response.json();
         if (errJson.error) errorMsg = errJson.error;
+        codigo = errJson.codigo || null;
+        data = errJson;
       } catch (e) {
         // Fallback
       }
-      throw new Error(errorMsg);
+      const error = new Error(errorMsg);
+      error.status = response.status;
+      error.codigo = codigo;
+      error.data = data;
+      throw error;
     }
 
     return await response.json();
