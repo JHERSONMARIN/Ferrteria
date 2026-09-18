@@ -1,3 +1,5 @@
+import { nextDocumentNumber, DocumentSeriesError } from './documentSeries.js';
+
 export class VentaError extends Error {
   constructor(message, status = 400, codigo = null, extra = null) {
     super(message);
@@ -8,7 +10,6 @@ export class VentaError extends Error {
 }
 
 const DOC_TYPES = { Factura: 'FACTURA', Boleta: 'BOLETA' };
-const SERIES = { FACTURA: 'F001', BOLETA: 'B001', NOTA_VENTA: 'T001' };
 const PAY_METHODS = {
   Efectivo: 'EFECTIVO',
   Tarjeta: 'TARJETA',
@@ -17,8 +18,6 @@ const PAY_METHODS = {
   'Pago Mixto': 'PAGO_MIXTO',
   Fiado: 'FIADO',
 };
-
-const MAX_REINTENTOS_CORRELATIVO = 3;
 
 const redondear = (n) => Math.round(n * 100) / 100;
 
@@ -59,16 +58,6 @@ export async function cargarProductosActivos(db, items) {
     }
   }
   return porId;
-}
-
-async function siguienteNumDoc(tx, serie) {
-  const ultima = await tx.venta.findFirst({
-    where: { numDoc: { startsWith: `${serie}-` } },
-    orderBy: { numDoc: 'desc' },
-    select: { numDoc: true },
-  });
-  const ultimoNumero = ultima ? parseInt(ultima.numDoc.slice(serie.length + 1), 10) || 0 : 0;
-  return `${serie}-${String(ultimoNumero + 1).padStart(6, '0')}`;
 }
 
 function cotizacionVigente(cot) {
@@ -157,7 +146,7 @@ async function ejecutarVenta(tx, datos) {
   });
   if (!cajaAbierta) throw new VentaError('No hay una caja abierta para este usuario.');
 
-  const numDoc = await siguienteNumDoc(tx, SERIES[docTypeEnum]);
+  const numDoc = await nextDocumentNumber(tx, docTypeEnum);
 
   const venta = await tx.venta.create({
     data: {
@@ -264,22 +253,15 @@ export async function procesarVenta(prisma, payload) {
     totalEsperado: payload.totalEsperado,
   };
 
-  // Dos ventas simultáneas pueden calcular el mismo correlativo; la restricción única
-  // de numDoc hace fallar a una, que se reintenta con el número siguiente.
-  for (let intento = 1; ; intento++) {
-    try {
-      return await prisma.$transaction(tx => ejecutarVenta(tx, datos));
-    } catch (err) {
-      const choqueCorrelativo = err.code === 'P2002' && String(err.meta?.target).includes('numDoc');
-      if (choqueCorrelativo && intento < MAX_REINTENTOS_CORRELATIVO) continue;
-      throw err;
-    }
-  }
+  return prisma.$transaction(tx => ejecutarVenta(tx, datos));
 }
 
 export function responderErrorVenta(res, error, contexto) {
   if (error instanceof VentaError) {
     return res.status(error.status).json({ error: error.message, codigo: error.codigo, ...error.extra });
+  }
+  if (error instanceof DocumentSeriesError) {
+    return res.status(400).json({ error: error.message });
   }
   if (error.code === 'P2002') {
     return res.status(409).json({ error: 'No se pudo generar el número de comprobante. Intente nuevamente.' });

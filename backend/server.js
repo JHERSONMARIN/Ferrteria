@@ -17,6 +17,8 @@ import comprasRoutes from './src/routes/compras.js';
 import cotizacionesRoutes from './src/routes/cotizaciones.js';
 import categoriesRoutes from './src/routes/categories.js';
 import settingsRoutes from './src/routes/settings.js';
+import { PrismaClient } from '@prisma/client';
+import { initializeDocumentSeries } from './src/services/documentSeries.js';
 
 dotenv.config();
 
@@ -62,6 +64,13 @@ app.use((err, req, res, next) => {
   console.error('❌ Error no capturado:', err);
   res.status(500).json({ error: err.message || 'Error interno del servidor.' });
 });
+
+// Si falla, el servidor arranca igual: las ventas responderán que no hay serie configurada.
+try {
+  await initializeDocumentSeries(new PrismaClient());
+} catch (error) {
+  console.error('❌ No se pudieron inicializar las series de comprobantes:', error);
+}
 
 app.listen(PORT, () => {
   console.log(`🚀 FerreSys Backend corriendo en el puerto ${PORT}`);
