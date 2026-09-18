@@ -16,6 +16,7 @@ import CajaPage from './pages/CajaPage.jsx';
 import ComprasPage from './pages/ComprasPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import FieldError from './components/FieldError.jsx';
+import ChangePasswordForm from './components/ChangePasswordForm.jsx';
 import { api } from './api.js';
 
 const DEMO_TEST_USERS = [
@@ -82,6 +83,16 @@ export default function App() {
   const [ticketData, setTicketData] = useState(null);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Todas');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+
+  const handlePasswordChanged = () => {
+    setShowChangePassword(false);
+    setCurrentUser(prev => {
+      const updated = { ...prev, mustChangePassword: false };
+      localStorage.setItem('ferre_user', JSON.stringify(updated));
+      return updated;
+    });
+  };
   const [settings, setSettings] = useState(null);
   const [licensedModules, setLicensedModules] = useState(null);
   const [settingsStatus, setSettingsStatus] = useState('loading');
@@ -126,17 +137,25 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (currentUser?.id) loadSettings();
-  }, [currentUser?.id]);
+    // Con clave temporal la API rechaza todo salvo el cambio de clave: se carga después.
+    if (currentUser?.id && !currentUser.mustChangePassword) loadSettings();
+  }, [currentUser?.id, currentUser?.mustChangePassword]);
 
   // Aplica al estado local los datos del usuario que devuelve el servidor.
   const syncUser = (serverUser) => {
     setCurrentUser(prev => {
       if (!prev) return prev;
       const hasChanged = JSON.stringify(serverUser.modules) !== JSON.stringify(prev.modules) ||
-                         serverUser.role !== prev.role || serverUser.name !== prev.name;
+                         serverUser.role !== prev.role || serverUser.name !== prev.name ||
+                         Boolean(serverUser.mustChangePassword) !== Boolean(prev.mustChangePassword);
       if (!hasChanged) return prev;
-      const updated = { ...prev, modules: serverUser.modules, role: serverUser.role, name: serverUser.name };
+      const updated = {
+        ...prev,
+        modules: serverUser.modules,
+        role: serverUser.role,
+        name: serverUser.name,
+        mustChangePassword: Boolean(serverUser.mustChangePassword),
+      };
       localStorage.setItem('ferre_user', JSON.stringify(updated));
       return updated;
     });
@@ -345,9 +364,22 @@ export default function App() {
             )}
           </div>
         </div>
+      ) : currentUser.mustChangePassword ? (
+        /* Clave temporal: hay que cambiarla antes de usar el sistema */
+        <div className="fixed inset-0 bg-slate-900 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+          <ChangePasswordForm mandatory onDone={handlePasswordChanged} onLogout={handleLogout} />
+        </div>
       ) : (
         /* Layout Principal Full-Stack React */
         <div className="print:hidden h-screen flex overflow-hidden">
+          {showChangePassword && (
+            <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+              <ChangePasswordForm
+                onDone={() => { handlePasswordChanged(); alert('Contraseña actualizada.'); }}
+                onCancel={() => setShowChangePassword(false)}
+              />
+            </div>
+          )}
           <Sidebar
             activeTab={activeTab}
             onSwitchTab={handleSwitchTab}
@@ -357,6 +389,7 @@ export default function App() {
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             onLogout={handleLogout}
+            onChangePassword={() => setShowChangePassword(true)}
           />
 
           <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">

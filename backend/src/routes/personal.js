@@ -45,6 +45,8 @@ router.post('/', async (req, res) => {
         name: name.trim(),
         user: user.trim(),
         pass: await hashPassword(pass),
+        // La clave la define el administrador: el empleado debe cambiarla al ingresar.
+        mustChangePassword: true,
         role: role || 'VENDEDOR',
         modules: modules || ['pos'],
         active: true,
@@ -121,6 +123,8 @@ router.put('/:id', async (req, res) => {
         return res.status(400).json({ error: policyError.message });
       }
       updateData.pass = await hashPassword(pass);
+      // Si un administrador restablece la clave de otro usuario, esta queda como temporal.
+      updateData.mustChangePassword = id !== req.user.id;
     }
 
     const updated = await prisma.usuario.update({

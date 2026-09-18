@@ -18,7 +18,7 @@ import categoriesRoutes from './src/routes/categories.js';
 import settingsRoutes from './src/routes/settings.js';
 import { prisma } from './src/db.js';
 import { initializeDocumentSeries } from './src/services/documentSeries.js';
-import { authenticate } from './src/middleware/authenticate.js';
+import { authenticate, requirePasswordChanged } from './src/middleware/authenticate.js';
 import { allowModules } from './src/middleware/authorize.js';
 
 dotenv.config();
@@ -54,7 +54,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // ---------- A partir de aquí todo requiere sesión ----------
-app.use('/api', authenticate);
+app.use('/api', authenticate, requirePasswordChanged);
 
 // Catálogos que consultan varias pantallas (POS, compras, entregas…); modificarlos exige su módulo.
 const CATALOG_READERS = ['pos', 'cotizaciones', 'inventory', 'categories', 'kardex', 'compras', 'deliveries'];

@@ -28,6 +28,7 @@ async function bootstrap() {
       role: 'ADMINISTRADOR',
       modules: AVAILABLE_MODULES,
       active: true,
+      mustChangePassword: true,
     },
   });
 

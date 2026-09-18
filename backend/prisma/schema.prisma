@@ -71,6 +71,8 @@ model Usuario {
   role      Role     @default(VENDEDOR)
   modules   Json
   active    Boolean  @default(true)
+  // Clave temporal (creada por el sistema o un administrador): debe cambiarse al ingresar.
+  mustChangePassword Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

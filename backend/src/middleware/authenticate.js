@@ -38,7 +38,10 @@ export async function authenticate(req, res, next) {
 
     const user = await prisma.usuario.findUnique({
       where: { id: claims.sub },
-      select: { id: true, name: true, user: true, role: true, modules: true, active: true, pass: true },
+      select: {
+        id: true, name: true, user: true, role: true, modules: true, active: true,
+        mustChangePassword: true, pass: true,
+      },
     });
     if (!user || !user.active || passwordFingerprint(user.pass) !== claims.pwf) {
       clearSessionCookie(res);
@@ -52,4 +55,12 @@ export async function authenticate(req, res, next) {
     console.error('[authenticate] Error al validar la sesión:', error);
     res.status(500).json({ error: 'No se pudo validar la sesión.' });
   }
+}
+
+// Mientras la clave sea temporal, la API solo permite cambiarla o cerrar sesión (rutas de /api/auth).
+export function requirePasswordChanged(req, res, next) {
+  if (req.user?.mustChangePassword) {
+    return res.status(403).json({ error: 'Debe cambiar su contraseña antes de continuar.', codigo: 'CAMBIO_CLAVE_REQUERIDO' });
+  }
+  next();
 }

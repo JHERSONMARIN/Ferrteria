@@ -1,6 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
-import { hashPassword, verifyPassword } from '../services/passwords.js';
+import { hashPassword, verifyPassword, validateNewPassword, PasswordPolicyError } from '../services/passwords.js';
 import { createSessionToken } from '../services/sessionTokens.js';
 import { secondsBlocked, registerFailure, registerSuccess } from '../services/loginThrottle.js';
 import { authenticate, setSessionCookie, clearSessionCookie } from '../middleware/authenticate.js';
@@ -37,6 +37,7 @@ router.post('/login', async (req, res) => {
         role: true,
         modules: true,
         active: true,
+        mustChangePassword: true,
       }
     });
 
@@ -53,6 +54,35 @@ router.post('/login', async (req, res) => {
   } catch (error) {
     console.error('Error en login:', error);
     res.status(500).json({ error: 'Error interno de servidor en autenticación.' });
+  }
+});
+
+// POST /api/auth/change-password
+router.post('/change-password', authenticate, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const stored = await prisma.usuario.findUnique({ where: { id: req.user.id }, select: { pass: true } });
+
+    if (!(await verifyPassword(String(currentPassword ?? ''), stored.pass))) {
+      return res.status(400).json({ error: 'La contraseña actual no es correcta.' });
+    }
+    validateNewPassword(newPassword);
+    if (newPassword === currentPassword) {
+      return res.status(400).json({ error: 'La nueva contraseña debe ser distinta de la actual.' });
+    }
+
+    const updated = await prisma.usuario.update({
+      where: { id: req.user.id },
+      data: { pass: await hashPassword(newPassword), mustChangePassword: false },
+    });
+
+    // La huella de la contraseña cambió: se entrega una sesión nueva y las demás quedan inválidas.
+    setSessionCookie(res, createSessionToken(updated));
+    res.json({ success: true, user: { ...req.user, mustChangePassword: false } });
+  } catch (error) {
+    if (error instanceof PasswordPolicyError) return res.status(400).json({ error: error.message });
+    console.error('[auth.js] Error al cambiar la contraseña:', error);
+    res.status(500).json({ error: 'No se pudo cambiar la contraseña.' });
   }
 });
 

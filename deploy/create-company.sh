@@ -98,7 +98,7 @@ cat <<INFO
 ✅ Empresa creada: $COMPANY_NAME
    URL:         http://127.0.0.1:$WEB_PORT
    Usuario:     admin
-   Contraseña:  $ADMIN_PASSWORD   (anótela: no se vuelve a mostrar)
+   Contraseña:  $ADMIN_PASSWORD   (temporal: se pedirá cambiarla al ingresar)
    Base datos:  $DB_NAME
    Config.:     $COMPANY_ENV
 INFO
