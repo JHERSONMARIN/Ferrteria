@@ -12,7 +12,7 @@ const availableStock = (product) => product.stock - (product.reserved || 0);
 
 const TOAST_COLORS = { error: 'bg-red-600', exito: 'bg-emerald-600', info: 'bg-slate-800' };
 
-export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'DIRECT' }) {
+export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'DIRECT', deliveriesEnabled = false }) {
   const isDirect = saleFlowMode === 'DIRECT';
 
   const [products, setProducts] = useState([]);
@@ -219,6 +219,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         cotizacionId: loadedQuote ? loadedQuote.id : null,
         totalEsperado: Math.round(cartTotal * 100) / 100,
         cart: cartPayload(),
+        delivery: payment.delivery,
       });
     } catch (err) {
       if (err.codigo === 'PRECIOS_CAMBIARON') {
@@ -239,7 +240,10 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       icon: 'fa-check',
       title: 'Venta registrada',
       subtitle: `${sale.numDoc} · ${payment.customer ? payment.customer.name : payment.customerName || 'Público General'}`,
-      rows: [{ label: `Total (${payment.payMethod})`, value: formatSoles(sale.total) }],
+      rows: [
+        { label: `Total (${payment.payMethod})`, value: formatSoles(sale.total) },
+        ...(sale.delivery ? [{ label: 'Envío programado', value: sale.delivery.ref }] : []),
+      ],
       change: payment.receivedCash !== null ? payment.receivedCash - sale.total : null,
       buttonLabel: 'Nueva venta',
     });
@@ -680,6 +684,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
           onCustomerInputChange={setCustomerInput}
           onClose={() => setShowCheckout(false)}
           onConfirm={confirmDirectSale}
+          allowDelivery={deliveriesEnabled}
         />
       )}
 
