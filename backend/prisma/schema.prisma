@@ -197,6 +197,7 @@ model Venta {
   cotizacion   Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
 
   detalles DetalleVenta[]
+  entrega  Entrega?
 
   @@index([status])
   @@map("ventas")
@@ -241,9 +242,19 @@ model Entrega {
   status    EstadoEntrega @default(PENDIENTE)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+  // Datos de contacto propios: el cliente puede no estar registrado o recibir otra persona.
+  contactName  String?
+  contactPhone String?
+  notes        String?
+  departedAt   DateTime?
+  deliveredAt  DateTime?
 
-  clienteId Int
-  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  clienteId Int?
+  cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  // Venta que origina el envío. Las entregas anteriores a este vínculo no tienen venta.
+  ventaId Int?   @unique
+  venta   Venta? @relation(fields: [ventaId], references: [id], onDelete: SetNull)
 
   repartidorId Int?
   repartidor   Usuario? @relation("RepartidorEntregas", fields: [repartidorId], references: [id], onDelete: SetNull)
