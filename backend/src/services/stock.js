@@ -25,7 +25,7 @@ const stockAfter = async (tx, productId) =>
 // Venta inmediata: descuenta del stock disponible.
 export async function takeAvailableStock(tx, productId, qty) {
   const updated = await tx.$executeRaw`
-    UPDATE "productos" SET "stock" = "stock" - ${qty}, "updatedAt" = NOW()
+    UPDATE "productos" SET "stock" = "stock" - ${qty}, "updatedAt" = (NOW() AT TIME ZONE 'UTC')
     WHERE "id" = ${productId} AND "active" = true AND "stock" - "reserved" >= ${qty}`;
   if (updated === 0) throw await insufficientStock(tx, productId);
   return stockAfter(tx, productId);
@@ -34,7 +34,7 @@ export async function takeAvailableStock(tx, productId, qty) {
 // Pedido: aparta unidades sin sacarlas todavía del almacén.
 export async function reserveStock(tx, productId, qty) {
   const updated = await tx.$executeRaw`
-    UPDATE "productos" SET "reserved" = "reserved" + ${qty}, "updatedAt" = NOW()
+    UPDATE "productos" SET "reserved" = "reserved" + ${qty}, "updatedAt" = (NOW() AT TIME ZONE 'UTC')
     WHERE "id" = ${productId} AND "active" = true AND "stock" - "reserved" >= ${qty}`;
   if (updated === 0) throw await insufficientStock(tx, productId);
 }
@@ -42,7 +42,7 @@ export async function reserveStock(tx, productId, qty) {
 // Despacho de un pedido: las unidades reservadas salen del almacén.
 export async function consumeReservedStock(tx, productId, qty) {
   const updated = await tx.$executeRaw`
-    UPDATE "productos" SET "stock" = "stock" - ${qty}, "reserved" = "reserved" - ${qty}, "updatedAt" = NOW()
+    UPDATE "productos" SET "stock" = "stock" - ${qty}, "reserved" = "reserved" - ${qty}, "updatedAt" = (NOW() AT TIME ZONE 'UTC')
     WHERE "id" = ${productId} AND "reserved" >= ${qty} AND "stock" >= ${qty}`;
   if (updated === 0) {
     throw new StockError('El stock reservado del pedido no coincide con el almacén. Revise el producto en Kardex.');
@@ -53,6 +53,6 @@ export async function consumeReservedStock(tx, productId, qty) {
 // Pedido anulado o vencido: devuelve las unidades apartadas al disponible.
 export async function releaseReservedStock(tx, productId, qty) {
   await tx.$executeRaw`
-    UPDATE "productos" SET "reserved" = GREATEST("reserved" - ${qty}, 0), "updatedAt" = NOW()
+    UPDATE "productos" SET "reserved" = GREATEST("reserved" - ${qty}, 0), "updatedAt" = (NOW() AT TIME ZONE 'UTC')
     WHERE "id" = ${productId}`;
 }
