@@ -52,7 +52,7 @@ export function normalizarCarrito(cart) {
 export async function cargarProductosActivos(db, items) {
   const productos = await db.producto.findMany({
     where: { id: { in: items.map(i => i.id) } },
-    select: { id: true, name: true, code: true, price: true, stock: true, active: true, allowsFractions: true, unit: true },
+    select: { id: true, name: true, code: true, price: true, wholesalePrice: true, stock: true, active: true, allowsFractions: true, unit: true },
   });
   const porId = new Map(productos.map(p => [p.id, p]));
 
@@ -78,9 +78,20 @@ const toId = (v) => (v === undefined || v === null || v === '' ? null : parseInt
 export const toDocTypeEnum = (docType) => DOC_TYPES[docType] || 'NOTA_VENTA';
 export const toPayMethodEnum = (payMethod) => PAY_METHODS[payMethod] || 'EFECTIVO';
 
-// Precios de cada línea: los de la cotización si sigue vigente; si no, los actuales del producto.
-export async function priceLines(tx, items, cotizacionId) {
+export async function priceListFor(tx, clienteId) {
+  if (!clienteId) return 'RETAIL';
+  const client = await tx.cliente.findUnique({ where: { id: clienteId }, select: { priceList: true } });
+  return client?.priceList ?? 'RETAIL';
+}
+
+export const unitPriceFor = (product, priceList) =>
+  (priceList === 'WHOLESALE' && product.wholesalePrice != null ? product.wholesalePrice : product.price);
+
+// Precio de cada línea: el de la cotización si sigue vigente; si no, el de la lista del cliente
+// (mayorista o minorista). Nunca se usa el precio que manda el navegador.
+export async function priceLines(tx, items, cotizacionId, clienteId = null) {
   const productos = await cargarProductosActivos(tx, items);
+  const priceList = await priceListFor(tx, clienteId);
 
   const preciosCotizados = new Map();
   if (cotizacionId) {
@@ -99,7 +110,7 @@ export async function priceLines(tx, items, cotizacionId) {
 
   const lineas = items.map(item => {
     const prod = productos.get(item.id);
-    const price = preciosCotizados.get(item.id) ?? prod.price;
+    const price = preciosCotizados.get(item.id) ?? unitPriceFor(prod, priceList);
     return { ...item, name: prod.name, code: prod.code, price, subtotal: redondear(price * item.qty) };
   });
   return { lineas, total: redondear(lineas.reduce((sum, l) => sum + l.subtotal, 0)) };
@@ -210,7 +221,7 @@ async function ejecutarVenta(tx, datos) {
     clienteId, vendedorId, cajaUsuarioId, cotizacionId, totalEsperado, delivery,
   } = datos;
 
-  const { lineas, total } = await priceLines(tx, items, cotizacionId);
+  const { lineas, total } = await priceLines(tx, items, cotizacionId, clienteId);
   assertExpectedTotal(totalEsperado, lineas, total);
   if (cotizacionId) await markQuoteConverted(tx, cotizacionId);
 

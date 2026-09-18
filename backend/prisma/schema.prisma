@@ -72,6 +72,12 @@ enum SaleFlowMode {
   STAGED
 }
 
+// Lista de precios del cliente: la mayorista usa Producto.wholesalePrice cuando existe.
+enum PriceList {
+  RETAIL
+  WHOLESALE
+}
+
 enum EstadoCotizacion {
   PENDIENTE
   CONVERTIDO
@@ -113,6 +119,8 @@ model Producto {
   reserved  Decimal      @default(0) @db.Decimal(12, 3)
   minStock  Decimal      @default(10) @db.Decimal(12, 3)
   price     Decimal    @default(0.0) @db.Decimal(12, 2)
+  // Precio para clientes con lista mayorista; si falta, se usa el precio normal.
+  wholesalePrice Decimal? @db.Decimal(12, 2)
   category    String   @default("General")
   categoriaId Int?
   categoria   Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
@@ -153,6 +161,7 @@ model Cliente {
   email     String?
   address   String?
   maxCredit Decimal       @default(1000.0) @db.Decimal(12, 2)
+  priceList PriceList     @default(RETAIL)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 

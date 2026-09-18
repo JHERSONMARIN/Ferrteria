@@ -4,6 +4,13 @@ import { quantityProblem } from '../utils/quantities.js';
 
 const router = express.Router();
 
+// Precio mayorista opcional: vacío = sin precio mayorista (null); false = valor inválido.
+function parseWholesalePrice(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const price = Number(value);
+  return Number.isFinite(price) && price > 0 ? price : false;
+}
+
 // GET /api/productos
 router.get('/', async (req, res) => {
   try {
@@ -17,6 +24,7 @@ router.get('/', async (req, res) => {
         allowsFractions: true,
         stock: true,
         reserved: true,
+        wholesalePrice: true,
         minStock: true,
         price: true,
         category: true,
@@ -67,6 +75,8 @@ router.post('/', async (req, res) => {
     }
 
     const allowsFractions = req.body.allowsFractions === true;
+    const wholesale = parseWholesalePrice(req.body.wholesalePrice);
+    if (wholesale === false) return res.status(400).json({ error: 'El precio mayorista debe ser mayor a 0.' });
     const stockNum = Number(stock);
     const priceNum = parseFloat(price);
     const minStockNum = minStock === undefined || minStock === '' ? 10 : Number(minStock);
@@ -101,6 +111,7 @@ router.post('/', async (req, res) => {
           name: name.trim(),
           unit: unit || 'Unidad',
           allowsFractions,
+          wholesalePrice: wholesale,
           stock: stockNum,
           minStock: minStockNum,
           price: priceNum,
@@ -163,6 +174,9 @@ router.put('/:id', async (req, res) => {
       resolvedCatId = catRecord.id;
     }
 
+    const wholesale = parseWholesalePrice(req.body.wholesalePrice);
+    if (wholesale === false) return res.status(400).json({ error: 'El precio mayorista debe ser mayor a 0.' });
+
     // No se puede dejar de vender fraccionado si el stock actual tiene decimales.
     if (allowsFractions === false) {
       const current = await prisma.producto.findUnique({ where: { id }, select: { stock: true, reserved: true } });
@@ -178,13 +192,14 @@ router.put('/:id', async (req, res) => {
         name: name.trim(),
         unit: unit || 'Unidad',
         allowsFractions: typeof allowsFractions === 'boolean' ? allowsFractions : undefined,
+        wholesalePrice: req.body.wholesalePrice === undefined ? undefined : wholesale,
         price: parseFloat(price),
         category: categoryName,
         categoriaId: resolvedCatId,
         minStock: minStock !== undefined && minStock !== '' && Number(minStock) >= 0 ? Number(minStock) : undefined,
       },
       select: {
-        id: true, code: true, name: true, unit: true, allowsFractions: true,
+        id: true, code: true, name: true, unit: true, allowsFractions: true, wholesalePrice: true,
         stock: true, minStock: true, price: true, category: true, categoriaId: true,
       },
     });

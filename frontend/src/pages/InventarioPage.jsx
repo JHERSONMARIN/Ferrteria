@@ -27,6 +27,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
   const [stock, setStock] = useState('');
   const [minStock, setMinStock] = useState('10');
   const [price, setPrice] = useState('');
+  const [wholesalePrice, setWholesalePrice] = useState('');
   const [searchingBarcode, setSearchingBarcode] = useState(false);
   const [productErrors, setProductErrors] = useState({});
 
@@ -114,6 +115,9 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
     else if (priceNum <= 0) e.price = 'El precio debe ser mayor a 0.';
     else if (priceNum > 1000000) e.price = 'El precio es demasiado alto.';
 
+    const wholesaleNum = parseFloat(wholesalePrice);
+    if (wholesalePrice !== '' && (isNaN(wholesaleNum) || wholesaleNum <= 0)) e.wholesalePrice = 'Debe ser mayor a 0 (o dejarlo vacío).';
+
     setProductErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -125,6 +129,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
     setStock('');
     setMinStock('10');
     setPrice('');
+    setWholesalePrice('');
     setUnit('Unidad');
     setAllowsFractions(false);
     setProductErrors({});
@@ -150,6 +155,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
     setStock(String(p.stock));
     setMinStock(String(p.minStock ?? 10));
     setPrice(String(p.price));
+    setWholesalePrice(p.wholesalePrice != null ? String(p.wholesalePrice) : '');
     setShowModal(true);
   };
 
@@ -172,6 +178,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
           category,
           minStock: Number(minStock),
           price: parseFloat(price),
+          wholesalePrice: wholesalePrice === '' ? null : parseFloat(wholesalePrice),
         });
       } else {
         await api.post('/productos', {
@@ -183,6 +190,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
           stock: Number(stock),
           minStock: Number(minStock),
           price: parseFloat(price),
+          wholesalePrice: wholesalePrice === '' ? null : parseFloat(wholesalePrice),
           usuarioId: currentUser?.id,
         });
       }
@@ -530,6 +538,19 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                     className={`w-full border p-2 rounded outline-none text-sm ${borderClass(productErrors.price)}`}
                   />
                   <FieldError msg={productErrors.price} />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Precio mayorista (opcional)</label>
+                  <input
+                    type="number"
+                    step="0.10"
+                    min="0"
+                    value={wholesalePrice}
+                    onChange={e => { setWholesalePrice(e.target.value); clearProductError('wholesalePrice'); }}
+                    placeholder="Igual al normal"
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(productErrors.wholesalePrice)}`}
+                  />
+                  <FieldError msg={productErrors.wholesalePrice} />
                 </div>
               </div>
             </div>

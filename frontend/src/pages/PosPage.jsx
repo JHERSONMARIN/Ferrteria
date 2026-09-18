@@ -143,6 +143,21 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const cartUnits = cart.length;
   const cajaCerrada = isDirect && estadoCaja && estadoCaja.abierta === false;
   const selectedCustomer = findCustomerByInput(clients, customerInput);
+  const isWholesale = selectedCustomer?.priceList === 'WHOLESALE';
+
+  // Mismo criterio que el backend: precio mayorista si el cliente tiene esa lista y el producto lo define.
+  const priceFor = (product, wholesale = isWholesale) =>
+    (wholesale && product.wholesalePrice != null ? product.wholesalePrice : product.price);
+
+  // Al cambiar de cliente se recalculan los precios del carrito (salvo si viene de una cotización,
+  // que conserva los precios cotizados).
+  useEffect(() => {
+    if (loadedQuote) return;
+    setCart(prev => prev.map(item => {
+      const product = products.find(p => p.id === item.id);
+      return product ? { ...item, price: priceFor(product, isWholesale) } : item;
+    }));
+  }, [isWholesale, products]);
 
   useEffect(() => {
     if (cart.length === 0) setLoadedQuote(null);
@@ -160,7 +175,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     setCart(prev => current
       ? prev.map(i => (i.id === product.id ? { ...i, qty: roundQuantity(Math.min(i.qty + 1, available)) } : i))
       : [...prev, {
-        id: product.id, name: product.name, code: product.code, price: product.price, qty: 1, stock: available,
+        id: product.id, name: product.name, code: product.code, price: priceFor(product), qty: 1, stock: available,
         unit: product.unit, allowsFractions: product.allowsFractions,
       }]
     );
@@ -539,7 +554,12 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                       <span className="text-[10px] font-mono text-slate-400 truncate pr-7">{product.code}</span>
                       <h4 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2 flex-1">{product.name}</h4>
                       <div className="flex items-end justify-between gap-2">
-                        <span className="text-base font-black text-slate-900">{formatSoles(product.price)}</span>
+                        <span className="text-base font-black text-slate-900">
+                          {formatSoles(priceFor(product))}
+                          {isWholesale && product.wholesalePrice != null && (
+                            <span className="block text-[9px] font-bold text-indigo-600 uppercase">Mayorista</span>
+                          )}
+                        </span>
                         <span
                           className={`text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${
                             soldOut ? 'bg-slate-200 text-slate-500' : lowStock ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'
@@ -580,6 +600,13 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             <div className="px-4 py-2.5 bg-red-50 border-b border-red-200 text-xs text-red-700 flex items-center gap-2">
               <i className="fa-solid fa-lock"></i>
               <span><strong>Caja cerrada.</strong> Abra su turno en "Arqueo de Caja" para poder cobrar.</span>
+            </div>
+          )}
+
+          {isWholesale && !loadedQuote && (
+            <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-200 text-xs text-indigo-800">
+              <i className="fa-solid fa-tags mr-1.5"></i>
+              <strong>Precios mayoristas</strong> de {selectedCustomer.name}.
             </div>
           )}
 

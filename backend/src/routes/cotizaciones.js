@@ -1,6 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
-import { procesarVenta, responderErrorVenta, normalizarCarrito, cargarProductosActivos, VentaError } from '../services/ventas.js';
+import { procesarVenta, responderErrorVenta, normalizarCarrito, cargarProductosActivos, priceListFor, unitPriceFor, VentaError } from '../services/ventas.js';
 
 const router = express.Router();
 
@@ -57,9 +57,10 @@ router.post('/', async (req, res) => {
 
     const items = normalizarCarrito(req.body.cart);
     const productos = await cargarProductosActivos(prisma, items);
+    const priceList = await priceListFor(prisma, clienteId ? parseInt(clienteId, 10) : null);
 
     const detalles = items.map(item => {
-      const unitPrice = productos.get(item.id).price;
+      const unitPrice = unitPriceFor(productos.get(item.id), priceList);
       return {
         productoId: item.id,
         quantity: item.qty,

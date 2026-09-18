@@ -78,16 +78,18 @@ export async function createOrder(db, payload, user) {
   }
   const items = normalizarCarrito(payload.cart);
   const cotizacionId = toId(payload.cotizacionId);
+  const clienteId = toId(payload.clienteId);
 
   return db.$transaction(async (tx) => {
-    const { lineas, total } = await priceLines(tx, items, cotizacionId);
+    // La lista de precios se aplica al armar el pedido: el cliente mayorista debe elegirse en el POS.
+    const { lineas, total } = await priceLines(tx, items, cotizacionId, clienteId);
     assertExpectedTotal(payload.totalEsperado, lineas, total);
 
     const order = await tx.venta.create({
       data: {
         status: 'PENDING_PAYMENT',
         total,
-        clienteId: toId(payload.clienteId),
+        clienteId,
         vendedorId: user.id,
         cotizacionId,
         expiresAt: endOfBusinessDay(),
