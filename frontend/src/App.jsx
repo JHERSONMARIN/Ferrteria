@@ -129,43 +129,41 @@ export default function App() {
     if (currentUser?.id) loadSettings();
   }, [currentUser?.id]);
 
-  // Heartbeat cada 8s para sincronizar roles y estado activo del usuario
+  // Aplica al estado local los datos del usuario que devuelve el servidor.
+  const syncUser = (serverUser) => {
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const hasChanged = JSON.stringify(serverUser.modules) !== JSON.stringify(prev.modules) ||
+                         serverUser.role !== prev.role || serverUser.name !== prev.name;
+      if (!hasChanged) return prev;
+      const updated = { ...prev, modules: serverUser.modules, role: serverUser.role, name: serverUser.name };
+      localStorage.setItem('ferre_user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Latido cada 8s: confirma que la sesión sigue válida y sincroniza rol y módulos.
+  // Si la sesión venció o el usuario fue desactivado, api.js emite "sesion-expirada".
   useEffect(() => {
-    if (!currentUser || !currentUser.id) return;
+    if (!currentUser?.id) return;
 
-    const heartbeatInterval = setInterval(async () => {
-      try {
-        const res = await api.get(`/usuarios/check/${currentUser.id}`);
-        const serverUser = res?.user || res;
-
-        if (!res?.active || (serverUser && !serverUser.active)) {
-          alert('Tu usuario ha sido desactivado o tus permisos han sido modificados.');
-          handleLogout();
-          return;
-        }
-
-        const newModules = serverUser?.modules ?? res?.modules;
-        const newRole = serverUser?.role ?? res?.role;
-        const newName = serverUser?.name ?? res?.name;
-
-        // Solo actualizar si recibimos datos válidos y no destructivos
-        if (newModules !== undefined && newRole !== undefined && newName !== undefined) {
-          const hasChanged = JSON.stringify(newModules) !== JSON.stringify(currentUser.modules) ||
-                             newRole !== currentUser.role ||
-                             newName !== currentUser.name;
-          if (hasChanged) {
-            const updated = { ...currentUser, modules: newModules, role: newRole, name: newName };
-            setCurrentUser(updated);
-            localStorage.setItem('ferre_user', JSON.stringify(updated));
-          }
-        }
-      } catch (err) {
-        // En caso de caída de backend temporal, no desloguear agresivamente
-      }
-    }, 8000);
-
+    const checkSession = () => api.get('/auth/me').then(res => syncUser(res.user)).catch(() => {});
+    checkSession();
+    const heartbeatInterval = setInterval(checkSession, 8000);
     return () => clearInterval(heartbeatInterval);
-  }, [currentUser]);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    const onSessionExpired = () => {
+      if (localStorage.getItem('ferre_user')) {
+        localStorage.removeItem('ferre_user');
+        alert('Su sesión terminó o su usuario fue modificado. Inicie sesión nuevamente.');
+      }
+      setCurrentUser(null);
+    };
+    window.addEventListener('sesion-expirada', onSessionExpired);
+    return () => window.removeEventListener('sesion-expirada', onSessionExpired);
+  }, []);
 
   // Si el usuario cambia de tab a uno al que no tiene acceso, redirigirlo al primero accesible
   useEffect(() => {
@@ -223,6 +221,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    api.post('/auth/logout', {}).catch(() => {});
     setCurrentUser(null);
     localStorage.removeItem('ferre_user');
     setLoginUser('');

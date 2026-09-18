@@ -1,6 +1,8 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { hashPassword, verifyPassword } from '../services/passwords.js';
+import { createSessionToken } from '../services/sessionTokens.js';
+import { authenticate, setSessionCookie, clearSessionCookie } from '../middleware/authenticate.js';
 
 const router = express.Router();
 
@@ -34,7 +36,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciales incorrectas o usuario inactivo.' });
     }
 
-    // No devolvemos el hash o password plano en respuesta completa
+    setSessionCookie(res, createSessionToken(usuario));
     const { pass: _, ...userData } = usuario;
     res.json({ success: true, user: userData });
   } catch (error) {
@@ -43,36 +45,15 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/usuarios/check/:id (Heartbeat de sesión)
-router.get('/check/:id', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const usuario = await prisma.usuario.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        user: true,
-        role: true,
-        modules: true,
-        active: true,
-      }
-    });
+// POST /api/auth/logout
+router.post('/logout', (req, res) => {
+  clearSessionCookie(res);
+  res.json({ success: true });
+});
 
-    if (!usuario || !usuario.active) {
-      return res.json({ active: false, error: 'Usuario desactivado o no encontrado.' });
-    }
-
-    res.json({
-      active: true,
-      user: usuario,
-      modules: usuario.modules,
-      role: usuario.role,
-      name: usuario.name,
-    });
-  } catch (error) {
-    res.status(500).json({ active: false, error: error.message });
-  }
+// GET /api/auth/me: usuario de la sesión actual (también sirve de latido para detectar cambios)
+router.get('/me', authenticate, (req, res) => {
+  res.json({ user: req.user });
 });
 
 export default router;

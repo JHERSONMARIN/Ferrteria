@@ -37,7 +37,6 @@ app.use((req, res, next) => {
 
 // Rutas de la API
 app.use('/api/auth', authRoutes);
-app.use('/api/usuarios', authRoutes); // Heartbeat `/api/usuarios/check/:id`
 app.use('/api/personal', personalRoutes);
 app.use('/api/clientes', consultaDocRoutes);
 app.use('/api/clientes', clientesRoutes);

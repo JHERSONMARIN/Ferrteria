@@ -11,6 +11,9 @@ services:
       TZ: America/Lima
       DATABASE_URL: ${DATABASE_URL}
       DEMO_MODE: ${DEMO_MODE:-false}
+      JWT_SECRET: ${JWT_SECRET}
+      # Poner true cuando la instancia se sirva por HTTPS (proxy del servidor).
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       COMPANY_NAME: ${COMPANY_NAME}
       # Módulos contratados; vacío = todos. Se cambia con deploy/set-modules.sh
       LICENSED_MODULES: ${LICENSED_MODULES:-}
