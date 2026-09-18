@@ -126,6 +126,9 @@ export default function App() {
 
   // La configuración no es un módulo desactivable: la ve siempre el administrador.
   const saleFlowMode = settings?.saleFlowMode || 'DIRECT';
+  // El envío a domicilio solo se ofrece si la empresa usa (y tiene contratado) el módulo de entregas.
+  const deliveriesEnabled = Boolean(settings?.enabledModules?.includes('deliveries'))
+    && (!licensedModules || licensedModules.includes('deliveries'));
 
   // Pantallas que dependen del modo de trabajo: "Por cobrar" (con pedidos) y "Por despachar" (por etapas).
   const navigableTabs = useMemo(() => {
@@ -424,6 +427,7 @@ export default function App() {
                   currentUser={currentUser}
                   onTriggerPrint={setTicketData}
                   saleFlowMode={saleFlowMode}
+                  deliveriesEnabled={deliveriesEnabled}
                 />
               )}
               {activeTab === 'caja' && <CajaPage currentUser={currentUser} />}
@@ -450,7 +454,7 @@ export default function App() {
               {activeTab === 'kardex' && <KardexPage currentUser={currentUser} />}
               {activeTab === 'compras' && <ComprasPage />}
               {activeTab === 'deliveries' && (
-                <EntregasPage onTriggerPrint={setTicketData} />
+                <EntregasPage currentUser={currentUser} />
               )}
               {activeTab === 'client-dir' && <ClientesPage />}
               {activeTab === 'customers' && <CreditosPage />}
@@ -458,7 +462,12 @@ export default function App() {
               {activeTab === 'dashboard' && <DashboardPage />}
               {activeTab === 'settings' && isAdmin && <SettingsPage onSaved={setSettings} />}
               {activeTab === 'cobros' && (
-                <CashierQueuePage currentUser={currentUser} onTriggerPrint={setTicketData} saleFlowMode={saleFlowMode} />
+                <CashierQueuePage
+                  currentUser={currentUser}
+                  onTriggerPrint={setTicketData}
+                  saleFlowMode={saleFlowMode}
+                  deliveriesEnabled={deliveriesEnabled}
+                />
               )}
               {activeTab === 'despacho' && <DispatchQueuePage />}
               </>)}

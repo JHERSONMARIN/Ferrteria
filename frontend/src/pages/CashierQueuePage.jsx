@@ -16,7 +16,7 @@ function minutesAgo(date) {
 }
 
 // Cola de pedidos que los vendedores enviaron a caja.
-export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlowMode }) {
+export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlowMode, deliveriesEnabled = false }) {
   const [orders, setOrders] = useState([]);
   const [clients, setClients] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -99,6 +99,7 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
       mixDigital: payment.mixDigital,
       payCode: payment.payCode,
       clienteId: payment.customer ? payment.customer.id : null,
+      delivery: payment.delivery,
     });
     const order = res.pedido;
     window.dispatchEvent(new Event('venta-registrada'));
@@ -109,13 +110,16 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
     }
 
     const staged = saleFlowMode === 'STAGED';
+    const pickupMessage = staged
+      ? 'Indique al cliente que recoja sus productos en despacho con este número.'
+      : 'Entregue los productos al cliente.';
     setSuccess({
-      icon: staged ? 'fa-dolly' : 'fa-check',
+      icon: order.delivery ? 'fa-truck-fast' : staged ? 'fa-dolly' : 'fa-check',
       title: staged ? 'Pedido cobrado' : 'Venta completada',
       highlight: `N° ${order.id}`,
-      subtitle: staged
-        ? 'Indique al cliente que recoja sus productos en despacho con este número.'
-        : 'Entregue los productos al cliente.',
+      subtitle: order.delivery
+        ? `Se enviará a domicilio (${order.delivery.ref}). ${staged ? 'Almacén lo preparará para el repartidor.' : 'Entregue los productos al repartidor.'}`
+        : pickupMessage,
       rows: [{ label: `${order.numDoc} (${payment.payMethod})`, value: formatSoles(order.total) }],
       change: payment.receivedCash !== null ? payment.receivedCash - order.total : null,
       buttonLabel: 'Siguiente pedido',
@@ -293,6 +297,7 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
           onCustomerInputChange={setCustomerInput}
           onClose={() => setShowCheckout(false)}
           onConfirm={confirmPayment}
+          allowDelivery={deliveriesEnabled}
         />
       )}
 

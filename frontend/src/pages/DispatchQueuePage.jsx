@@ -116,7 +116,13 @@ export default function DispatchQueuePage() {
             >
               <div className="flex items-center justify-between">
                 <span className="text-lg font-black text-slate-900">N° {order.id}</span>
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Pagado</span>
+                {order.delivery ? (
+                  <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                    <i className="fa-solid fa-truck-fast mr-1"></i>Envío
+                  </span>
+                ) : (
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Retira</span>
+                )}
               </div>
               <div className="flex items-center justify-between text-xs text-slate-500 mt-0.5">
                 <span className="truncate">{order.customer} · {order.items.length} prod.</span>
@@ -159,6 +165,12 @@ export default function DispatchQueuePage() {
             </div>
 
             <div className="flex-1 lg:overflow-y-auto p-5">
+              {selected.delivery && (
+                <div className="mb-4 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+                  <p className="font-bold"><i className="fa-solid fa-truck-fast mr-1.5"></i>Envío a domicilio · {selected.delivery.ref}</p>
+                  <p className="text-xs mt-0.5">Entregue estos productos al repartidor, no al cliente. Destino: {selected.delivery.address}</p>
+                </div>
+              )}
               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Productos a entregar</p>
               <ul className="flex flex-col gap-2">
                 {selected.items.map(item => (

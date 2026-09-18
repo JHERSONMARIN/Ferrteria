@@ -1,147 +1,72 @@
 import express from 'express';
 import { prisma } from '../db.js';
-import { takeAvailableStock } from '../services/stock.js';
+import {
+  DeliveryError, listDeliveries, assignCourier, markDeparted, markDelivered, cancelDelivery,
+  scheduleDeliveryForExistingSale, findSaleForDelivery,
+} from '../services/deliveries.js';
 
 const router = express.Router();
 
-// GET /api/entregas (Optimizado para polling continuo <15ms)
-router.get('/', async (req, res) => {
+const handle = (action) => async (req, res) => {
   try {
-    const list = await prisma.entrega.findMany({
-      select: {
-        id: true,
-        ref: true,
-        address: true,
-        status: true,
-        createdAt: true,
-        cliente: {
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            address: true,
-          }
-        },
-        repartidor: {
-          select: {
-            id: true,
-            name: true,
-            role: true,
-          }
-        },
-        detalles: {
-          select: {
-            quantity: true,
-            producto: {
-              select: {
-                name: true,
-              }
-            }
-          }
-        }
-      },
-      orderBy: { id: 'desc' }
-    });
-
-    const formatted = list.map(d => ({
-      id: d.id,
-      ref: d.ref,
-      client: d.cliente.name,
-      phone: d.cliente.phone,
-      seller: d.repartidor ? d.repartidor.name : 'Sin asignar',
-      address: d.address || d.cliente.address || 'Sin dirección',
-      date: new Date(d.createdAt).toLocaleString('es-PE'),
-      status: d.status === 'ENTREGADO' ? 'Entregado' : (d.status === 'CANCELADO' ? 'Cancelado' : 'Pendiente'),
-      items: d.detalles.map(dt => `${dt.quantity}x ${dt.producto.name}`).join(', '),
-    }));
-
-    res.json(formatted);
+    await action(req, res);
   } catch (error) {
-    res.status(500).json({ error: 'Error al listar entregas.' });
+    if (error instanceof DeliveryError) return res.status(error.status).json({ error: error.message });
+    console.error('[entregas.js] Error:', error);
+    res.status(500).json({ error: 'No se pudo completar la operación de entrega.' });
   }
-});
+};
 
-// POST /api/entregas
-router.post('/', async (req, res) => {
-  try {
-    const { clienteId, repartidorId, address, items } = req.body;
-
-    if (!clienteId || !items || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Cliente y al menos un producto requeridos.' });
-    }
-
-    const entregaResult = await prisma.$transaction(async (tx) => {
-      const count = await tx.entrega.count();
-      const refCode = `ENT-${String(count + 1).padStart(4, '0')}`;
-
-      // Descontar stock y registrar Kardex por entrega
-      for (const item of items) {
-        const prod = await tx.producto.findUnique({ where: { id: item.id } });
-        if (!prod || prod.stock < item.qty) {
-          throw new Error(`Stock insuficiente para el producto ${item.name || item.id}`);
-        }
-      }
-
-      const entrega = await tx.entrega.create({
-        data: {
-          ref: refCode,
-          clienteId: parseInt(clienteId),
-          repartidorId: repartidorId ? parseInt(repartidorId) : null,
-          address: address ? address.trim() : '',
-          status: 'PENDIENTE',
-        }
-      });
-
-      for (const item of items) {
-        await tx.detalleEntrega.create({
-          data: {
-            entregaId: entrega.id,
-            productoId: item.id,
-            quantity: item.qty,
-          }
-        });
-
-        // Solo del disponible (stock menos lo reservado por pedidos); antes podía quedar negativo.
-        const stockAfter = await takeAvailableStock(tx, parseInt(item.id, 10), parseInt(item.qty, 10));
-
-        // Registrar Kardex
-        await tx.movimientoKardex.create({
-          data: {
-            productoId: item.id,
-            type: 'SALIDA',
-            qty: item.qty,
-            stockAfter,
-            ref: `Orden de Entrega ${refCode}`,
-          }
-        });
-      }
-
-      return entrega;
-    });
-
-    res.status(201).json({ success: true, entrega: entregaResult });
-  } catch (error) {
-    res.status(400).json({ error: error.message || 'Error al programar entrega.' });
+const deliveryId = (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) {
+    res.status(400).json({ error: 'Entrega no válida.' });
+    return null;
   }
-});
+  return id;
+};
 
-// PATCH /api/entregas/:id/estado
-router.patch('/:id/estado', async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const { status } = req.body;
+// GET /api/entregas?estado=activas|finalizadas&mias=1
+router.get('/', handle(async (req, res) => {
+  res.json(await listDeliveries(prisma, {
+    finished: req.query.estado === 'finalizadas',
+    onlyUserId: req.query.mias === '1' ? req.user.id : null,
+  }));
+}));
 
-    const updated = await prisma.entrega.update({
-      where: { id },
-      data: {
-        status: status === 'Entregado' || status === 'ENTREGADO' ? 'ENTREGADO' : 'PENDIENTE'
-      }
-    });
+// GET /api/entregas/venta/:numDoc  (vista previa para programar el envío de una venta ya cobrada)
+router.get('/venta/:numDoc', handle(async (req, res) => {
+  res.json(await findSaleForDelivery(prisma, req.params.numDoc));
+}));
 
-    res.json(updated);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al cambiar estado de entrega.' });
-  }
-});
+// POST /api/entregas  { numDoc, address, contactName, contactPhone, notes }
+router.post('/', handle(async (req, res) => {
+  const { numDoc, ...delivery } = req.body;
+  res.status(201).json({ success: true, entrega: await scheduleDeliveryForExistingSale(prisma, numDoc, delivery) });
+}));
+
+// PATCH /api/entregas/:id/repartidor  { repartidorId | null }
+router.patch('/:id/repartidor', handle(async (req, res) => {
+  const id = deliveryId(req, res);
+  if (id === null) return;
+  const courierId = req.body.repartidorId ? parseInt(req.body.repartidorId, 10) : null;
+  res.json(await assignCourier(prisma, id, courierId));
+}));
+
+// POST /api/entregas/:id/salir | /entregar | /cancelar
+router.post('/:id/salir', handle(async (req, res) => {
+  const id = deliveryId(req, res);
+  if (id !== null) res.json(await markDeparted(prisma, id, req.user));
+}));
+
+router.post('/:id/entregar', handle(async (req, res) => {
+  const id = deliveryId(req, res);
+  if (id !== null) res.json(await markDelivered(prisma, id, req.user));
+}));
+
+router.post('/:id/cancelar', handle(async (req, res) => {
+  const id = deliveryId(req, res);
+  if (id !== null) res.json(await cancelDelivery(prisma, id, req.user, req.body?.reason));
+}));
 
 export default router;

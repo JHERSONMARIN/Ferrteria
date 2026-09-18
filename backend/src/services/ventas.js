@@ -1,6 +1,7 @@
 import { nextDocumentNumber, DocumentSeriesError } from './documentSeries.js';
 import { takeAvailableStock, StockError } from './stock.js';
 import { getSettings } from './settings.js';
+import { parseDeliveryRequest, scheduleDeliveryForSale, DeliveryError } from './deliveries.js';
 
 export class VentaError extends Error {
   constructor(message, status = 400, codigo = null, extra = null) {
@@ -202,7 +203,7 @@ export const publicLines = (lineas) =>
 async function ejecutarVenta(tx, datos) {
   const {
     items, docTypeEnum, payMethodEnum, mixCash, mixDigital, payCode,
-    clienteId, vendedorId, cajaUsuarioId, cotizacionId, totalEsperado,
+    clienteId, vendedorId, cajaUsuarioId, cotizacionId, totalEsperado, delivery,
   } = datos;
 
   const { lineas, total } = await priceLines(tx, items, cotizacionId);
@@ -252,7 +253,11 @@ async function ejecutarVenta(tx, datos) {
 
   if (payMethodEnum === 'FIADO') await recordCreditCharge(tx, { clienteId, total, numDoc, lineas });
 
-  return { ...venta, items: publicLines(lineas) };
+  const entrega = delivery
+    ? await scheduleDeliveryForSale(tx, { ventaId: venta.id, numDoc, clienteId, lines: lineas, delivery })
+    : null;
+
+  return { ...venta, items: publicLines(lineas), delivery: entrega };
 }
 
 export async function procesarVenta(prisma, payload) {
@@ -278,6 +283,7 @@ export async function procesarVenta(prisma, payload) {
     cajaUsuarioId,
     cotizacionId: toId(payload.cotizacionId),
     totalEsperado: payload.totalEsperado,
+    delivery: parseDeliveryRequest(payload.delivery),
   };
 
   return prisma.$transaction(tx => ejecutarVenta(tx, datos));
@@ -289,6 +295,9 @@ export function responderErrorVenta(res, error, contexto) {
   }
   if (error instanceof DocumentSeriesError) {
     return res.status(400).json({ error: error.message });
+  }
+  if (error instanceof DeliveryError) {
+    return res.status(error.status).json({ error: error.message });
   }
   if (error instanceof StockError) {
     return res.status(error.status).json({ error: error.message });

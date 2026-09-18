@@ -31,7 +31,7 @@ function Section({ title, children }) {
 
 // Ventana de cobro: comprobante, cliente y medio de pago. Valida los datos y entrega el pago a
 // onConfirm; si onConfirm lanza un error, su mensaje se muestra aquí para corregir y reintentar.
-export default function CheckoutModal({ title, total, units, clients, customerInput, onCustomerInputChange, onClose, onConfirm }) {
+export default function CheckoutModal({ title, total, units, clients, customerInput, onCustomerInputChange, onClose, onConfirm, allowDelivery = false }) {
   const [docType, setDocType] = useState('Nota de Venta');
   const [payMethod, setPayMethod] = useState('Efectivo');
   const [payCode, setPayCode] = useState('');
@@ -41,6 +41,11 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
   const [customerName, setCustomerName] = useState('');
   const [customerDni, setCustomerDni] = useState('');
   const [customerRuc, setCustomerRuc] = useState('');
+  const [deliveryType, setDeliveryType] = useState('PICKUP');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryPhone, setDeliveryPhone] = useState('');
+  const [deliveryRecipient, setDeliveryRecipient] = useState('');
+  const [deliveryNotes, setDeliveryNotes] = useState('');
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -63,6 +68,18 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
   const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
 
   const close = () => { if (!processing) onClose(); };
+
+  // Al elegir envío se proponen los datos del cliente registrado (se pueden corregir).
+  const chooseDelivery = (type) => {
+    setDeliveryType(type);
+    if (type === 'DELIVERY') {
+      if (!deliveryAddress && customer?.address) setDeliveryAddress(customer.address);
+      if (!deliveryPhone && customer?.phone) setDeliveryPhone(customer.phone);
+      if (!deliveryRecipient) setDeliveryRecipient(customer?.name || customerName.trim());
+    }
+    clearError('deliveryAddress');
+    clearError('deliveryPhone');
+  };
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') close(); };
@@ -87,6 +104,10 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
       else if (received + 0.001 < total) e.receivedCash = `El monto recibido es menor al total (${formatSoles(total)}).`;
     }
     if (payMethod === 'Yape/Plin' && !payCode.trim()) e.payCode = 'Ingrese el N° de operación de Yape/Plin.';
+    if (deliveryType === 'DELIVERY') {
+      if (deliveryAddress.trim().length < 5) e.deliveryAddress = 'Ingrese la dirección de entrega.';
+      if (deliveryPhone.trim() && !/^[0-9+\s()-]{6,30}$/.test(deliveryPhone.trim())) e.deliveryPhone = 'Teléfono no válido.';
+    }
     if (payMethod === 'Pago Mixto') {
       const cash = parseFloat(mixCash);
       const digital = parseFloat(mixDigital);
@@ -117,6 +138,15 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
         customerName,
         customerDni,
         customerRuc,
+        delivery: deliveryType === 'DELIVERY'
+          ? {
+            type: 'DELIVERY',
+            address: deliveryAddress.trim(),
+            contactName: deliveryRecipient.trim() || (customer ? customer.name : customerName.trim()) || null,
+            contactPhone: deliveryPhone.trim() || null,
+            notes: deliveryNotes.trim() || null,
+          }
+          : null,
       });
     } catch (err) {
       setServerError(err.message || 'No se pudo completar el cobro.');
@@ -320,6 +350,80 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
               </p>
             )}
           </Section>
+
+          {allowDelivery && (
+            <Section title="4. Entrega">
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'PICKUP', label: 'Se lleva ahora', icon: 'fa-bag-shopping' },
+                  { id: 'DELIVERY', label: 'Envío a domicilio', icon: 'fa-truck-fast' },
+                ].map(option => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => chooseDelivery(option.id)}
+                    className={`${tile(deliveryType === option.id)} py-2.5 px-2 flex items-center justify-center gap-2`}
+                  >
+                    <i className={`fa-solid ${option.icon}`}></i>
+                    <span className="text-xs font-bold">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {deliveryType === 'DELIVERY' && (
+                <div className="mt-3 flex flex-col gap-2">
+                  <div>
+                    <label className="text-xs text-slate-500 mb-1 block">Dirección de entrega</label>
+                    <input
+                      type="text"
+                      maxLength={250}
+                      value={deliveryAddress}
+                      onChange={e => { setDeliveryAddress(e.target.value); clearError('deliveryAddress'); }}
+                      placeholder="Calle, número, referencia"
+                      className={`w-full px-3 py-2 border rounded-lg outline-none text-sm ${borderClass(errors.deliveryAddress)}`}
+                    />
+                    <FieldError msg={errors.deliveryAddress} />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Recibe</label>
+                      <input
+                        type="text"
+                        maxLength={120}
+                        value={deliveryRecipient}
+                        onChange={e => setDeliveryRecipient(e.target.value)}
+                        placeholder="Nombre de quien recibe"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Teléfono de contacto</label>
+                      <input
+                        type="tel"
+                        maxLength={30}
+                        value={deliveryPhone}
+                        onChange={e => { setDeliveryPhone(e.target.value); clearError('deliveryPhone'); }}
+                        placeholder="Opcional"
+                        className={`w-full px-3 py-2 border rounded-lg outline-none text-sm ${borderClass(errors.deliveryPhone)}`}
+                      />
+                      <FieldError msg={errors.deliveryPhone} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-xs text-slate-500 mb-1 block">Indicaciones</label>
+                      <input
+                        type="text"
+                        maxLength={300}
+                        value={deliveryNotes}
+                        onChange={e => setDeliveryNotes(e.target.value)}
+                        placeholder="Ej. dejar en portería"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Section>
+          )}
         </div>
 
         <div className="p-4 border-t border-gray-200 bg-slate-50 flex gap-2 shrink-0">
