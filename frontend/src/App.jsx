@@ -454,7 +454,7 @@ export default function App() {
               {activeTab === 'kardex' && <KardexPage currentUser={currentUser} />}
               {activeTab === 'compras' && <ComprasPage />}
               {activeTab === 'deliveries' && (
-                <EntregasPage onTriggerPrint={setTicketData} />
+                <EntregasPage currentUser={currentUser} />
               )}
               {activeTab === 'client-dir' && <ClientesPage />}
               {activeTab === 'customers' && <CreditosPage />}
