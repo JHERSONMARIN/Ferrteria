@@ -16,8 +16,10 @@ import comprasRoutes from './src/routes/compras.js';
 import cotizacionesRoutes from './src/routes/cotizaciones.js';
 import categoriesRoutes from './src/routes/categories.js';
 import settingsRoutes from './src/routes/settings.js';
+import pedidosRoutes from './src/routes/pedidos.js';
 import { prisma } from './src/db.js';
 import { initializeDocumentSeries } from './src/services/documentSeries.js';
+import { expireOrders } from './src/services/saleOrders.js';
 import { authenticate, requirePasswordChanged } from './src/middleware/authenticate.js';
 import { allowModules } from './src/middleware/authorize.js';
 
@@ -77,6 +79,8 @@ app.use('/api/creditos', allowModules({ default: ['customers'] }), creditosRoute
 app.use('/api/dashboard', allowModules({ default: ['dashboard'] }), dashboardRoutes);
 app.use('/api/proveedores', allowModules({ default: ['compras'] }), proveedoresRoutes);
 app.use('/api/compras', allowModules({ default: ['compras'] }), comprasRoutes);
+// Permisos por acción dentro del router (crear: POS, cobrar: caja, despachar: despacho).
+app.use('/api/pedidos', pedidosRoutes);
 
 // Cualquier otra ruta de la API
 app.use('/api', (req, res) => res.status(404).json({ error: 'Recurso no encontrado.' }));
@@ -93,6 +97,13 @@ try {
 } catch (error) {
   console.error('❌ No se pudieron inicializar las series de comprobantes:', error);
 }
+
+// Pedidos sin cobrar que pasaron el cierre del día: se anulan y liberan su stock reservado.
+const runOrderExpiration = () => expireOrders(prisma).catch(error => {
+  console.error('❌ Error al vencer pedidos:', error);
+});
+await runOrderExpiration();
+setInterval(runOrderExpiration, 5 * 60 * 1000).unref();
 
 app.listen(PORT, () => {
   console.log(`🚀 FerreSys Backend corriendo en el puerto ${PORT}`);
