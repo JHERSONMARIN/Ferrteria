@@ -26,6 +26,11 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Las peticiones llegan a través del proxy del frontend (y en producción también del proxy HTTPS).
+// Solo se confía en esa cantidad de saltos para obtener la IP real del cliente: con más,
+// cualquiera podría falsear su IP en X-Forwarded-For.
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
+
 // Sin CORS: el navegador siempre llega por el mismo dominio a través del proxy del frontend,
 // así que ningún otro sitio web puede llamar a la API con la sesión del usuario.
 app.use(express.json());

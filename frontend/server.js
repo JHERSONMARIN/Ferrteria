@@ -19,6 +19,8 @@ app.use(
   createProxyMiddleware({
     target: `${BACKEND_URL.replace(/\/$/, '')}/api`,
     changeOrigin: true,
+    // Informa al backend la IP real del cliente (límite de intentos de inicio de sesión).
+    xfwd: true,
   })
 );
 
