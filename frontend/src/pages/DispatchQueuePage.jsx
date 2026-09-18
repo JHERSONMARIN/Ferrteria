@@ -73,7 +73,9 @@ export default function DispatchQueuePage() {
   };
 
   return (
-    <div className="tab-content active h-full p-3 sm:p-4 overflow-y-auto lg:overflow-hidden flex flex-col lg:flex-row gap-4">
+    <div className="tab-content active h-full p-3 sm:p-4 overflow-y-auto lg:overflow-hidden">
+      {/* Contenedor propio: .tab-content fuerza columna y no dejaría aplicar lg:flex-row. */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:min-h-0">
       {/* ===== COLA ===== */}
       <div className="lg:w-[400px] flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 lg:overflow-hidden shrink-0">
         <div className="p-4 border-b border-gray-100 flex flex-col gap-3">
@@ -186,6 +188,7 @@ export default function DispatchQueuePage() {
             </div>
           </>
         )}
+      </div>
       </div>
     </div>
   );
