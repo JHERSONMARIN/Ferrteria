@@ -54,6 +54,11 @@ app.use('/api/compras', comprasRoutes);
 app.use('/api/cotizaciones', cotizacionesRoutes);
 app.use('/api/settings', settingsRoutes);
 
+// Información pública para la pantalla de inicio de sesión
+app.get('/api/app-info', (req, res) => {
+  res.json({ demoMode: process.env.DEMO_MODE === 'true' });
+});
+
 // Healthcheck
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', system: 'FerreSys v4.8 API', timestamp: new Date() });

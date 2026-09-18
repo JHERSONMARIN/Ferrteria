@@ -15,4 +15,4 @@ RUN npx prisma generate
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "node scripts/migrate.js && node prisma/seed.js && npm start"]
+CMD ["sh", "scripts/start.sh"]
