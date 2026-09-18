@@ -65,7 +65,7 @@ export function formatDelivery(d) {
     status: d.status,
     waitingDispatch: isWaitingDispatch(d),
     address: d.address || d.cliente?.address || 'Sin dirección',
-    contactName: d.contactName || d.cliente?.name || 'Sin nombre',
+    contactName: d.contactName || d.cliente?.name || 'Cliente sin nombre',
     contactPhone: d.contactPhone || d.cliente?.phone || null,
     notes: d.notes,
     saleNumDoc: d.venta?.numDoc ?? null,

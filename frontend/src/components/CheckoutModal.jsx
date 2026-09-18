@@ -44,6 +44,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
   const [deliveryType, setDeliveryType] = useState('PICKUP');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryPhone, setDeliveryPhone] = useState('');
+  const [deliveryRecipient, setDeliveryRecipient] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
@@ -74,6 +75,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
     if (type === 'DELIVERY') {
       if (!deliveryAddress && customer?.address) setDeliveryAddress(customer.address);
       if (!deliveryPhone && customer?.phone) setDeliveryPhone(customer.phone);
+      if (!deliveryRecipient) setDeliveryRecipient(customer?.name || customerName.trim());
     }
     clearError('deliveryAddress');
     clearError('deliveryPhone');
@@ -140,7 +142,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
           ? {
             type: 'DELIVERY',
             address: deliveryAddress.trim(),
-            contactName: customer ? customer.name : customerName.trim() || null,
+            contactName: deliveryRecipient.trim() || (customer ? customer.name : customerName.trim()) || null,
             contactPhone: deliveryPhone.trim() || null,
             notes: deliveryNotes.trim() || null,
           }
@@ -384,6 +386,17 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Recibe</label>
+                      <input
+                        type="text"
+                        maxLength={120}
+                        value={deliveryRecipient}
+                        onChange={e => setDeliveryRecipient(e.target.value)}
+                        placeholder="Nombre de quien recibe"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm"
+                      />
+                    </div>
+                    <div>
                       <label className="text-xs text-slate-500 mb-1 block">Teléfono de contacto</label>
                       <input
                         type="tel"
@@ -395,7 +408,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
                       />
                       <FieldError msg={errors.deliveryPhone} />
                     </div>
-                    <div>
+                    <div className="sm:col-span-2">
                       <label className="text-xs text-slate-500 mb-1 block">Indicaciones</label>
                       <input
                         type="text"
