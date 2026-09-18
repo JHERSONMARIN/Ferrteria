@@ -1,5 +1,6 @@
 import { nextDocumentNumber, DocumentSeriesError } from './documentSeries.js';
 import { takeAvailableStock, StockError } from './stock.js';
+import { quantityProblem, roundQuantity, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, DeliveryError } from './deliveries.js';
 
@@ -24,8 +25,9 @@ const PAY_METHODS = {
 
 const redondear = (n) => Math.round(n * 100) / 100;
 
-// Agrupa productos repetidos y rechaza ids o cantidades que no sean enteros positivos.
-// Se ordena por id para que las ventas concurrentes bloqueen filas en el mismo orden.
+// Agrupa productos repetidos y rechaza ids inválidos o cantidades no positivas. Si el producto admite
+// fracciones se valida después, al cargarlo. Se ordena por id para que las ventas concurrentes
+// bloqueen filas en el mismo orden.
 export function normalizarCarrito(cart) {
   if (!Array.isArray(cart) || cart.length === 0) {
     throw new VentaError('El carrito no puede estar vacío.');
@@ -38,10 +40,10 @@ export function normalizarCarrito(cart) {
     if (!Number.isInteger(id) || id <= 0) {
       throw new VentaError('El carrito contiene un producto inválido.');
     }
-    if (!Number.isInteger(qty) || qty <= 0) {
-      throw new VentaError(`Cantidad inválida para ${item?.name || `el producto ${id}`}. Debe ser un entero mayor a 0.`);
+    if (!Number.isFinite(qty) || qty <= 0 || roundQuantity(qty) !== qty) {
+      throw new VentaError(`Cantidad inválida para ${item?.name || `el producto ${id}`}: debe ser mayor a 0 y con hasta ${MAX_QUANTITY_DECIMALS} decimales.`);
     }
-    cantidades.set(id, (cantidades.get(id) || 0) + qty);
+    cantidades.set(id, roundQuantity((cantidades.get(id) || 0) + qty));
   }
 
   return [...cantidades].map(([id, qty]) => ({ id, qty })).sort((a, b) => a.id - b.id);
@@ -50,7 +52,7 @@ export function normalizarCarrito(cart) {
 export async function cargarProductosActivos(db, items) {
   const productos = await db.producto.findMany({
     where: { id: { in: items.map(i => i.id) } },
-    select: { id: true, name: true, code: true, price: true, stock: true, active: true },
+    select: { id: true, name: true, code: true, price: true, stock: true, active: true, allowsFractions: true, unit: true },
   });
   const porId = new Map(productos.map(p => [p.id, p]));
 
@@ -59,6 +61,8 @@ export async function cargarProductosActivos(db, items) {
     if (!prod || !prod.active) {
       throw new VentaError(`El producto ${prod?.name || item.id} no existe o no está activo.`);
     }
+    const problem = quantityProblem(item.qty, prod.allowsFractions);
+    if (problem) throw new VentaError(`La cantidad de ${prod.name} ${problem}.`);
   }
   return porId;
 }

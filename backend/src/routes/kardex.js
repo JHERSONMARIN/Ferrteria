@@ -1,5 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
+import { quantityProblem, roundQuantity } from '../utils/quantities.js';
 
 const router = express.Router();
 
@@ -133,9 +134,9 @@ router.post('/', async (req, res) => {
   try {
     const { productoId, type, qty, ref } = req.body;
     const usuarioId = req.user.id;
-    const qtyNum = parseInt(qty, 10);
+    const qtyNum = Number(qty);
 
-    if (!productoId || !type || isNaN(qtyNum) || qtyNum <= 0) {
+    if (!productoId || !type || !Number.isFinite(qtyNum) || qtyNum <= 0) {
       return res.status(400).json({ error: 'Parámetros inválidos para registrar el movimiento.' });
     }
 
@@ -144,6 +145,8 @@ router.post('/', async (req, res) => {
         where: { id: parseInt(productoId, 10) },
       });
       if (!prod) throw new Error('Producto no encontrado.');
+      const problem = quantityProblem(qtyNum, prod.allowsFractions);
+      if (problem) throw new Error(`La cantidad ${problem}.`);
 
       // Lo reservado por pedidos no se puede sacar manualmente.
       const available = prod.stock - prod.reserved;
@@ -151,7 +154,7 @@ router.post('/', async (req, res) => {
         throw new Error(`Stock insuficiente. Disponible: ${available}${prod.reserved > 0 ? ` (${prod.reserved} reservado para pedidos)` : ''}`);
       }
 
-      const newStock = type === 'ENTRADA' ? prod.stock + qtyNum : prod.stock - qtyNum;
+      const newStock = roundQuantity(type === 'ENTRADA' ? prod.stock + qtyNum : prod.stock - qtyNum);
 
       // Actualizar stock del producto
       await tx.producto.update({

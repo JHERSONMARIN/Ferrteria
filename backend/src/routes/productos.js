@@ -1,5 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
+import { quantityProblem } from '../utils/quantities.js';
 
 const router = express.Router();
 
@@ -13,6 +14,7 @@ router.get('/', async (req, res) => {
         code: true,
         name: true,
         unit: true,
+        allowsFractions: true,
         stock: true,
         reserved: true,
         minStock: true,
@@ -58,14 +60,23 @@ router.get('/categorias', async (req, res) => {
 // POST /api/productos
 router.post('/', async (req, res) => {
   try {
-    const { code, name, unit, stock, price, category, categoriaId } = req.body;
+    const { code, name, unit, stock, price, category, categoriaId, minStock } = req.body;
     const usuarioId = req.user.id;
     if (!code || !name || isNaN(stock) || isNaN(price)) {
       return res.status(400).json({ error: 'Completa todos los campos obligatorios.' });
     }
 
-    const stockNum = parseInt(stock, 10);
+    const allowsFractions = req.body.allowsFractions === true;
+    const stockNum = Number(stock);
     const priceNum = parseFloat(price);
+    const minStockNum = minStock === undefined || minStock === '' ? 10 : Number(minStock);
+    if (stockNum !== 0) {
+      const problem = quantityProblem(stockNum, allowsFractions);
+      if (problem) return res.status(400).json({ error: `El stock inicial ${problem}.` });
+    }
+    if (!Number.isFinite(minStockNum) || minStockNum < 0) {
+      return res.status(400).json({ error: 'El stock mínimo no es válido.' });
+    }
     const categoryName = category && category.trim() ? category.trim() : 'General';
 
     // Resolver Categoria relacional
@@ -89,7 +100,9 @@ router.post('/', async (req, res) => {
           code: code.trim(),
           name: name.trim(),
           unit: unit || 'Unidad',
+          allowsFractions,
           stock: stockNum,
+          minStock: minStockNum,
           price: priceNum,
           category: categoryName,
           categoriaId: resolvedCatId,
@@ -126,7 +139,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const { code, name, unit, price, category, categoriaId, minStock } = req.body;
+    const { code, name, unit, price, category, categoriaId, minStock, allowsFractions } = req.body;
 
     if (!code || !code.trim() || !name || !name.trim()) {
       return res.status(400).json({ error: 'El código y el nombre son obligatorios.' });
@@ -150,19 +163,28 @@ router.put('/:id', async (req, res) => {
       resolvedCatId = catRecord.id;
     }
 
+    // No se puede dejar de vender fraccionado si el stock actual tiene decimales.
+    if (allowsFractions === false) {
+      const current = await prisma.producto.findUnique({ where: { id }, select: { stock: true, reserved: true } });
+      if (current && (!Number.isInteger(current.stock) || !Number.isInteger(current.reserved))) {
+        return res.status(400).json({ error: 'El stock actual tiene decimales: ajústelo en Kardex antes de venderlo solo por unidades.' });
+      }
+    }
+
     const updated = await prisma.producto.update({
       where: { id },
       data: {
         code: code.trim(),
         name: name.trim(),
         unit: unit || 'Unidad',
+        allowsFractions: typeof allowsFractions === 'boolean' ? allowsFractions : undefined,
         price: parseFloat(price),
         category: categoryName,
         categoriaId: resolvedCatId,
-        minStock: minStock !== undefined && !isNaN(parseInt(minStock, 10)) ? parseInt(minStock, 10) : undefined,
+        minStock: minStock !== undefined && minStock !== '' && Number(minStock) >= 0 ? Number(minStock) : undefined,
       },
       select: {
-        id: true, code: true, name: true, unit: true,
+        id: true, code: true, name: true, unit: true, allowsFractions: true,
         stock: true, minStock: true, price: true, category: true, categoriaId: true,
       },
     });
@@ -187,7 +209,7 @@ router.get('/barcode/:code', async (req, res) => {
     // 1. Buscar primero en base de datos local
     const local = await prisma.producto.findUnique({
       where: { code: barcode },
-      select: { id: true, code: true, name: true, unit: true, stock: true, price: true, category: true }
+      select: { id: true, code: true, name: true, unit: true, allowsFractions: true, stock: true, reserved: true, price: true, category: true }
     });
 
     if (local) {

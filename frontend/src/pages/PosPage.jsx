@@ -6,9 +6,41 @@ import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
 import { formatSoles } from '../utils/currency.js';
 import { findCustomerByInput } from '../utils/customers.js';
 import { buildSaleTicket, buildOrderTicket } from '../utils/tickets.js';
+import { quantityProblem, roundQuantity, formatQuantity } from '../utils/quantities.js';
 
 // Stock que se puede vender: lo reservado por pedidos sin despachar ya tiene dueño.
-const availableStock = (product) => product.stock - (product.reserved || 0);
+const availableStock = (product) => roundQuantity(product.stock - (product.reserved || 0));
+
+// "c/u" para lo que se vende por unidad; "/ metro", "/ kilo"… para lo demás.
+const perUnitLabel = (unit) => (!unit || unit === 'Unidad' ? 'c/u' : `/ ${unit.toLowerCase()}`);
+const stockUnitLabel = (unit) => (!unit || unit === 'Unidad' ? 'disp.' : `${unit.toLowerCase()} disp.`);
+
+// Cantidad editable: se confirma al salir del campo o con Enter, para poder escribir "2.5"
+// sin que el valor se corrija a mitad de camino.
+function CartQtyInput({ item, onCommit }) {
+  const [draft, setDraft] = useState(formatQuantity(item.qty));
+  useEffect(() => { setDraft(formatQuantity(item.qty)); }, [item.qty]);
+
+  const commit = () => {
+    const value = Number(draft.replace(',', '.'));
+    if (quantityProblem(value, item.allowsFractions)) setDraft(formatQuantity(item.qty));
+    else onCommit(value);
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode={item.allowsFractions ? 'decimal' : 'numeric'}
+      value={draft}
+      onFocus={e => e.target.select()}
+      onChange={e => setDraft(e.target.value.replace(item.allowsFractions ? /[^0-9.,]/g : /\D/g, ''))}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+      className={`${item.allowsFractions ? 'w-16' : 'w-11'} h-7 text-center border border-slate-300 rounded-md text-sm font-bold outline-none focus:border-orange-500`}
+      title={item.allowsFractions ? 'Admite decimales (hasta 3)' : undefined}
+    />
+  );
+}
 
 const TOAST_COLORS = { error: 'bg-red-600', exito: 'bg-emerald-600', info: 'bg-slate-800' };
 
@@ -107,7 +139,8 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
   const qtyInCart = useMemo(() => new Map(cart.map(i => [i.id, i.qty])), [cart]);
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const cartUnits = cart.reduce((sum, item) => sum + item.qty, 0);
+  // Cantidad de líneas: sumar metros con unidades no tiene sentido.
+  const cartUnits = cart.length;
   const cajaCerrada = isDirect && estadoCaja && estadoCaja.abierta === false;
   const selectedCustomer = findCustomerByInput(clients, customerInput);
 
@@ -125,17 +158,22 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       return showToast(`Solo hay ${available} unidades disponibles de ${product.name}.`, 'error');
     }
     setCart(prev => current
-      ? prev.map(i => (i.id === product.id ? { ...i, qty: i.qty + 1 } : i))
-      : [...prev, { id: product.id, name: product.name, code: product.code, price: product.price, qty: 1, stock: available }]
+      ? prev.map(i => (i.id === product.id ? { ...i, qty: roundQuantity(Math.min(i.qty + 1, available)) } : i))
+      : [...prev, {
+        id: product.id, name: product.name, code: product.code, price: product.price, qty: 1, stock: available,
+        unit: product.unit, allowsFractions: product.allowsFractions,
+      }]
     );
   };
 
   const setCartQty = (id, qty) => {
     const item = cart.find(i => i.id === id);
-    if (!item || qty < 1) return;
+    if (!item) return;
+    const problem = quantityProblem(qty, item.allowsFractions);
+    if (problem) return showToast(`La cantidad de ${item.name} ${problem}.`, 'error');
     let quantity = qty;
     if (quantity > item.stock) {
-      showToast(`Solo hay ${item.stock} unidades disponibles de ${item.name}.`, 'error');
+      showToast(`Solo hay ${formatQuantity(item.stock)} disponibles de ${item.name}.`, 'error');
       quantity = item.stock;
     }
     setCart(prev => prev.map(i => (i.id === id ? { ...i, qty: quantity } : i)));
@@ -361,6 +399,8 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       price: d.unitPrice,
       qty: d.quantity,
       stock: availableStock(d.producto),
+      unit: d.producto.unit,
+      allowsFractions: d.producto.allowsFractions,
     })));
     setLoadedQuote({ id: quote.id, numDoc: quote.numDoc });
     setCustomerInput(quote.clienteId ? `${quote.customerDoc} - ${quote.customer}` : '');
@@ -506,7 +546,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                           }`}
                           title={product.reserved > 0 ? `${product.reserved} reservado(s) para pedidos` : undefined}
                         >
-                          {soldOut ? 'Agotado' : `${available} disp.`}
+                          {soldOut ? 'Agotado' : `${formatQuantity(available)} ${stockUnitLabel(product.unit)}`}
                         </span>
                       </div>
                     </button>
@@ -526,7 +566,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <i className="fa-solid fa-cart-shopping text-orange-600"></i> {isDirect ? 'Venta actual' : 'Pedido actual'}
               {cart.length > 0 && (
-                <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-0.5 rounded-full">{cartUnits} und.</span>
+                <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-0.5 rounded-full">{cartUnits} prod.</span>
               )}
             </h3>
             {cart.length > 0 && (
@@ -572,32 +612,22 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                   <li key={item.id} className="py-3 flex gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-800 leading-snug line-clamp-2">{item.name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{formatSoles(item.price)} c/u</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{formatSoles(item.price)} {perUnitLabel(item.unit)}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1.5 shrink-0">
                       <span className="text-sm font-black text-slate-900 tabular-nums">{formatSoles(item.price * item.qty)}</span>
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => setCartQty(item.id, item.qty - 1)}
+                          onClick={() => setCartQty(item.id, roundQuantity(item.qty - 1))}
                           disabled={item.qty <= 1}
                           className="w-7 h-7 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           title="Quitar uno"
                         >
                           −
                         </button>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={item.qty}
-                          onFocus={e => e.target.select()}
-                          onChange={e => {
-                            const n = parseInt(e.target.value.replace(/\D/g, ''), 10);
-                            if (!isNaN(n)) setCartQty(item.id, n);
-                          }}
-                          className="w-11 h-7 text-center border border-slate-300 rounded-md text-sm font-bold outline-none focus:border-orange-500"
-                        />
+                        <CartQtyInput item={item} onCommit={qty => setCartQty(item.id, qty)} />
                         <button
-                          onClick={() => setCartQty(item.id, item.qty + 1)}
+                          onClick={() => setCartQty(item.id, roundQuantity(item.qty + 1))}
                           className="w-7 h-7 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
                           title="Agregar uno"
                         >

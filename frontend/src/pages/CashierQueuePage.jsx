@@ -291,7 +291,7 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
         <CheckoutModal
           title={`Pedido N° ${selected.id}`}
           total={selected.total}
-          units={selected.items.reduce((sum, i) => sum + i.qty, 0)}
+          units={selected.items.length}
           clients={clients}
           customerInput={customerInput}
           onCustomerInputChange={setCustomerInput}

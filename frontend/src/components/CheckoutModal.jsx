@@ -164,7 +164,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
       <div className="bg-white sm:rounded-xl rounded-t-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
         <div className="px-5 py-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
           <div>
-            <p className="text-xs text-slate-400 font-semibold">{title || 'Total a cobrar'} · {units} und.</p>
+            <p className="text-xs text-slate-400 font-semibold">{title || 'Total a cobrar'} · {units} {units === 1 ? 'producto' : 'productos'}</p>
             <p className="text-3xl font-black text-orange-400 tabular-nums">{formatSoles(total)}</p>
           </div>
           <button onClick={close} className="text-slate-400 hover:text-white p-1" title="Cerrar (Esc)">

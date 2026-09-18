@@ -106,6 +106,8 @@ model Producto {
   code      String   @unique
   name      String
   unit      String   @default("Unidad")
+  // Se vende fraccionado (metros, kilos): acepta hasta 3 decimales; si no, solo enteros.
+  allowsFractions Boolean @default(false)
   stock     Decimal      @default(0) @db.Decimal(12, 3)
   // Unidades apartadas por pedidos aún no despachados; disponible = stock - reserved.
   reserved  Decimal      @default(0) @db.Decimal(12, 3)

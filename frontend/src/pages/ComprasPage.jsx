@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
+import { quantityProblem, roundQuantity } from '../utils/quantities.js';
 
 export default function ComprasPage() {
   const [compras, setCompras] = useState([]);
@@ -135,12 +136,10 @@ export default function ComprasPage() {
 
   const handleAddCompraItem = () => {
     const e = {};
-    const qty = parseInt(productQty);
+    const qty = Number(productQty);
     const cost = parseFloat(productCost);
 
     if (!productInput.trim()) e.product = 'Seleccione un producto.';
-    if (productQty === '' || isNaN(qty)) e.qty = 'Ingrese la cantidad.';
-    else if (!Number.isInteger(Number(productQty)) || qty <= 0) e.qty = 'Cantidad entera mayor a 0.';
     if (productCost === '' || isNaN(cost)) e.cost = 'Ingrese el costo unitario.';
     else if (cost < 0) e.cost = 'El costo no puede ser negativo.';
 
@@ -150,6 +149,10 @@ export default function ComprasPage() {
     );
     if (!e.product && !prod) e.product = 'Producto no encontrado en el catálogo.';
 
+    // Enteros, o hasta 3 decimales si el producto se vende fraccionado (metros, kilos).
+    if (productQty === '' || isNaN(qty)) e.qty = 'Ingrese la cantidad.';
+    else if (prod && quantityProblem(qty, prod.allowsFractions)) e.qty = `La cantidad ${quantityProblem(qty, prod.allowsFractions)}.`;
+
     setItemErrors(e);
     if (Object.keys(e).length > 0) return;
 
@@ -157,7 +160,7 @@ export default function ComprasPage() {
     setCompraCart(prev => {
       const exist = prev.find(item => item.id === prod.id);
       if (exist) {
-        return prev.map(item => item.id === prod.id ? { ...item, qty: item.qty + qty, cost } : item);
+        return prev.map(item => item.id === prod.id ? { ...item, qty: roundQuantity(item.qty + qty), cost } : item);
       }
       return [...prev, { id: prod.id, name: prod.name, code: prod.code, qty, cost }];
     });
@@ -631,8 +634,8 @@ export default function ComprasPage() {
                 <div>
                   <input
                     type="number"
-                    min="1"
-                    step="1"
+                    min="0.001"
+                    step="any"
                     value={productQty}
                     onChange={e => { setProductQty(e.target.value); clearItemError('qty'); }}
                     placeholder="Cant."

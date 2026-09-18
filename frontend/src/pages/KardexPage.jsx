@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
+import { quantityProblem, roundQuantity, formatQuantity } from '../utils/quantities.js';
 
 const COMMON_REASONS = {
   ENTRADA: [
@@ -101,14 +102,12 @@ export default function KardexPage({ currentUser }) {
     if (!selectedProdId) e.producto = 'Seleccione un producto.';
 
     const qtyNum = Number(qty);
+    const prod = products.find((p) => String(p.id) === String(selectedProdId));
+    const available = prod ? roundQuantity(prod.stock - (prod.reserved || 0)) : 0;
     if (qty === '' || isNaN(qtyNum)) e.qty = 'Ingrese la cantidad.';
-    else if (!Number.isInteger(qtyNum)) e.qty = 'La cantidad debe ser un número entero.';
-    else if (qtyNum <= 0) e.qty = 'La cantidad debe ser mayor a 0.';
-    else if (type === 'SALIDA') {
-      const prod = products.find((p) => String(p.id) === String(selectedProdId));
-      if (prod && qtyNum > prod.stock) {
-        e.qty = `Stock insuficiente. Disponible: ${prod.stock}.`;
-      }
+    else if (prod && quantityProblem(qtyNum, prod.allowsFractions)) e.qty = `La cantidad ${quantityProblem(qtyNum, prod.allowsFractions)}.`;
+    else if (type === 'SALIDA' && prod && qtyNum > available) {
+      e.qty = `Stock insuficiente. Disponible: ${formatQuantity(available)}${prod.reserved > 0 ? ' (el resto está reservado para pedidos)' : ''}.`;
     }
 
     setErrors(e);
@@ -145,7 +144,7 @@ export default function KardexPage({ currentUser }) {
       await api.post('/kardex', {
         productoId: selectedProdId,
         type,
-        qty: parseInt(qty, 10),
+        qty: Number(qty),
         ref: fullRef,
         usuarioId: currentUser?.id,
       });
@@ -503,8 +502,8 @@ export default function KardexPage({ currentUser }) {
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    step="1"
+                    min="0.001"
+                    step="any"
                     value={qty}
                     onChange={(e) => {
                       setQty(e.target.value);
