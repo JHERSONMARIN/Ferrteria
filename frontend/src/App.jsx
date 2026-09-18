@@ -82,13 +82,17 @@ export default function App() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Todas');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settings, setSettings] = useState(null);
+  const [settingsStatus, setSettingsStatus] = useState('loading');
 
   // Módulos visibles: los asignados al usuario que además estén activos en la empresa.
+  // Mientras carga no se muestra ninguno (evita enseñar módulos desactivados); si la carga
+  // falla se usan los del usuario para no dejarlo sin acceso.
   const effectiveModules = useMemo(() => {
     const userModules = currentUser?.modules || [];
+    if (settingsStatus === 'loading') return [];
     if (!settings) return userModules;
     return userModules.filter(m => settings.enabledModules.includes(m));
-  }, [currentUser, settings]);
+  }, [currentUser, settings, settingsStatus]);
 
   const isAdmin = currentUser?.role === 'ADMINISTRADOR';
 
@@ -102,8 +106,10 @@ export default function App() {
     try {
       const res = await api.get('/settings');
       setSettings(res.settings);
+      setSettingsStatus('ready');
     } catch (err) {
       console.error('Error cargando la configuración de la empresa:', err);
+      setSettingsStatus('error');
     }
   };
 
@@ -349,6 +355,11 @@ export default function App() {
             />
 
             <div className="flex-1 overflow-hidden relative w-full h-full bg-gray-50">
+              {settingsStatus === 'loading' ? (
+                <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                  <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando…
+                </div>
+              ) : (<>
               {activeTab === 'pos' && (
                 <PosPage
                   currentUser={currentUser}
@@ -386,6 +397,7 @@ export default function App() {
               {activeTab === 'personal' && <PersonalPage currentUser={currentUser} />}
               {activeTab === 'dashboard' && <DashboardPage />}
               {activeTab === 'settings' && isAdmin && <SettingsPage onSaved={setSettings} />}
+              </>)}
             </div>
           </main>
         </div>
