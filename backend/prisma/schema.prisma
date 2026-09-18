@@ -354,3 +354,35 @@ model DetalleCotizacion {
 
   @@map("detalle_cotizaciones")
 }
+
+// Configuración de la empresa: una sola fila por instalación (id fijo = 1).
+model BusinessSettings {
+  id             Int      @id @default(1)
+  legalName      String
+  tradeName      String?
+  taxId          String?
+  address        String?
+  phone          String?
+  email          String?
+  currencySymbol String   @default("S/")
+  taxRate        Float    @default(18)
+  ticketFooter   String?
+  enabledModules Json
+  updatedAt      DateTime @updatedAt
+
+  @@map("business_settings")
+}
+
+// Series de comprobantes; lastNumber se incrementa de forma atómica al emitir.
+model DocumentSeries {
+  id           Int             @id @default(autoincrement())
+  documentType TipoComprobante
+  series       String          @unique
+  lastNumber   Int             @default(0)
+  isDefault    Boolean         @default(false)
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@map("document_series")
+}
