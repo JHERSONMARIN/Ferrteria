@@ -87,6 +87,10 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Recurso no encontra
 
 // Manejo Global de Errores
 app.use((err, req, res, next) => {
+  // Errores del propio cliente (JSON mal formado, cuerpo demasiado grande): no son fallas del servidor.
+  if (err.status >= 400 && err.status < 500) {
+    return res.status(err.status).json({ error: 'Solicitud inválida.' });
+  }
   console.error(`❌ Error no capturado en ${req.method} ${req.originalUrl}:`, err);
   res.status(500).json({ error: 'Error interno del servidor.' });
 });
