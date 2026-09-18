@@ -16,6 +16,7 @@ import proveedoresRoutes from './src/routes/proveedores.js';
 import comprasRoutes from './src/routes/compras.js';
 import cotizacionesRoutes from './src/routes/cotizaciones.js';
 import categoriesRoutes from './src/routes/categories.js';
+import settingsRoutes from './src/routes/settings.js';
 
 dotenv.config();
 
@@ -49,6 +50,7 @@ app.use('/api/caja', cajaRoutes);
 app.use('/api/proveedores', proveedoresRoutes);
 app.use('/api/compras', comprasRoutes);
 app.use('/api/cotizaciones', cotizacionesRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Healthcheck
 app.get('/api/health', (req, res) => {
