@@ -105,7 +105,7 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
     window.dispatchEvent(new Event('venta-registrada'));
 
     if (onTriggerPrint) {
-      onTriggerPrint(buildSaleTicket({ ...payment, numDoc: order.numDoc, items: order.items, total: order.total, sellerName: order.seller }));
+      onTriggerPrint(buildSaleTicket({ ...payment, numDoc: order.numDoc, items: order.items, total: order.total, discount: order.discount, sellerName: order.seller }));
       setTimeout(() => window.print(), 300);
     }
 
@@ -263,6 +263,18 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
                       </tr>
                     ))}
                   </tbody>
+                  {selected.discount > 0 && (
+                    <tfoot>
+                      <tr className="border-t border-slate-200 text-slate-500">
+                        <td colSpan={3} className="py-2 text-right">Subtotal</td>
+                        <td className="py-2 text-right tabular-nums">{formatSoles(selected.subtotal)}</td>
+                      </tr>
+                      <tr className="text-emerald-700 font-semibold">
+                        <td colSpan={3} className="pb-2 text-right">Descuento</td>
+                        <td className="pb-2 text-right tabular-nums">− {formatSoles(selected.discount)}</td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
 

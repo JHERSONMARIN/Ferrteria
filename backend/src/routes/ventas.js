@@ -18,6 +18,7 @@ router.get('/', async (req, res) => {
         mixDigital: true,
         payCode: true,
         total: true,
+        discount: true,
         status: true,
         createdAt: true,
         cliente: { select: { name: true, doc: true, type: true } },
@@ -45,6 +46,7 @@ router.get('/', async (req, res) => {
       method: s.payMethod,
       payCode: s.payCode,
       total: s.total,
+      discount: s.discount,
       detalles: s.detalles,
     }));
 
@@ -62,7 +64,7 @@ router.post('/', async (req, res) => {
       ...req.body,
       usuarioCajaId: req.user.id,
       vendedorId: req.body.vendedorId || req.user.id,
-    });
+    }, req.user);
     res.status(201).json({ success: true, venta });
   } catch (error) {
     responderErrorVenta(res, error, 'ventas.js');

@@ -19,6 +19,7 @@ export default function TicketPrint({ data, business }) {
     payMethod = 'Efectivo',
     items = [],
     total = 0,
+    discount = 0,
     isFiscal = false,
   } = data;
 
@@ -71,6 +72,12 @@ export default function TicketPrint({ data, business }) {
         </tbody>
       </table>
       <div style={{ textAlign: 'right', marginBottom: '15px' }}>
+        {discount > 0 && (
+          <>
+            <p>SUBTOTAL: {currency} {(Number(total) + Number(discount)).toFixed(2)}</p>
+            <p>DESCUENTO: -{currency} {Number(discount).toFixed(2)}</p>
+          </>
+        )}
         {isFiscal && (
           <>
             <p>OP. GRAVADAS: {currency} {subtotal.toFixed(2)}</p>

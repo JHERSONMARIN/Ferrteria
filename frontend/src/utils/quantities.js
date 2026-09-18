@@ -2,6 +2,7 @@
 export const MAX_QUANTITY_DECIMALS = 3;
 
 export const roundQuantity = (value) => Math.round(value * 1000) / 1000;
+export const roundMoney = (value) => Math.round(value * 100) / 100;
 
 export function quantityProblem(qty, allowsFractions) {
   if (!Number.isFinite(qty) || qty <= 0) return 'debe ser mayor a 0';

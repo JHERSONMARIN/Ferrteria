@@ -2,8 +2,9 @@ import { nextDocumentNumber } from './documentSeries.js';
 import { getSettings } from './settings.js';
 import { reserveStock, consumeReservedStock, releaseReservedStock } from './stock.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale } from './deliveries.js';
+import { roundMoney } from '../utils/quantities.js';
 import {
-  VentaError, normalizarCarrito, priceLines, assertExpectedTotal, validatePayment,
+  VentaError, normalizarCarrito, priceLines, assertExpectedTotal, validatePayment, parseDiscountRequest, applyDiscount,
   findOpenCashRegister, recordCashIncome, recordCreditCharge, writeKardexExit, publicLines,
   toDocTypeEnum, toPayMethodEnum,
 } from './ventas.js';
@@ -38,6 +39,8 @@ export function formatOrder(order) {
     id: order.id,
     status: order.status,
     total: order.total,
+    discount: order.discount,
+    subtotal: roundMoney(order.total + order.discount),
     createdAt: order.createdAt,
     expiresAt: order.expiresAt,
     paidAt: order.paidAt,
@@ -79,16 +82,20 @@ export async function createOrder(db, payload, user) {
   const items = normalizarCarrito(payload.cart);
   const cotizacionId = toId(payload.cotizacionId);
   const clienteId = toId(payload.clienteId);
+  const discountRequest = parseDiscountRequest(payload.discount);
 
   return db.$transaction(async (tx) => {
-    // La lista de precios se aplica al armar el pedido: el cliente mayorista debe elegirse en el POS.
-    const { lineas, total } = await priceLines(tx, items, cotizacionId, clienteId);
+    // La lista de precios y el descuento se aplican al armar el pedido; en caja solo se cobra.
+    const { lineas, total: subtotal } = await priceLines(tx, items, cotizacionId, clienteId);
+    const { discount, total } = applyDiscount(subtotal, discountRequest, user, settings.maxDiscountPercent);
     assertExpectedTotal(payload.totalEsperado, lineas, total);
 
     const order = await tx.venta.create({
       data: {
         status: 'PENDING_PAYMENT',
         total,
+        discount,
+        discountById: discount > 0 ? user.id : null,
         clienteId,
         vendedorId: user.id,
         cotizacionId,

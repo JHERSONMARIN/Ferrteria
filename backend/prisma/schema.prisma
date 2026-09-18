@@ -99,6 +99,7 @@ model Usuario {
 
   ventasAsignadas   Venta[]        @relation("VendedorVentas")
   ventasDespachadas Venta[]        @relation("DespachadorVentas")
+  descuentosAplicados Venta[]      @relation("DescuentoVentas")
   entregasAsignadas Entrega[]      @relation("RepartidorEntregas")
   cajasChicas       CajaChica[]
   cotizaciones      Cotizacion[]   @relation("VendedorCotizaciones")
@@ -183,6 +184,8 @@ model Venta {
   mixDigital Decimal?         @default(0) @db.Decimal(12, 2)
   payCode   String?
   total     Decimal           @default(0) @db.Decimal(12, 2)
+  // Descuento sobre la suma de las líneas: total = suma de subtotales - discount.
+  discount  Decimal           @default(0) @db.Decimal(12, 2)
   status    SaleStatus      @default(DISPATCHED)
   createdAt DateTime        @default(now())
   paidAt       DateTime?
@@ -203,6 +206,9 @@ model Venta {
 
   dispatchedById Int?
   dispatchedBy   Usuario? @relation("DespachadorVentas", fields: [dispatchedById], references: [id], onDelete: SetNull)
+
+  discountById Int?
+  discountBy   Usuario? @relation("DescuentoVentas", fields: [discountById], references: [id], onDelete: SetNull)
 
   cotizacionId Int?
   cotizacion   Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
@@ -426,6 +432,8 @@ model BusinessSettings {
   ticketFooter   String?
   enabledModules Json
   saleFlowMode   SaleFlowMode @default(DIRECT)
+  // Descuento máximo (%) que puede aplicar quien no es administrador; 0 = no puede descontar.
+  maxDiscountPercent Decimal @default(0) @db.Decimal(5, 2)
   updatedAt      DateTime @updatedAt
 
   @@map("business_settings")

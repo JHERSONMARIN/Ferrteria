@@ -124,7 +124,7 @@ router.post('/:id/convertir', async (req, res) => {
       clienteId: cot.clienteId,
       cotizacionId: cot.id,
       cart: cot.detalles.map(d => ({ id: d.productoId, qty: d.quantity })),
-    });
+    }, req.user);
 
     res.json({ success: true, venta });
   } catch (error) {

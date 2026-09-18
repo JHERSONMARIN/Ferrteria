@@ -7,7 +7,7 @@ const DOC_TITLES = {
 const now = () => new Date().toLocaleString('es-PE');
 
 // Datos del comprobante impreso a partir de lo que registró el servidor.
-export function buildSaleTicket({ numDoc, docType, payMethod, items, total, sellerName, customer, customerName, customerDni, customerRuc }) {
+export function buildSaleTicket({ numDoc, docType, payMethod, items, total, discount = 0, sellerName, customer, customerName, customerDni, customerRuc }) {
   return {
     docTitle: DOC_TITLES[docType] || DOC_TITLES['Nota de Venta'],
     numDoc,
@@ -19,6 +19,7 @@ export function buildSaleTicket({ numDoc, docType, payMethod, items, total, sell
     payMethod,
     items,
     total,
+    discount,
     isFiscal: docType === 'Boleta' || docType === 'Factura',
   };
 }
@@ -36,6 +37,7 @@ export function buildOrderTicket(order) {
     payMethod: 'PENDIENTE DE PAGO',
     items: order.items,
     total: order.total,
+    discount: order.discount || 0,
     isFiscal: false,
   };
 }

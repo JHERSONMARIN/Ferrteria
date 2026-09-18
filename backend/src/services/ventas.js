@@ -1,6 +1,6 @@
 import { nextDocumentNumber, DocumentSeriesError } from './documentSeries.js';
 import { takeAvailableStock, StockError } from './stock.js';
-import { quantityProblem, roundQuantity, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
+import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, DeliveryError } from './deliveries.js';
 
@@ -124,6 +124,37 @@ export async function markQuoteConverted(tx, cotizacionId) {
   if (count === 0) throw new VentaError('La cotización ya fue procesada.', 409);
 }
 
+// Descuento que pide el POS: { type: 'PERCENT' | 'AMOUNT', value }. Sin descuento → null.
+export function parseDiscountRequest(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (raw.type !== 'PERCENT' && raw.type !== 'AMOUNT') throw new VentaError('Tipo de descuento no válido.');
+  const value = Number(raw.value);
+  if (!Number.isFinite(value) || value < 0) throw new VentaError('El descuento debe ser un número positivo.');
+  if (raw.type === 'PERCENT' && value > 100) throw new VentaError('El descuento no puede superar el 100 %.');
+  return value === 0 ? null : { type: raw.type, value };
+}
+
+// Aplica el descuento sobre la suma de las líneas. El administrador no tiene tope; el resto del
+// personal puede descontar hasta el % configurado por la empresa.
+export function applyDiscount(subtotal, request, user, maxPercent) {
+  if (!request) return { discount: 0, total: subtotal };
+  const discount = roundMoney(request.type === 'PERCENT' ? subtotal * request.value / 100 : request.value);
+  if (discount >= subtotal) throw new VentaError('El descuento no puede cubrir todo el total de la venta.');
+  if (user?.role !== 'ADMINISTRADOR') {
+    const allowed = roundMoney(subtotal * maxPercent / 100);
+    if (discount > allowed) {
+      throw new VentaError(
+        maxPercent > 0
+          ? `Su descuento máximo es ${maxPercent} % (S/ ${allowed.toFixed(2)} en esta venta).`
+          : 'No tiene permitido aplicar descuentos. Solicítelo a un administrador.',
+        403,
+        'DESCUENTO_EXCEDIDO'
+      );
+    }
+  }
+  return { discount, total: roundMoney(subtotal - discount) };
+}
+
 export function assertExpectedTotal(totalEsperado, lineas, total) {
   if (totalEsperado === undefined || totalEsperado === null) return;
   if (Math.abs(Number(totalEsperado) - total) > 0.01) {
@@ -219,9 +250,11 @@ async function ejecutarVenta(tx, datos) {
   const {
     items, docTypeEnum, payMethodEnum, mixCash, mixDigital, payCode,
     clienteId, vendedorId, cajaUsuarioId, cotizacionId, totalEsperado, delivery,
+    discountRequest, user, maxDiscountPercent,
   } = datos;
 
-  const { lineas, total } = await priceLines(tx, items, cotizacionId, clienteId);
+  const { lineas, total: subtotal } = await priceLines(tx, items, cotizacionId, clienteId);
+  const { discount, total } = applyDiscount(subtotal, discountRequest, user, maxDiscountPercent);
   assertExpectedTotal(totalEsperado, lineas, total);
   if (cotizacionId) await markQuoteConverted(tx, cotizacionId);
 
@@ -239,6 +272,8 @@ async function ejecutarVenta(tx, datos) {
       mixDigital: payMethodEnum === 'PAGO_MIXTO' ? payment.digital : 0,
       payCode: payCode ? String(payCode).trim() : null,
       total,
+      discount,
+      discountById: discount > 0 ? user.id : null,
       clienteId,
       vendedorId,
       cajaId: cajaAbierta.id,
@@ -272,10 +307,11 @@ async function ejecutarVenta(tx, datos) {
     ? await scheduleDeliveryForSale(tx, { ventaId: venta.id, numDoc, clienteId, lines: lineas, delivery })
     : null;
 
-  return { ...venta, items: publicLines(lineas), delivery: entrega };
+  return { ...venta, subtotal, items: publicLines(lineas), delivery: entrega };
 }
 
-export async function procesarVenta(prisma, payload) {
+// user: quien tiene la sesión; es quien aplica el descuento (el vendedor puede ser otro).
+export async function procesarVenta(prisma, payload, user) {
   const settings = await getSettings(prisma);
   if (settings.saleFlowMode !== 'DIRECT') {
     throw new VentaError('La empresa trabaja con pedidos: registre la venta como pedido y cóbrela en caja.', 409, 'MODO_PEDIDOS');
@@ -299,6 +335,9 @@ export async function procesarVenta(prisma, payload) {
     cotizacionId: toId(payload.cotizacionId),
     totalEsperado: payload.totalEsperado,
     delivery: parseDeliveryRequest(payload.delivery),
+    discountRequest: parseDiscountRequest(payload.discount),
+    user,
+    maxDiscountPercent: settings.maxDiscountPercent,
   };
 
   return prisma.$transaction(tx => ejecutarVenta(tx, datos));

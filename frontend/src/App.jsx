@@ -428,6 +428,7 @@ export default function App() {
                   onTriggerPrint={setTicketData}
                   saleFlowMode={saleFlowMode}
                   deliveriesEnabled={deliveriesEnabled}
+                  maxDiscountPercent={Number(settings?.maxDiscountPercent ?? 0)}
                 />
               )}
               {activeTab === 'caja' && <CajaPage currentUser={currentUser} />}

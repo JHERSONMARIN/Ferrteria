@@ -12,7 +12,7 @@ const DOCUMENT_TYPE_LABELS = {
 
 const EDITABLE_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email',
-  'currencySymbol', 'taxRate', 'ticketFooter', 'enabledModules', 'saleFlowMode',
+  'currencySymbol', 'taxRate', 'ticketFooter', 'enabledModules', 'saleFlowMode', 'maxDiscountPercent',
 ];
 
 const SALE_FLOW_OPTIONS = [
@@ -55,6 +55,7 @@ const toForm = (settings, licensedModules) => ({
   ticketFooter: settings.ticketFooter || '',
   enabledModules: (settings.enabledModules || []).filter(m => !licensedModules || licensedModules.includes(m)),
   saleFlowMode: settings.saleFlowMode || 'DIRECT',
+  maxDiscountPercent: String(settings.maxDiscountPercent ?? 0),
 });
 
 function validateForm(form) {
@@ -65,6 +66,10 @@ function validateForm(form) {
   const rate = Number(form.taxRate);
   if (form.taxRate === '' || !Number.isFinite(rate) || rate < 0 || rate > 100) errors.taxRate = 'Debe estar entre 0 y 100.';
   if (!form.currencySymbol.trim()) errors.currencySymbol = 'Obligatorio.';
+  const maxDiscount = Number(form.maxDiscountPercent);
+  if (form.maxDiscountPercent === '' || !Number.isFinite(maxDiscount) || maxDiscount < 0 || maxDiscount > 100) {
+    errors.maxDiscountPercent = 'Debe estar entre 0 y 100.';
+  }
   return errors;
 }
 
@@ -164,7 +169,7 @@ export default function SettingsPage({ onSaved }) {
 
     try {
       setSaving(true);
-      const res = await api.put('/settings', { ...form, taxRate: Number(form.taxRate) });
+      const res = await api.put('/settings', { ...form, taxRate: Number(form.taxRate), maxDiscountPercent: Number(form.maxDiscountPercent) });
       setSavedSettings(res.settings);
       setForm(toForm(res.settings, licensedModules));
       setSaveMessage({ type: 'success', text: 'Configuración guardada.' });
@@ -283,6 +288,18 @@ export default function SettingsPage({ onSaved }) {
                 ))}
               </div>
             )}
+          </div>
+        </Card>
+
+        <Card icon="fa-percent" title="Descuentos" description="Cuánto puede descontar el personal en el Punto de Venta.">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-start">
+            <Field label="Descuento máximo (%)" error={errors.maxDiscountPercent} hint="0 = solo el administrador descuenta.">
+              {input('maxDiscountPercent', { type: 'number', min: 0, max: 100, step: '0.01' })}
+            </Field>
+            <p className="sm:col-span-3 text-xs text-slate-500 leading-relaxed sm:pt-6">
+              Vendedores y cajeros pueden rebajar el total de una venta o pedido hasta este porcentaje.
+              El administrador no tiene tope. Cada venta guarda el monto descontado y quién lo aplicó.
+            </p>
           </div>
         </Card>
 
