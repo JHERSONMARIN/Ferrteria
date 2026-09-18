@@ -109,10 +109,10 @@ export default function PersonalPage({ currentUser }) {
 
     if (!editingId) {
       if (!pass.trim()) e.pass = 'La contraseña es obligatoria.';
-      else if (pass.length < 4) e.pass = 'La contraseña debe tener al menos 4 caracteres.';
+      else if (pass.trim().length < 8) e.pass = 'La contraseña debe tener al menos 8 caracteres.';
     } else {
-      if (pass.trim() && pass.length < 4) {
-        e.pass = 'La nueva contraseña debe tener al menos 4 caracteres.';
+      if (pass.trim() && pass.trim().length < 8) {
+        e.pass = 'La nueva contraseña debe tener al menos 8 caracteres.';
       }
     }
 
@@ -379,7 +379,7 @@ export default function PersonalPage({ currentUser }) {
                     type="password"
                     value={pass}
                     onChange={e => { setPass(e.target.value); clearError('pass'); }}
-                    placeholder={editingId ? 'Sin cambios (dejar vacío)' : 'Mínimo 4 caracteres'}
+                    placeholder={editingId ? 'Sin cambios (dejar vacío)' : 'Mínimo 8 caracteres'}
                     className={`w-full border p-2 rounded-lg outline-none text-sm font-medium ${borderClass(errors.pass)}`}
                   />
                   <FieldError msg={errors.pass} />

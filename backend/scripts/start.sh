@@ -10,5 +10,6 @@ if [ "$DEMO_MODE" = "true" ]; then
 fi
 
 node scripts/bootstrap.js
+node scripts/hash-legacy-passwords.js
 
 exec node server.js

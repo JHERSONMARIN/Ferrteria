@@ -1,5 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
+import { hashPassword, validateNewPassword, PasswordPolicyError } from '../services/passwords.js';
 
 const router = express.Router();
 
@@ -32,6 +33,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Nombre, usuario y contraseña son obligatorios.' });
     }
 
+    validateNewPassword(pass);
+
     const existing = await prisma.usuario.findUnique({ where: { user: user.trim() } });
     if (existing) {
       return res.status(400).json({ error: 'El nombre de usuario ya existe. Elija otro.' });
@@ -41,7 +44,7 @@ router.post('/', async (req, res) => {
       data: {
         name: name.trim(),
         user: user.trim(),
-        pass: pass.trim(),
+        pass: await hashPassword(pass),
         role: role || 'VENDEDOR',
         modules: modules || ['pos'],
         active: true,
@@ -58,6 +61,9 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(created);
   } catch (error) {
+    if (error instanceof PasswordPolicyError) {
+      return res.status(400).json({ error: error.message });
+    }
     if (error.code === 'P2002') {
       return res.status(400).json({ error: 'El usuario ya se encuentra registrado.' });
     }
@@ -109,10 +115,12 @@ router.put('/:id', async (req, res) => {
 
     // Si pasaron una nueva contraseña no vacía
     if (pass && pass.trim().length > 0) {
-      if (pass.trim().length < 4) {
-        return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 4 caracteres.' });
+      try {
+        validateNewPassword(pass);
+      } catch (policyError) {
+        return res.status(400).json({ error: policyError.message });
       }
-      updateData.pass = pass.trim();
+      updateData.pass = await hashPassword(pass);
     }
 
     const updated = await prisma.usuario.update({

@@ -1,7 +1,12 @@
 import express from 'express';
 import { prisma } from '../db.js';
+import { hashPassword, verifyPassword } from '../services/passwords.js';
 
 const router = express.Router();
+
+// Si el usuario no existe se verifica igual contra este hash, para que el tiempo de respuesta
+// no delate qué nombres de usuario existen.
+const DUMMY_HASH = await hashPassword('ferresys-usuario-inexistente');
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -24,7 +29,8 @@ router.post('/login', async (req, res) => {
       }
     });
 
-    if (!usuario || usuario.pass !== pass.trim() || !usuario.active) {
+    const validPassword = await verifyPassword(String(pass), usuario ? usuario.pass : DUMMY_HASH);
+    if (!usuario || !validPassword || !usuario.active) {
       return res.status(401).json({ error: 'Credenciales incorrectas o usuario inactivo.' });
     }
 
