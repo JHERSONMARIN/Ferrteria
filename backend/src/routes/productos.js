@@ -1,6 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { quantityProblem } from '../utils/quantities.js';
+import { recordAudit, changedFields } from '../services/audit.js';
 
 const router = express.Router();
 
@@ -177,31 +178,53 @@ router.put('/:id', async (req, res) => {
     const wholesale = parseWholesalePrice(req.body.wholesalePrice);
     if (wholesale === false) return res.status(400).json({ error: 'El precio mayorista debe ser mayor a 0.' });
 
+    const current = await prisma.producto.findUnique({
+      where: { id },
+      select: { code: true, name: true, price: true, wholesalePrice: true, stock: true, reserved: true },
+    });
+    if (!current) return res.status(404).json({ error: 'Producto no encontrado.' });
+
     // No se puede dejar de vender fraccionado si el stock actual tiene decimales.
-    if (allowsFractions === false) {
-      const current = await prisma.producto.findUnique({ where: { id }, select: { stock: true, reserved: true } });
-      if (current && (!Number.isInteger(current.stock) || !Number.isInteger(current.reserved))) {
-        return res.status(400).json({ error: 'El stock actual tiene decimales: ajústelo en Kardex antes de venderlo solo por unidades.' });
-      }
+    if (allowsFractions === false && (!Number.isInteger(current.stock) || !Number.isInteger(current.reserved))) {
+      return res.status(400).json({ error: 'El stock actual tiene decimales: ajústelo en Kardex antes de venderlo solo por unidades.' });
     }
 
-    const updated = await prisma.producto.update({
-      where: { id },
-      data: {
-        code: code.trim(),
-        name: name.trim(),
-        unit: unit || 'Unidad',
-        allowsFractions: typeof allowsFractions === 'boolean' ? allowsFractions : undefined,
-        wholesalePrice: req.body.wholesalePrice === undefined ? undefined : wholesale,
-        price: parseFloat(price),
-        category: categoryName,
-        categoriaId: resolvedCatId,
-        minStock: minStock !== undefined && minStock !== '' && Number(minStock) >= 0 ? Number(minStock) : undefined,
-      },
-      select: {
-        id: true, code: true, name: true, unit: true, allowsFractions: true, wholesalePrice: true,
-        stock: true, minStock: true, price: true, category: true, categoriaId: true,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const product = await tx.producto.update({
+        where: { id },
+        data: {
+          code: code.trim(),
+          name: name.trim(),
+          unit: unit || 'Unidad',
+          allowsFractions: typeof allowsFractions === 'boolean' ? allowsFractions : undefined,
+          wholesalePrice: req.body.wholesalePrice === undefined ? undefined : wholesale,
+          price: parseFloat(price),
+          category: categoryName,
+          categoriaId: resolvedCatId,
+          minStock: minStock !== undefined && minStock !== '' && Number(minStock) >= 0 ? Number(minStock) : undefined,
+        },
+        select: {
+          id: true, code: true, name: true, unit: true, allowsFractions: true, wholesalePrice: true,
+          stock: true, minStock: true, price: true, category: true, categoriaId: true,
+        },
+      });
+
+      const priceChanges = changedFields(current, product, ['price', 'wholesalePrice']);
+      if (priceChanges) {
+        const describe = (label, change) => `${label} S/ ${change.before ?? '—'} → S/ ${change.after ?? '—'}`;
+        await recordAudit(tx, {
+          action: 'PRICE_CHANGED',
+          entity: 'Producto',
+          entityId: id,
+          summary: `${product.code} ${product.name}: ` + [
+            priceChanges.price && describe('precio', priceChanges.price),
+            priceChanges.wholesalePrice && describe('mayorista', priceChanges.wholesalePrice),
+          ].filter(Boolean).join(', '),
+          details: priceChanges,
+          user: req.user,
+        });
+      }
+      return product;
     });
 
     res.json(updated);

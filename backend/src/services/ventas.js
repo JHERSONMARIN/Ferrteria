@@ -3,6 +3,7 @@ import { takeAvailableStock, StockError } from './stock.js';
 import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, DeliveryError } from './deliveries.js';
+import { recordAudit } from './audit.js';
 
 export class VentaError extends Error {
   constructor(message, status = 400, codigo = null, extra = null) {
@@ -155,6 +156,18 @@ export function applyDiscount(subtotal, request, user, maxPercent) {
   return { discount, total: roundMoney(subtotal - discount) };
 }
 
+export async function auditDiscount(tx, { saleId, reference, subtotal, discount, total, request, user }) {
+  if (discount <= 0) return;
+  await recordAudit(tx, {
+    action: 'DISCOUNT_APPLIED',
+    entity: 'Venta',
+    entityId: saleId,
+    summary: `Descuento de S/ ${discount.toFixed(2)} en ${reference} (de S/ ${subtotal.toFixed(2)} a S/ ${total.toFixed(2)})`,
+    details: { subtotal, discount, total, type: request.type, value: request.value },
+    user,
+  });
+}
+
 export function assertExpectedTotal(totalEsperado, lineas, total) {
   if (totalEsperado === undefined || totalEsperado === null) return;
   if (Math.abs(Number(totalEsperado) - total) > 0.01) {
@@ -286,6 +299,7 @@ async function ejecutarVenta(tx, datos) {
   });
 
   await recordCashIncome(tx, cajaAbierta.id, payment);
+  await auditDiscount(tx, { saleId: venta.id, reference: numDoc, subtotal, discount, total, request: discountRequest, user });
 
   for (const linea of lineas) {
     const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty);

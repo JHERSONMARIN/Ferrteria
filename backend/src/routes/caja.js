@@ -1,5 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
+import { recordAudit } from '../services/audit.js';
+import { roundMoney } from '../utils/quantities.js';
 
 const router = express.Router();
 
@@ -97,7 +99,8 @@ router.post('/cierre', async (req, res) => {
     const caja = await prisma.cajaChica.findUnique({
       where: { id: cId },
       include: {
-        ventas: { select: { total: true, payMethod: true, mixCash: true, mixDigital: true } }
+        ventas: { select: { total: true, payMethod: true, mixCash: true, mixDigital: true } },
+        usuario: { select: { name: true } },
       }
     });
 
@@ -122,19 +125,33 @@ router.post('/cierre', async (req, res) => {
       }
     });
 
-    const saldoTeorico = caja.montoInicial + ventasEfectivo;
-    const diferencia = conteo - saldoTeorico;
+    ventasEfectivo = roundMoney(ventasEfectivo);
+    ventasDigital = roundMoney(ventasDigital);
+    const saldoTeorico = roundMoney(caja.montoInicial + ventasEfectivo);
+    const diferencia = roundMoney(conteo - saldoTeorico);
 
-    const cajaCerrada = await prisma.cajaChica.update({
-      where: { id: cId },
-      data: {
-        ventasEfectivo,
-        ventasDigital,
-        montoCierreConteo: conteo,
-        diferencia,
-        estado: 'CERRADA',
-        closedAt: new Date(),
-      }
+    const cajaCerrada = await prisma.$transaction(async (tx) => {
+      const closed = await tx.cajaChica.update({
+        where: { id: cId },
+        data: {
+          ventasEfectivo,
+          ventasDigital,
+          montoCierreConteo: conteo,
+          diferencia,
+          estado: 'CERRADA',
+          closedAt: new Date(),
+        }
+      });
+      await recordAudit(tx, {
+        action: 'CASH_CLOSED',
+        entity: 'Caja',
+        entityId: cId,
+        summary: `Caja de ${caja.usuario.name} cerrada: esperado S/ ${saldoTeorico.toFixed(2)}, contado S/ ${conteo.toFixed(2)}, `
+          + `diferencia S/ ${diferencia.toFixed(2)}`,
+        details: { montoInicial: caja.montoInicial, ventasEfectivo, ventasDigital, saldoTeorico, conteo, diferencia },
+        user: req.user,
+      });
+      return closed;
     });
 
     res.json({ success: true, caja: cajaCerrada, saldoTeorico, diferencia });

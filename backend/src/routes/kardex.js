@@ -1,6 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { quantityProblem, roundQuantity } from '../utils/quantities.js';
+import { recordAudit } from '../services/audit.js';
 
 const router = express.Router();
 
@@ -172,6 +173,16 @@ router.post('/', async (req, res) => {
           ref: ref ? ref.trim() : 'Movimiento Manual',
           usuarioId: usuarioId ? parseInt(usuarioId, 10) : null,
         },
+      });
+
+      await recordAudit(tx, {
+        action: 'STOCK_ADJUSTED',
+        entity: 'Producto',
+        entityId: prod.id,
+        summary: `${km.type === 'ENTRADA' ? 'Entrada' : 'Salida'} manual de ${qtyNum} ${prod.unit} de ${prod.code} ${prod.name} `
+          + `(stock ${prod.stock} → ${newStock}): ${km.ref}`,
+        details: { type: km.type, qty: qtyNum, stockBefore: prod.stock, stockAfter: newStock, ref: km.ref },
+        user: req.user,
       });
 
       return { km, newStock };

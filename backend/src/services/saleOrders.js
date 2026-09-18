@@ -3,8 +3,9 @@ import { getSettings } from './settings.js';
 import { reserveStock, consumeReservedStock, releaseReservedStock } from './stock.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale } from './deliveries.js';
 import { roundMoney } from '../utils/quantities.js';
+import { recordAudit } from './audit.js';
 import {
-  VentaError, normalizarCarrito, priceLines, assertExpectedTotal, validatePayment, parseDiscountRequest, applyDiscount,
+  VentaError, normalizarCarrito, priceLines, assertExpectedTotal, validatePayment, parseDiscountRequest, applyDiscount, auditDiscount,
   findOpenCashRegister, recordCashIncome, recordCreditCharge, writeKardexExit, publicLines,
   toDocTypeEnum, toPayMethodEnum,
 } from './ventas.js';
@@ -102,6 +103,7 @@ export async function createOrder(db, payload, user) {
         expiresAt: endOfBusinessDay(),
       },
     });
+    await auditDiscount(tx, { saleId: order.id, reference: `el pedido N° ${order.id}`, subtotal, discount, total, request: discountRequest, user });
 
     for (const line of lineas) {
       await reserveStock(tx, line.id, line.qty);
@@ -182,12 +184,21 @@ export async function dispatchOrder(db, orderId, user) {
   });
 }
 
-async function cancelInTransaction(tx, order, reason) {
+// user null = lo anuló el sistema (vencimiento).
+async function cancelInTransaction(tx, order, reason, user = null) {
   await transition(tx, order.id, 'PENDING_PAYMENT', { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: reason },
     'Solo se pueden anular pedidos pendientes de cobro.');
   for (const line of linesOf(order)) {
     await releaseReservedStock(tx, line.id, line.qty);
   }
+  await recordAudit(tx, {
+    action: 'SALE_CANCELLED',
+    entity: 'Venta',
+    entityId: order.id,
+    summary: `Pedido N° ${order.id} de S/ ${order.total.toFixed(2)} anulado: ${reason}`,
+    details: { total: order.total, reason, seller: order.vendedor?.name ?? null, customer: order.cliente?.name ?? null },
+    user,
+  });
 }
 
 export async function cancelOrder(db, orderId, user, reason) {
@@ -201,7 +212,7 @@ export async function cancelOrder(db, orderId, user, reason) {
       throw new VentaError('Solo puede anular sus propios pedidos.', 403);
     }
 
-    await cancelInTransaction(tx, order, reason?.trim() || `Anulado por ${user.name}`);
+    await cancelInTransaction(tx, order, reason?.trim() || `Anulado por ${user.name}`, user);
     return formatOrder(await tx.venta.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE }));
   });
 }

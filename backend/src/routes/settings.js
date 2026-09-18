@@ -28,7 +28,7 @@ router.get('/', async (req, res) => {
 // TODO(Fase 2): restringir a administradores cuando exista autenticación en la API.
 router.put('/', async (req, res) => {
   try {
-    const settings = await updateSettings(prisma, req.body);
+    const settings = await updateSettings(prisma, req.body, req.user);
     res.json({ success: true, settings });
   } catch (error) {
     if (error instanceof SettingsValidationError) {

@@ -1,5 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
+import { recordAudit } from '../services/audit.js';
 import { procesarVenta, responderErrorVenta, normalizarCarrito, cargarProductosActivos, priceListFor, unitPriceFor, VentaError } from '../services/ventas.js';
 
 const router = express.Router();
@@ -148,9 +149,20 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Esta cotización ya se encuentra cancelada.' });
     }
 
-    const updated = await prisma.cotizacion.update({
-      where: { id: cotId },
-      data: { status: 'CANCELADO' }
+    const updated = await prisma.$transaction(async (tx) => {
+      const quote = await tx.cotizacion.update({
+        where: { id: cotId },
+        data: { status: 'CANCELADO' }
+      });
+      await recordAudit(tx, {
+        action: 'QUOTE_CANCELLED',
+        entity: 'Cotizacion',
+        entityId: cotId,
+        summary: `Cotización ${cot.numDoc} de S/ ${Number(cot.total).toFixed(2)} anulada`,
+        details: { numDoc: cot.numDoc, total: cot.total },
+        user: req.user,
+      });
+      return quote;
     });
 
     res.json({ success: true, message: 'Cotización eliminada (cancelada) exitosamente.', cotizacion: updated });

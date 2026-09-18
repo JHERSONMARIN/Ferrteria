@@ -15,6 +15,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import CajaPage from './pages/CajaPage.jsx';
 import ComprasPage from './pages/ComprasPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
+import AuditPage from './pages/AuditPage.jsx';
 import CashierQueuePage from './pages/CashierQueuePage.jsx';
 import DispatchQueuePage from './pages/DispatchQueuePage.jsx';
 import FieldError from './components/FieldError.jsx';
@@ -134,7 +135,7 @@ export default function App() {
   const navigableTabs = useMemo(() => {
     const tabs = effectiveModules.filter(m => m !== 'despacho' || saleFlowMode === 'STAGED');
     if (saleFlowMode !== 'DIRECT' && effectiveModules.includes('caja')) tabs.push('cobros');
-    if (isAdmin) tabs.push('settings');
+    if (isAdmin) tabs.push('audit', 'settings');
     return tabs;
   }, [effectiveModules, isAdmin, saleFlowMode]);
 
@@ -288,6 +289,7 @@ export default function App() {
     'personal': 'Módulo de Personal',
     'dashboard': 'Finanzas / Reportes',
     'settings': 'Configuración de la Empresa',
+    'audit': 'Auditoría',
     'cobros': 'Pedidos por Cobrar',
     'despacho': 'Pedidos por Despachar',
   };
@@ -462,6 +464,7 @@ export default function App() {
               {activeTab === 'personal' && <PersonalPage currentUser={currentUser} />}
               {activeTab === 'dashboard' && <DashboardPage />}
               {activeTab === 'settings' && isAdmin && <SettingsPage onSaved={setSettings} />}
+              {activeTab === 'audit' && isAdmin && <AuditPage />}
               {activeTab === 'cobros' && (
                 <CashierQueuePage
                   currentUser={currentUser}

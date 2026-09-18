@@ -100,6 +100,7 @@ model Usuario {
   ventasAsignadas   Venta[]        @relation("VendedorVentas")
   ventasDespachadas Venta[]        @relation("DespachadorVentas")
   descuentosAplicados Venta[]      @relation("DescuentoVentas")
+  auditLogs           AuditLog[]
   entregasAsignadas Entrega[]      @relation("RepartidorEntregas")
   cajasChicas       CajaChica[]
   cotizaciones      Cotizacion[]   @relation("VendedorCotizaciones")
@@ -451,4 +452,25 @@ model DocumentSeries {
   updatedAt    DateTime        @updatedAt
 
   @@map("document_series")
+}
+
+// Registro de auditoría: quién hizo qué y cuándo, con el antes/después en details.
+// action es texto (no enum) para agregar acciones nuevas sin migrar; las válidas están en services/audit.js.
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  action    String
+  entity    String
+  entityId  String?
+  summary   String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  userId   Int?
+  user     Usuario? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Se guarda el nombre para que el registro siga siendo legible si el usuario se elimina.
+  userName String
+
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
 }

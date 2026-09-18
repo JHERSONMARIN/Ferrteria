@@ -1,6 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { hashPassword, validateNewPassword, PasswordPolicyError } from '../services/passwords.js';
+import { recordAudit, changedFields } from '../services/audit.js';
 
 const router = express.Router();
 
@@ -40,25 +41,37 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'El nombre de usuario ya existe. Elija otro.' });
     }
 
-    const created = await prisma.usuario.create({
-      data: {
-        name: name.trim(),
-        user: user.trim(),
-        pass: await hashPassword(pass),
-        // La clave la define el administrador: el empleado debe cambiarla al ingresar.
-        mustChangePassword: true,
-        role: role || 'VENDEDOR',
-        modules: modules || ['pos'],
-        active: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        user: true,
-        role: true,
-        modules: true,
-        active: true,
-      }
+    const passwordHash = await hashPassword(pass);
+    const created = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.usuario.create({
+        data: {
+          name: name.trim(),
+          user: user.trim(),
+          pass: passwordHash,
+          // La clave la define el administrador: el empleado debe cambiarla al ingresar.
+          mustChangePassword: true,
+          role: role || 'VENDEDOR',
+          modules: modules || ['pos'],
+          active: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          user: true,
+          role: true,
+          modules: true,
+          active: true,
+        }
+      });
+      await recordAudit(tx, {
+        action: 'USER_CREATED',
+        entity: 'Usuario',
+        entityId: newUser.id,
+        summary: `Usuario ${newUser.user} (${newUser.name}) creado como ${newUser.role}`,
+        details: { user: newUser.user, role: newUser.role, modules: newUser.modules },
+        user: req.user,
+      });
+      return newUser;
     });
 
     res.status(201).json(created);
@@ -127,19 +140,35 @@ router.put('/:id', async (req, res) => {
       updateData.mustChangePassword = id !== req.user.id;
     }
 
-    const updated = await prisma.usuario.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        user: true,
-        role: true,
-        modules: true,
-        active: true,
-        createdAt: true,
-        updatedAt: true,
+    const updated = await prisma.$transaction(async (tx) => {
+      const saved = await tx.usuario.update({
+        where: { id },
+        data: updateData,
+        select: {
+          id: true,
+          name: true,
+          user: true,
+          role: true,
+          modules: true,
+          active: true,
+          createdAt: true,
+          updatedAt: true,
+        }
+      });
+      // La contraseña nunca se guarda en la auditoría: solo que se cambió.
+      const changes = changedFields(current, saved, ['name', 'user', 'role', 'modules', 'active']) || {};
+      if (updateData.pass) changes.password = { before: null, after: 'restablecida' };
+      if (Object.keys(changes).length > 0) {
+        await recordAudit(tx, {
+          action: 'USER_UPDATED',
+          entity: 'Usuario',
+          entityId: id,
+          summary: `Usuario ${saved.user}: ${Object.keys(changes).join(', ')}`,
+          details: changes,
+          user: req.user,
+        });
       }
+      return saved;
     });
 
     res.json(updated);
@@ -160,7 +189,21 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ error: 'No se puede eliminar el usuario administrador principal del sistema.' });
     }
 
-    await prisma.usuario.delete({ where: { id } });
+    const target = await prisma.usuario.findUnique({ where: { id }, select: { user: true, name: true, role: true } });
+    if (!target) return res.status(404).json({ error: 'Usuario no encontrado.' });
+
+    await prisma.$transaction(async (tx) => {
+      // La auditoría se escribe antes de borrar: su usuario queda en null pero conserva el nombre.
+      await recordAudit(tx, {
+        action: 'USER_DELETED',
+        entity: 'Usuario',
+        entityId: id,
+        summary: `Usuario ${target.user} (${target.name}) eliminado`,
+        details: target,
+        user: req.user,
+      });
+      await tx.usuario.delete({ where: { id } });
+    });
     res.json({ success: true });
   } catch (error) {
     if (error.code === 'P2003') {

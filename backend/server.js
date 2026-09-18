@@ -16,6 +16,7 @@ import comprasRoutes from './src/routes/compras.js';
 import cotizacionesRoutes from './src/routes/cotizaciones.js';
 import categoriesRoutes from './src/routes/categories.js';
 import settingsRoutes from './src/routes/settings.js';
+import auditoriaRoutes from './src/routes/auditoria.js';
 import pedidosRoutes from './src/routes/pedidos.js';
 import { prisma } from './src/db.js';
 import { initializeDocumentSeries } from './src/services/documentSeries.js';
@@ -62,6 +63,7 @@ app.use('/api', authenticate, requirePasswordChanged);
 const CATALOG_READERS = ['pos', 'cotizaciones', 'inventory', 'categories', 'kardex', 'compras', 'deliveries'];
 
 app.use('/api/settings', allowModules({ GET: 'authenticated', default: 'admin' }), settingsRoutes);
+app.use('/api/auditoria', allowModules({ default: 'admin' }), auditoriaRoutes);
 app.use('/api/personal', allowModules({ GET: ['personal', 'pos', 'deliveries'], default: ['personal'] }), personalRoutes);
 app.use('/api/clientes', allowModules({
   GET: ['pos', 'caja', 'cotizaciones', 'client-dir', 'customers', 'deliveries'],
