@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Sidebar from './components/Sidebar.jsx';
 import Header from './components/Header.jsx';
 import TicketPrint from './components/TicketPrint.jsx';
@@ -80,6 +80,27 @@ export default function App() {
   const [ticketData, setTicketData] = useState(null);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Todas');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settings, setSettings] = useState(null);
+
+  // Módulos visibles: los asignados al usuario que además estén activos en la empresa.
+  const effectiveModules = useMemo(() => {
+    const userModules = currentUser?.modules || [];
+    if (!settings) return userModules;
+    return userModules.filter(m => settings.enabledModules.includes(m));
+  }, [currentUser, settings]);
+
+  const loadSettings = async () => {
+    try {
+      const res = await api.get('/settings');
+      setSettings(res.settings);
+    } catch (err) {
+      console.error('Error cargando la configuración de la empresa:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.id) loadSettings();
+  }, [currentUser?.id]);
 
   // Heartbeat cada 8s para sincronizar roles y estado activo del usuario
   useEffect(() => {
@@ -121,13 +142,13 @@ export default function App() {
 
   // Si el usuario cambia de tab a uno al que no tiene acceso, redirigirlo al primero accesible
   useEffect(() => {
-    if (currentUser && currentUser.modules && currentUser.modules.length > 0) {
-      const isAllowed = currentUser.modules.includes(activeTab) || (activeTab === 'categories' && currentUser.modules.includes('inventory'));
+    if (currentUser && effectiveModules.length > 0) {
+      const isAllowed = effectiveModules.includes(activeTab) || (activeTab === 'categories' && effectiveModules.includes('inventory'));
       if (!isAllowed) {
-        setActiveTab(currentUser.modules[0]);
+        setActiveTab(effectiveModules[0]);
       }
     }
-  }, [currentUser, activeTab]);
+  }, [currentUser, activeTab, effectiveModules]);
 
   const handleLogin = async (e, customUser, customPass) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -212,7 +233,7 @@ export default function App() {
   return (
     <>
       {/* Componente Oculto de Impresión para Ticket de 80mm */}
-      <TicketPrint data={ticketData} />
+      <TicketPrint data={ticketData} business={settings} />
 
       {/* Pantalla de Login si no hay usuario autenticado */}
       {!currentUser ? (
@@ -302,6 +323,8 @@ export default function App() {
             activeTab={activeTab}
             onSwitchTab={handleSwitchTab}
             user={currentUser}
+            modules={effectiveModules}
+            businessName={settings?.tradeName || settings?.legalName}
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             onLogout={handleLogout}

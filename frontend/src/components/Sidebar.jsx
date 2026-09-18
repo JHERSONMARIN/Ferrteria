@@ -1,7 +1,7 @@
 import React from 'react';
 
-export default function Sidebar({ activeTab, onSwitchTab, user, open, onClose, onLogout }) {
-  const allowedModules = user?.modules || [];
+export default function Sidebar({ activeTab, onSwitchTab, user, modules, businessName, open, onClose, onLogout }) {
+  const allowedModules = modules || [];
 
   const handleSwitchTab = (tabId) => {
     onSwitchTab(tabId);
@@ -48,9 +48,14 @@ export default function Sidebar({ activeTab, onSwitchTab, user, open, onClose, o
       <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950 shrink-0">
         <div className="flex items-center min-w-0">
           <i className="fa-solid fa-screwdriver-wrench text-orange-500 text-xl mr-3 shrink-0"></i>
-          <span className="font-bold text-lg tracking-wide truncate">
-            FerreSys <span className="text-xs text-orange-500 align-top">v4.8</span>
-          </span>
+          <div className="min-w-0">
+            <span className="block font-bold text-lg tracking-wide truncate leading-tight">
+              FerreSys <span className="text-xs text-orange-500 align-top">v4.8</span>
+            </span>
+            {businessName && (
+              <span className="block text-[11px] text-slate-400 truncate">{businessName}</span>
+            )}
+          </div>
         </div>
         <button
           onClick={onClose}

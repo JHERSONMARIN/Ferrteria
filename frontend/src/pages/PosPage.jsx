@@ -18,12 +18,6 @@ const METODOS_PAGO = [
   { id: 'Fiado', label: 'Fiado', icon: 'fa-book' },
 ];
 
-const DATOS_NEGOCIO = {
-  businessName: 'FERRESYS S.A.C.',
-  businessRuc: '20123456789',
-  businessAddress: 'Av. Las Flores 123, Cajamarca',
-};
-
 const soles = (n) => `S/ ${Number(n || 0).toFixed(2)}`;
 
 function ClienteSelector({ value, onChange, cliente, error, inputRef }) {
@@ -386,7 +380,6 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
 
       if (onTriggerPrint) {
         onTriggerPrint({
-          ...DATOS_NEGOCIO,
           docTitle: docType === 'Factura' ? 'FACTURA ELECTRÓNICA' : (docType === 'Boleta' ? 'BOLETA DE VENTA' : 'NOTA DE VENTA'),
           numDoc: res.venta.numDoc,
           dateStr: new Date().toLocaleString('es-PE'),
@@ -456,7 +449,6 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
 
       if (onTriggerPrint) {
         onTriggerPrint({
-          ...DATOS_NEGOCIO,
           docTitle: 'PROFORMA / COTIZACIÓN',
           numDoc: res.cotizacion.numDoc,
           dateStr: new Date().toLocaleString('es-PE'),
