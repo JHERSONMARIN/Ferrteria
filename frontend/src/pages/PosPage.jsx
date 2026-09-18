@@ -6,13 +6,45 @@ import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
 import { formatSoles } from '../utils/currency.js';
 import { findCustomerByInput } from '../utils/customers.js';
 import { buildSaleTicket, buildOrderTicket } from '../utils/tickets.js';
+import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../utils/quantities.js';
 
 // Stock que se puede vender: lo reservado por pedidos sin despachar ya tiene dueño.
-const availableStock = (product) => product.stock - (product.reserved || 0);
+const availableStock = (product) => roundQuantity(product.stock - (product.reserved || 0));
+
+// "c/u" para lo que se vende por unidad; "/ metro", "/ kilo"… para lo demás.
+const perUnitLabel = (unit) => (!unit || unit === 'Unidad' ? 'c/u' : `/ ${unit.toLowerCase()}`);
+const stockUnitLabel = (unit) => (!unit || unit === 'Unidad' ? 'disp.' : `${unit.toLowerCase()} disp.`);
+
+// Cantidad editable: se confirma al salir del campo o con Enter, para poder escribir "2.5"
+// sin que el valor se corrija a mitad de camino.
+function CartQtyInput({ item, onCommit }) {
+  const [draft, setDraft] = useState(formatQuantity(item.qty));
+  useEffect(() => { setDraft(formatQuantity(item.qty)); }, [item.qty]);
+
+  const commit = () => {
+    const value = Number(draft.replace(',', '.'));
+    if (quantityProblem(value, item.allowsFractions)) setDraft(formatQuantity(item.qty));
+    else onCommit(value);
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode={item.allowsFractions ? 'decimal' : 'numeric'}
+      value={draft}
+      onFocus={e => e.target.select()}
+      onChange={e => setDraft(e.target.value.replace(item.allowsFractions ? /[^0-9.,]/g : /\D/g, ''))}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
+      className={`${item.allowsFractions ? 'w-16' : 'w-11'} h-7 text-center border border-slate-300 rounded-md text-sm font-bold outline-none focus:border-orange-500`}
+      title={item.allowsFractions ? 'Admite decimales (hasta 3)' : undefined}
+    />
+  );
+}
 
 const TOAST_COLORS = { error: 'bg-red-600', exito: 'bg-emerald-600', info: 'bg-slate-800' };
 
-export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'DIRECT', deliveriesEnabled = false }) {
+export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'DIRECT', deliveriesEnabled = false, maxDiscountPercent = 0 }) {
   const isDirect = saleFlowMode === 'DIRECT';
 
   const [products, setProducts] = useState([]);
@@ -29,6 +61,9 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const [customerError, setCustomerError] = useState('');
   const [estadoCaja, setEstadoCaja] = useState(null);
   const [loadedQuote, setLoadedQuote] = useState(null);
+  const [showDiscount, setShowDiscount] = useState(false);
+  const [discountType, setDiscountType] = useState('PERCENT');
+  const [discountValue, setDiscountValue] = useState('');
 
   const [showCheckout, setShowCheckout] = useState(false);
   const [success, setSuccess] = useState(null);
@@ -106,10 +141,47 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   }, [products, search, selectedCategory]);
 
   const qtyInCart = useMemo(() => new Map(cart.map(i => [i.id, i.qty])), [cart]);
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const cartUnits = cart.reduce((sum, item) => sum + item.qty, 0);
+  const cartSubtotal = roundMoney(cart.reduce((sum, item) => sum + item.price * item.qty, 0));
+
+  // Descuento sobre el total: se calcula igual que en el servidor, que es quien valida el tope.
+  const isAdmin = currentUser?.role === 'ADMINISTRADOR';
+  const canDiscount = isAdmin || maxDiscountPercent > 0;
+  const discountNumber = Number(discountValue) || 0;
+  const discountAmount = discountNumber > 0
+    ? roundMoney(discountType === 'PERCENT' ? cartSubtotal * discountNumber / 100 : discountNumber)
+    : 0;
+  const discountError = (() => {
+    if (discountValue === '') return '';
+    if (!Number.isFinite(Number(discountValue)) || Number(discountValue) < 0) return 'Ingrese un valor válido.';
+    if (discountType === 'PERCENT' && discountNumber > 100) return 'No puede superar el 100 %.';
+    if (discountAmount > 0 && discountAmount >= cartSubtotal) return 'No puede cubrir todo el total.';
+    if (!isAdmin && discountAmount > roundMoney(cartSubtotal * maxDiscountPercent / 100)) {
+      return `Su descuento máximo es ${maxDiscountPercent} %.`;
+    }
+    return '';
+  })();
+  const appliedDiscount = discountError ? 0 : discountAmount;
+  const discountPayload = appliedDiscount > 0 ? { type: discountType, value: discountNumber } : null;
+  const cartTotal = roundMoney(cartSubtotal - appliedDiscount);
+  // Cantidad de líneas: sumar metros con unidades no tiene sentido.
+  const cartUnits = cart.length;
   const cajaCerrada = isDirect && estadoCaja && estadoCaja.abierta === false;
   const selectedCustomer = findCustomerByInput(clients, customerInput);
+  const isWholesale = selectedCustomer?.priceList === 'WHOLESALE';
+
+  // Mismo criterio que el backend: precio mayorista si el cliente tiene esa lista y el producto lo define.
+  const priceFor = (product, wholesale = isWholesale) =>
+    (wholesale && product.wholesalePrice != null ? product.wholesalePrice : product.price);
+
+  // Al cambiar de cliente se recalculan los precios del carrito (salvo si viene de una cotización,
+  // que conserva los precios cotizados).
+  useEffect(() => {
+    if (loadedQuote) return;
+    setCart(prev => prev.map(item => {
+      const product = products.find(p => p.id === item.id);
+      return product ? { ...item, price: priceFor(product, isWholesale) } : item;
+    }));
+  }, [isWholesale, products]);
 
   useEffect(() => {
     if (cart.length === 0) setLoadedQuote(null);
@@ -125,17 +197,22 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       return showToast(`Solo hay ${available} unidades disponibles de ${product.name}.`, 'error');
     }
     setCart(prev => current
-      ? prev.map(i => (i.id === product.id ? { ...i, qty: i.qty + 1 } : i))
-      : [...prev, { id: product.id, name: product.name, code: product.code, price: product.price, qty: 1, stock: available }]
+      ? prev.map(i => (i.id === product.id ? { ...i, qty: roundQuantity(Math.min(i.qty + 1, available)) } : i))
+      : [...prev, {
+        id: product.id, name: product.name, code: product.code, price: priceFor(product), qty: 1, stock: available,
+        unit: product.unit, allowsFractions: product.allowsFractions,
+      }]
     );
   };
 
   const setCartQty = (id, qty) => {
     const item = cart.find(i => i.id === id);
-    if (!item || qty < 1) return;
+    if (!item) return;
+    const problem = quantityProblem(qty, item.allowsFractions);
+    if (problem) return showToast(`La cantidad de ${item.name} ${problem}.`, 'error');
     let quantity = qty;
     if (quantity > item.stock) {
-      showToast(`Solo hay ${item.stock} unidades disponibles de ${item.name}.`, 'error');
+      showToast(`Solo hay ${formatQuantity(item.stock)} disponibles de ${item.name}.`, 'error');
       quantity = item.stock;
     }
     setCart(prev => prev.map(i => (i.id === id ? { ...i, qty: quantity } : i)));
@@ -147,6 +224,16 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     if (cart.length === 0) return;
     if (window.confirm('¿Vaciar la venta actual?')) setCart([]);
   };
+
+  const clearDiscount = () => {
+    setShowDiscount(false);
+    setDiscountValue('');
+  };
+
+  // Con el carrito vacío el descuento ya no tiene sobre qué aplicarse.
+  useEffect(() => {
+    if (cart.length === 0) clearDiscount();
+  }, [cart.length]);
 
   const resetSale = () => {
     setCart([]);
@@ -217,7 +304,8 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         clienteId: payment.customer ? payment.customer.id : null,
         vendedorId: currentUser?.id ?? null,
         cotizacionId: loadedQuote ? loadedQuote.id : null,
-        totalEsperado: Math.round(cartTotal * 100) / 100,
+        totalEsperado: cartTotal,
+        discount: discountPayload,
         cart: cartPayload(),
         delivery: payment.delivery,
       });
@@ -232,7 +320,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     window.dispatchEvent(new Event('venta-registrada'));
     const sale = res.venta;
     if (onTriggerPrint) {
-      onTriggerPrint(buildSaleTicket({ ...payment, numDoc: sale.numDoc, items: sale.items, total: sale.total, sellerName: currentUser?.name }));
+      onTriggerPrint(buildSaleTicket({ ...payment, numDoc: sale.numDoc, items: sale.items, total: sale.total, discount: sale.discount, sellerName: currentUser?.name }));
       setTimeout(() => window.print(), 300);
     }
 
@@ -241,6 +329,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       title: 'Venta registrada',
       subtitle: `${sale.numDoc} · ${payment.customer ? payment.customer.name : payment.customerName || 'Público General'}`,
       rows: [
+        ...(sale.discount > 0 ? [{ label: 'Descuento aplicado', value: `− ${formatSoles(sale.discount)}` }] : []),
         { label: `Total (${payment.payMethod})`, value: formatSoles(sale.total) },
         ...(sale.delivery ? [{ label: 'Envío programado', value: sale.delivery.ref }] : []),
       ],
@@ -263,7 +352,8 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         cart: cartPayload(),
         clienteId: selectedCustomer ? selectedCustomer.id : null,
         cotizacionId: loadedQuote ? loadedQuote.id : null,
-        totalEsperado: Math.round(cartTotal * 100) / 100,
+        totalEsperado: cartTotal,
+        discount: discountPayload,
       });
       const order = res.pedido;
       if (onTriggerPrint) {
@@ -361,6 +451,8 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       price: d.unitPrice,
       qty: d.quantity,
       stock: availableStock(d.producto),
+      unit: d.producto.unit,
+      allowsFractions: d.producto.allowsFractions,
     })));
     setLoadedQuote({ id: quote.id, numDoc: quote.numDoc });
     setCustomerInput(quote.clienteId ? `${quote.customerDoc} - ${quote.customer}` : '');
@@ -499,14 +591,19 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                       <span className="text-[10px] font-mono text-slate-400 truncate pr-7">{product.code}</span>
                       <h4 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2 flex-1">{product.name}</h4>
                       <div className="flex items-end justify-between gap-2">
-                        <span className="text-base font-black text-slate-900">{formatSoles(product.price)}</span>
+                        <span className="text-base font-black text-slate-900">
+                          {formatSoles(priceFor(product))}
+                          {isWholesale && product.wholesalePrice != null && (
+                            <span className="block text-[9px] font-bold text-indigo-600 uppercase">Mayorista</span>
+                          )}
+                        </span>
                         <span
                           className={`text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${
                             soldOut ? 'bg-slate-200 text-slate-500' : lowStock ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'
                           }`}
                           title={product.reserved > 0 ? `${product.reserved} reservado(s) para pedidos` : undefined}
                         >
-                          {soldOut ? 'Agotado' : `${available} disp.`}
+                          {soldOut ? 'Agotado' : `${formatQuantity(available)} ${stockUnitLabel(product.unit)}`}
                         </span>
                       </div>
                     </button>
@@ -526,7 +623,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <i className="fa-solid fa-cart-shopping text-orange-600"></i> {isDirect ? 'Venta actual' : 'Pedido actual'}
               {cart.length > 0 && (
-                <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-0.5 rounded-full">{cartUnits} und.</span>
+                <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-0.5 rounded-full">{cartUnits} prod.</span>
               )}
             </h3>
             {cart.length > 0 && (
@@ -540,6 +637,13 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             <div className="px-4 py-2.5 bg-red-50 border-b border-red-200 text-xs text-red-700 flex items-center gap-2">
               <i className="fa-solid fa-lock"></i>
               <span><strong>Caja cerrada.</strong> Abra su turno en "Arqueo de Caja" para poder cobrar.</span>
+            </div>
+          )}
+
+          {isWholesale && !loadedQuote && (
+            <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-200 text-xs text-indigo-800">
+              <i className="fa-solid fa-tags mr-1.5"></i>
+              <strong>Precios mayoristas</strong> de {selectedCustomer.name}.
             </div>
           )}
 
@@ -572,32 +676,22 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                   <li key={item.id} className="py-3 flex gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-slate-800 leading-snug line-clamp-2">{item.name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{formatSoles(item.price)} c/u</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{formatSoles(item.price)} {perUnitLabel(item.unit)}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1.5 shrink-0">
                       <span className="text-sm font-black text-slate-900 tabular-nums">{formatSoles(item.price * item.qty)}</span>
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => setCartQty(item.id, item.qty - 1)}
+                          onClick={() => setCartQty(item.id, roundQuantity(item.qty - 1))}
                           disabled={item.qty <= 1}
                           className="w-7 h-7 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           title="Quitar uno"
                         >
                           −
                         </button>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={item.qty}
-                          onFocus={e => e.target.select()}
-                          onChange={e => {
-                            const n = parseInt(e.target.value.replace(/\D/g, ''), 10);
-                            if (!isNaN(n)) setCartQty(item.id, n);
-                          }}
-                          className="w-11 h-7 text-center border border-slate-300 rounded-md text-sm font-bold outline-none focus:border-orange-500"
-                        />
+                        <CartQtyInput item={item} onCommit={qty => setCartQty(item.id, qty)} />
                         <button
-                          onClick={() => setCartQty(item.id, item.qty + 1)}
+                          onClick={() => setCartQty(item.id, roundQuantity(item.qty + 1))}
                           className="w-7 h-7 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
                           title="Agregar uno"
                         >
@@ -633,6 +727,61 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
               />
             </div>
 
+            {canDiscount && cart.length > 0 && !showDiscount && (
+              <button
+                type="button"
+                onClick={() => setShowDiscount(true)}
+                className="self-start text-xs font-semibold text-orange-700 hover:text-orange-800 hover:underline"
+              >
+                <i className="fa-solid fa-percent mr-1.5"></i> Aplicar descuento
+              </button>
+            )}
+
+            {canDiscount && cart.length > 0 && showDiscount && (
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Descuento</span>
+                  <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-bold">
+                    {[['PERCENT', '%'], ['AMOUNT', 'S/']].map(([type, label]) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setDiscountType(type)}
+                        className={`px-2.5 py-1 ${discountType === type ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    autoFocus
+                    value={discountValue}
+                    onChange={e => setDiscountValue(e.target.value)}
+                    placeholder="0"
+                    className={`w-20 px-2 py-1 border rounded-md text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-orange-500 ${discountError ? 'border-red-400' : 'border-slate-300'}`}
+                  />
+                  <button type="button" onClick={clearDiscount} title="Quitar descuento" className="ml-auto text-slate-400 hover:text-red-600 px-1">
+                    <i className="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+                {discountError
+                  ? <p className="text-xs text-red-600 mt-1">{discountError}</p>
+                  : !isAdmin && <p className="text-[11px] text-slate-500 mt-1">Hasta {maxDiscountPercent} % del total.</p>}
+              </div>
+            )}
+
+            {appliedDiscount > 0 && (
+              <div className="text-sm text-slate-500 flex flex-col gap-0.5">
+                <div className="flex justify-between"><span>Subtotal</span><span className="tabular-nums">{formatSoles(cartSubtotal)}</span></div>
+                <div className="flex justify-between text-emerald-700 font-semibold">
+                  <span>Descuento</span><span className="tabular-nums">− {formatSoles(appliedDiscount)}</span>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between items-end">
               <span className="text-sm text-slate-500">Total</span>
               <span className="text-3xl font-black text-slate-900 tabular-nums">{formatSoles(cartTotal)}</span>
@@ -640,7 +789,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
             <button
               onClick={primaryAction}
-              disabled={processing || cart.length === 0 || cajaCerrada}
+              disabled={processing || cart.length === 0 || cajaCerrada || Boolean(discountError)}
               className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3.5 rounded-lg shadow-md transition-colors text-base disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {processing && !isDirect

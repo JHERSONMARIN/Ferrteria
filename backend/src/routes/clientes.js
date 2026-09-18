@@ -16,6 +16,7 @@ router.get('/', async (req, res) => {
         email: true,
         address: true,
         maxCredit: true,
+        priceList: true,
         creditoCliente: {
           select: { debtTotal: true }
         }
@@ -43,7 +44,7 @@ router.get('/', async (req, res) => {
 // POST /api/clientes
 router.post('/', async (req, res) => {
   try {
-    const { type, doc, name, phone, email, address, maxCredit } = req.body;
+    const { type, doc, name, phone, email, address, maxCredit, priceList } = req.body;
     if (!doc || !name) {
       return res.status(400).json({ error: 'El documento y nombre son requeridos.' });
     }
@@ -57,6 +58,7 @@ router.post('/', async (req, res) => {
         email: email ? email.trim() : null,
         address: address ? address.trim() : null,
         maxCredit: parseFloat(maxCredit) || 1000.0,
+        priceList: priceList === 'WHOLESALE' ? 'WHOLESALE' : 'RETAIL',
       }
     });
 
@@ -94,6 +96,23 @@ router.put('/:id/max-credit', async (req, res) => {
     res.json({ success: true, client: updated });
   } catch (error) {
     res.status(500).json({ error: 'Error al actualizar límite de crédito.' });
+  }
+});
+
+// PUT /api/clientes/:id/price-list  { priceList: 'RETAIL' | 'WHOLESALE' }
+router.put('/:id/price-list', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { priceList } = req.body;
+    if (Number.isNaN(id) || !['RETAIL', 'WHOLESALE'].includes(priceList)) {
+      return res.status(400).json({ error: 'Lista de precios no válida.' });
+    }
+    const updated = await prisma.cliente.update({ where: { id }, data: { priceList }, select: { id: true, priceList: true } });
+    res.json({ success: true, client: updated });
+  } catch (error) {
+    if (error.code === 'P2025') return res.status(404).json({ error: 'Cliente no encontrado.' });
+    console.error('[clientes.js] Error al cambiar la lista de precios:', error);
+    res.status(500).json({ error: 'No se pudo cambiar la lista de precios.' });
   }
 });
 

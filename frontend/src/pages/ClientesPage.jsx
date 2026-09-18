@@ -16,6 +16,7 @@ export default function ClientesPage() {
   const [cliEmail, setCliEmail] = useState('');
   const [cliAddress, setCliAddress] = useState('');
   const [maxCredit, setMaxCredit] = useState('1000');
+  const [priceList, setPriceList] = useState('RETAIL');
   const [errors, setErrors] = useState({});
 
   const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
@@ -78,6 +79,7 @@ export default function ClientesPage() {
         email: cliEmail.trim(),
         address: cliAddress.trim(),
         maxCredit: parseFloat(maxCredit) || 1000.0,
+        priceList,
       });
 
       setShowModal(false);
@@ -88,6 +90,7 @@ export default function ClientesPage() {
       setCliEmail('');
       setCliAddress('');
       setMaxCredit('1000');
+      setPriceList('RETAIL');
 
       await loadClients();
       alert('Cliente guardado con éxito.');
@@ -111,6 +114,21 @@ export default function ClientesPage() {
       alert('Límite de crédito actualizado.');
     } catch (err) {
       alert('Error al actualizar límite: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const togglePriceList = async (client) => {
+    const next = client.priceList === 'WHOLESALE' ? 'RETAIL' : 'WHOLESALE';
+    const label = next === 'WHOLESALE' ? 'mayorista' : 'minorista';
+    if (!window.confirm(`¿Cambiar a ${client.name} a la lista ${label}?`)) return;
+    try {
+      setLoading(true);
+      await api.put(`/clientes/${client.id}/price-list`, { priceList: next });
+      await loadClients();
+    } catch (err) {
+      alert('Error al cambiar la lista de precios: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -140,6 +158,7 @@ export default function ClientesPage() {
                 <th className="px-4 py-3">DNI / RUC</th>
                 <th className="px-4 py-3">Nombre / Razón Social</th>
                 <th className="px-4 py-3">Teléfono</th>
+                <th className="px-4 py-3 text-center">Precios</th>
                 <th className="px-4 py-3 text-right">Deuda Actual</th>
                 <th className="px-4 py-3 text-right">Límite Crédito</th>
                 <th className="px-4 py-3 text-right">Crédito Disponible</th>
@@ -157,6 +176,19 @@ export default function ClientesPage() {
                   <td className="px-4 py-3 font-mono text-xs font-bold">{c.doc}</td>
                   <td className="px-4 py-3 font-bold text-slate-800">{c.name}</td>
                   <td className="px-4 py-3 text-xs">{c.phone || '-'}</td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => togglePriceList(c)}
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                        c.priceList === 'WHOLESALE'
+                          ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}
+                      title="Cambiar lista de precios"
+                    >
+                      {c.priceList === 'WHOLESALE' ? 'Mayorista' : 'Minorista'}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-right font-bold text-red-600">S/ {c.currentDebt.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right font-semibold text-slate-700">S/ {c.maxCredit.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right font-black text-emerald-600">S/ {c.availableCredit.toFixed(2)}</td>
@@ -247,6 +279,17 @@ export default function ClientesPage() {
                     className={`w-full border p-2 rounded outline-none text-sm font-bold ${borderClass(errors.maxCredit)}`}
                   />
                   <FieldError msg={errors.maxCredit} />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Lista de precios</label>
+                  <select
+                    value={priceList}
+                    onChange={e => setPriceList(e.target.value)}
+                    className="w-full border border-gray-300 p-2 rounded outline-none text-sm bg-white"
+                  >
+                    <option value="RETAIL">Minorista</option>
+                    <option value="WHOLESALE">Mayorista</option>
+                  </select>
                 </div>
               </div>
               <div>

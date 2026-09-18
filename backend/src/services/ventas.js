@@ -1,5 +1,6 @@
 import { nextDocumentNumber, DocumentSeriesError } from './documentSeries.js';
 import { takeAvailableStock, StockError } from './stock.js';
+import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, DeliveryError } from './deliveries.js';
 
@@ -24,8 +25,9 @@ const PAY_METHODS = {
 
 const redondear = (n) => Math.round(n * 100) / 100;
 
-// Agrupa productos repetidos y rechaza ids o cantidades que no sean enteros positivos.
-// Se ordena por id para que las ventas concurrentes bloqueen filas en el mismo orden.
+// Agrupa productos repetidos y rechaza ids inválidos o cantidades no positivas. Si el producto admite
+// fracciones se valida después, al cargarlo. Se ordena por id para que las ventas concurrentes
+// bloqueen filas en el mismo orden.
 export function normalizarCarrito(cart) {
   if (!Array.isArray(cart) || cart.length === 0) {
     throw new VentaError('El carrito no puede estar vacío.');
@@ -38,10 +40,10 @@ export function normalizarCarrito(cart) {
     if (!Number.isInteger(id) || id <= 0) {
       throw new VentaError('El carrito contiene un producto inválido.');
     }
-    if (!Number.isInteger(qty) || qty <= 0) {
-      throw new VentaError(`Cantidad inválida para ${item?.name || `el producto ${id}`}. Debe ser un entero mayor a 0.`);
+    if (!Number.isFinite(qty) || qty <= 0 || roundQuantity(qty) !== qty) {
+      throw new VentaError(`Cantidad inválida para ${item?.name || `el producto ${id}`}: debe ser mayor a 0 y con hasta ${MAX_QUANTITY_DECIMALS} decimales.`);
     }
-    cantidades.set(id, (cantidades.get(id) || 0) + qty);
+    cantidades.set(id, roundQuantity((cantidades.get(id) || 0) + qty));
   }
 
   return [...cantidades].map(([id, qty]) => ({ id, qty })).sort((a, b) => a.id - b.id);
@@ -50,7 +52,7 @@ export function normalizarCarrito(cart) {
 export async function cargarProductosActivos(db, items) {
   const productos = await db.producto.findMany({
     where: { id: { in: items.map(i => i.id) } },
-    select: { id: true, name: true, code: true, price: true, stock: true, active: true },
+    select: { id: true, name: true, code: true, price: true, wholesalePrice: true, stock: true, active: true, allowsFractions: true, unit: true },
   });
   const porId = new Map(productos.map(p => [p.id, p]));
 
@@ -59,6 +61,8 @@ export async function cargarProductosActivos(db, items) {
     if (!prod || !prod.active) {
       throw new VentaError(`El producto ${prod?.name || item.id} no existe o no está activo.`);
     }
+    const problem = quantityProblem(item.qty, prod.allowsFractions);
+    if (problem) throw new VentaError(`La cantidad de ${prod.name} ${problem}.`);
   }
   return porId;
 }
@@ -74,9 +78,20 @@ const toId = (v) => (v === undefined || v === null || v === '' ? null : parseInt
 export const toDocTypeEnum = (docType) => DOC_TYPES[docType] || 'NOTA_VENTA';
 export const toPayMethodEnum = (payMethod) => PAY_METHODS[payMethod] || 'EFECTIVO';
 
-// Precios de cada línea: los de la cotización si sigue vigente; si no, los actuales del producto.
-export async function priceLines(tx, items, cotizacionId) {
+export async function priceListFor(tx, clienteId) {
+  if (!clienteId) return 'RETAIL';
+  const client = await tx.cliente.findUnique({ where: { id: clienteId }, select: { priceList: true } });
+  return client?.priceList ?? 'RETAIL';
+}
+
+export const unitPriceFor = (product, priceList) =>
+  (priceList === 'WHOLESALE' && product.wholesalePrice != null ? product.wholesalePrice : product.price);
+
+// Precio de cada línea: el de la cotización si sigue vigente; si no, el de la lista del cliente
+// (mayorista o minorista). Nunca se usa el precio que manda el navegador.
+export async function priceLines(tx, items, cotizacionId, clienteId = null) {
   const productos = await cargarProductosActivos(tx, items);
+  const priceList = await priceListFor(tx, clienteId);
 
   const preciosCotizados = new Map();
   if (cotizacionId) {
@@ -95,7 +110,7 @@ export async function priceLines(tx, items, cotizacionId) {
 
   const lineas = items.map(item => {
     const prod = productos.get(item.id);
-    const price = preciosCotizados.get(item.id) ?? prod.price;
+    const price = preciosCotizados.get(item.id) ?? unitPriceFor(prod, priceList);
     return { ...item, name: prod.name, code: prod.code, price, subtotal: redondear(price * item.qty) };
   });
   return { lineas, total: redondear(lineas.reduce((sum, l) => sum + l.subtotal, 0)) };
@@ -107,6 +122,37 @@ export async function markQuoteConverted(tx, cotizacionId) {
     data: { status: 'CONVERTIDO' },
   });
   if (count === 0) throw new VentaError('La cotización ya fue procesada.', 409);
+}
+
+// Descuento que pide el POS: { type: 'PERCENT' | 'AMOUNT', value }. Sin descuento → null.
+export function parseDiscountRequest(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (raw.type !== 'PERCENT' && raw.type !== 'AMOUNT') throw new VentaError('Tipo de descuento no válido.');
+  const value = Number(raw.value);
+  if (!Number.isFinite(value) || value < 0) throw new VentaError('El descuento debe ser un número positivo.');
+  if (raw.type === 'PERCENT' && value > 100) throw new VentaError('El descuento no puede superar el 100 %.');
+  return value === 0 ? null : { type: raw.type, value };
+}
+
+// Aplica el descuento sobre la suma de las líneas. El administrador no tiene tope; el resto del
+// personal puede descontar hasta el % configurado por la empresa.
+export function applyDiscount(subtotal, request, user, maxPercent) {
+  if (!request) return { discount: 0, total: subtotal };
+  const discount = roundMoney(request.type === 'PERCENT' ? subtotal * request.value / 100 : request.value);
+  if (discount >= subtotal) throw new VentaError('El descuento no puede cubrir todo el total de la venta.');
+  if (user?.role !== 'ADMINISTRADOR') {
+    const allowed = roundMoney(subtotal * maxPercent / 100);
+    if (discount > allowed) {
+      throw new VentaError(
+        maxPercent > 0
+          ? `Su descuento máximo es ${maxPercent} % (S/ ${allowed.toFixed(2)} en esta venta).`
+          : 'No tiene permitido aplicar descuentos. Solicítelo a un administrador.',
+        403,
+        'DESCUENTO_EXCEDIDO'
+      );
+    }
+  }
+  return { discount, total: roundMoney(subtotal - discount) };
 }
 
 export function assertExpectedTotal(totalEsperado, lineas, total) {
@@ -204,9 +250,11 @@ async function ejecutarVenta(tx, datos) {
   const {
     items, docTypeEnum, payMethodEnum, mixCash, mixDigital, payCode,
     clienteId, vendedorId, cajaUsuarioId, cotizacionId, totalEsperado, delivery,
+    discountRequest, user, maxDiscountPercent,
   } = datos;
 
-  const { lineas, total } = await priceLines(tx, items, cotizacionId);
+  const { lineas, total: subtotal } = await priceLines(tx, items, cotizacionId, clienteId);
+  const { discount, total } = applyDiscount(subtotal, discountRequest, user, maxDiscountPercent);
   assertExpectedTotal(totalEsperado, lineas, total);
   if (cotizacionId) await markQuoteConverted(tx, cotizacionId);
 
@@ -224,6 +272,8 @@ async function ejecutarVenta(tx, datos) {
       mixDigital: payMethodEnum === 'PAGO_MIXTO' ? payment.digital : 0,
       payCode: payCode ? String(payCode).trim() : null,
       total,
+      discount,
+      discountById: discount > 0 ? user.id : null,
       clienteId,
       vendedorId,
       cajaId: cajaAbierta.id,
@@ -257,10 +307,11 @@ async function ejecutarVenta(tx, datos) {
     ? await scheduleDeliveryForSale(tx, { ventaId: venta.id, numDoc, clienteId, lines: lineas, delivery })
     : null;
 
-  return { ...venta, items: publicLines(lineas), delivery: entrega };
+  return { ...venta, subtotal, items: publicLines(lineas), delivery: entrega };
 }
 
-export async function procesarVenta(prisma, payload) {
+// user: quien tiene la sesión; es quien aplica el descuento (el vendedor puede ser otro).
+export async function procesarVenta(prisma, payload, user) {
   const settings = await getSettings(prisma);
   if (settings.saleFlowMode !== 'DIRECT') {
     throw new VentaError('La empresa trabaja con pedidos: registre la venta como pedido y cóbrela en caja.', 409, 'MODO_PEDIDOS');
@@ -284,6 +335,9 @@ export async function procesarVenta(prisma, payload) {
     cotizacionId: toId(payload.cotizacionId),
     totalEsperado: payload.totalEsperado,
     delivery: parseDeliveryRequest(payload.delivery),
+    discountRequest: parseDiscountRequest(payload.discount),
+    user,
+    maxDiscountPercent: settings.maxDiscountPercent,
   };
 
   return prisma.$transaction(tx => ejecutarVenta(tx, datos));

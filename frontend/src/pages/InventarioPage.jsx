@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
+import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quantities.js';
 
 export default function InventarioPage({ initialCategory = 'Todas', onNavigateToCategories, currentUser }) {
   const [products, setProducts] = useState([]);
@@ -20,11 +21,13 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
   // Campos formulario producto
   const [code, setCode] = useState('');
   const [unit, setUnit] = useState('Unidad');
+  const [allowsFractions, setAllowsFractions] = useState(false);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Ferretería general');
   const [stock, setStock] = useState('');
   const [minStock, setMinStock] = useState('10');
   const [price, setPrice] = useState('');
+  const [wholesalePrice, setWholesalePrice] = useState('');
   const [searchingBarcode, setSearchingBarcode] = useState(false);
   const [productErrors, setProductErrors] = useState({});
 
@@ -99,18 +102,21 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
 
     const stockNum = Number(stock);
     if (stock === '' || isNaN(stockNum)) e.stock = 'Ingrese el stock inicial.';
-    else if (!Number.isInteger(stockNum)) e.stock = 'El stock debe ser un número entero.';
     else if (stockNum < 0) e.stock = 'El stock no puede ser negativo.';
+    else if (stockNum > 0 && quantityProblem(stockNum, allowsFractions)) e.stock = `El stock ${quantityProblem(stockNum, allowsFractions)}.`;
 
     const minNum = Number(minStock);
     if (minStock === '' || isNaN(minNum)) e.minStock = 'Ingrese el stock mínimo.';
-    else if (!Number.isInteger(minNum)) e.minStock = 'Debe ser un número entero.';
     else if (minNum < 0) e.minStock = 'No puede ser negativo.';
+    else if (minNum > 0 && quantityProblem(minNum, allowsFractions)) e.minStock = `El mínimo ${quantityProblem(minNum, allowsFractions)}.`;
 
     const priceNum = parseFloat(price);
     if (price === '' || isNaN(priceNum)) e.price = 'Ingrese el precio.';
     else if (priceNum <= 0) e.price = 'El precio debe ser mayor a 0.';
     else if (priceNum > 1000000) e.price = 'El precio es demasiado alto.';
+
+    const wholesaleNum = parseFloat(wholesalePrice);
+    if (wholesalePrice !== '' && (isNaN(wholesaleNum) || wholesaleNum <= 0)) e.wholesalePrice = 'Debe ser mayor a 0 (o dejarlo vacío).';
 
     setProductErrors(e);
     return Object.keys(e).length === 0;
@@ -123,7 +129,9 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
     setStock('');
     setMinStock('10');
     setPrice('');
+    setWholesalePrice('');
     setUnit('Unidad');
+    setAllowsFractions(false);
     setProductErrors({});
     setEditingProductId(null);
   };
@@ -142,10 +150,12 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
     setCode(p.code);
     setName(p.name);
     setUnit(p.unit || 'Unidad');
+    setAllowsFractions(Boolean(p.allowsFractions));
     setCategory(p.category || 'General');
     setStock(String(p.stock));
     setMinStock(String(p.minStock ?? 10));
     setPrice(String(p.price));
+    setWholesalePrice(p.wholesalePrice != null ? String(p.wholesalePrice) : '');
     setShowModal(true);
   };
 
@@ -164,19 +174,23 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
           code: code.trim(),
           name: name.trim(),
           unit,
+          allowsFractions,
           category,
-          minStock: parseInt(minStock, 10) || 10,
+          minStock: Number(minStock),
           price: parseFloat(price),
+          wholesalePrice: wholesalePrice === '' ? null : parseFloat(wholesalePrice),
         });
       } else {
         await api.post('/productos', {
           code: code.trim(),
           name: name.trim(),
           unit,
+          allowsFractions,
           category,
-          stock: parseInt(stock, 10),
-          minStock: parseInt(minStock, 10) || 10,
+          stock: Number(stock),
+          minStock: Number(minStock),
           price: parseFloat(price),
+          wholesalePrice: wholesalePrice === '' ? null : parseFloat(wholesalePrice),
           usuarioId: currentUser?.id,
         });
       }
@@ -355,8 +369,8 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center text-xs text-slate-500">{p.unit}</td>
-                      <td className="px-4 py-3 text-right font-bold text-slate-700">{p.stock}</td>
-                      <td className="px-4 py-3 text-right text-xs text-slate-400">{p.minStock ?? 10}</td>
+                      <td className="px-4 py-3 text-right font-bold text-slate-700">{formatQuantity(p.stock)}</td>
+                      <td className="px-4 py-3 text-right text-xs text-slate-400">{formatQuantity(p.minStock ?? 10)}</td>
                       <td className="px-4 py-3 text-right font-bold text-orange-600">
                         S/ {parseFloat(p.price).toFixed(2)}
                       </td>
@@ -431,7 +445,10 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                   <label className="text-xs font-bold text-slate-500 mb-1 block">Unidad</label>
                   <select
                     value={unit}
-                    onChange={e => setUnit(e.target.value)}
+                    onChange={e => {
+                      setUnit(e.target.value);
+                      if (FRACTIONAL_UNITS.includes(e.target.value)) setAllowsFractions(true);
+                    }}
                     className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 bg-white text-sm"
                   >
                     <option value="Unidad">Unidad</option>
@@ -439,11 +456,25 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                     <option value="Metro">Metro</option>
                     <option value="Kilo">Kilo</option>
                     <option value="Galón">Galón</option>
+                    <option value="Litro">Litro</option>
                     <option value="Caja">Caja</option>
                     <option value="Paquete">Paquete</option>
                   </select>
                 </div>
               </div>
+
+              <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={allowsFractions}
+                  onChange={e => { setAllowsFractions(e.target.checked); clearProductError('stock'); clearProductError('minStock'); }}
+                  className="accent-orange-600 w-4 h-4 mt-0.5"
+                />
+                <span>
+                  <span className="font-semibold">Se vende fraccionado</span>
+                  <span className="block text-xs text-slate-500">Permite vender cantidades con decimales, por ejemplo 2.5 metros o 0.750 kilos.</span>
+                </span>
+              </label>
 
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1 block">Nombre del Producto</label>
@@ -507,6 +538,19 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                     className={`w-full border p-2 rounded outline-none text-sm ${borderClass(productErrors.price)}`}
                   />
                   <FieldError msg={productErrors.price} />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 mb-1 block">Precio mayorista (opcional)</label>
+                  <input
+                    type="number"
+                    step="0.10"
+                    min="0"
+                    value={wholesalePrice}
+                    onChange={e => { setWholesalePrice(e.target.value); clearProductError('wholesalePrice'); }}
+                    placeholder="Igual al normal"
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(productErrors.wholesalePrice)}`}
+                  />
+                  <FieldError msg={productErrors.wholesalePrice} />
                 </div>
               </div>
             </div>

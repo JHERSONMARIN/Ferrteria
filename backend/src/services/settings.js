@@ -100,6 +100,16 @@ export function validateSettingsInput(input) {
     }
   }
 
+  // Opcional como el modo: si no viene, se conserva el tope actual.
+  let maxDiscountPercent;
+  if (input.maxDiscountPercent !== undefined) {
+    maxDiscountPercent = Number(input.maxDiscountPercent);
+    if (!Number.isFinite(maxDiscountPercent) || maxDiscountPercent < 0 || maxDiscountPercent > 100) {
+      throw new SettingsValidationError('El descuento máximo debe estar entre 0 y 100 %.');
+    }
+    maxDiscountPercent = Math.round(maxDiscountPercent * 100) / 100;
+  }
+
   return {
     legalName,
     tradeName: optionalText(input.tradeName, 100, 'El nombre comercial'),
@@ -112,6 +122,7 @@ export function validateSettingsInput(input) {
     ticketFooter: optionalText(input.ticketFooter, 300, 'El pie del ticket'),
     enabledModules,
     saleFlowMode,
+    maxDiscountPercent,
   };
 }
 

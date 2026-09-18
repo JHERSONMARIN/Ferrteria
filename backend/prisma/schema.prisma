@@ -72,6 +72,12 @@ enum SaleFlowMode {
   STAGED
 }
 
+// Lista de precios del cliente: la mayorista usa Producto.wholesalePrice cuando existe.
+enum PriceList {
+  RETAIL
+  WHOLESALE
+}
+
 enum EstadoCotizacion {
   PENDIENTE
   CONVERTIDO
@@ -93,6 +99,7 @@ model Usuario {
 
   ventasAsignadas   Venta[]        @relation("VendedorVentas")
   ventasDespachadas Venta[]        @relation("DespachadorVentas")
+  descuentosAplicados Venta[]      @relation("DescuentoVentas")
   entregasAsignadas Entrega[]      @relation("RepartidorEntregas")
   cajasChicas       CajaChica[]
   cotizaciones      Cotizacion[]   @relation("VendedorCotizaciones")
@@ -106,11 +113,15 @@ model Producto {
   code      String   @unique
   name      String
   unit      String   @default("Unidad")
-  stock     Int      @default(0)
+  // Se vende fraccionado (metros, kilos): acepta hasta 3 decimales; si no, solo enteros.
+  allowsFractions Boolean @default(false)
+  stock     Decimal      @default(0) @db.Decimal(12, 3)
   // Unidades apartadas por pedidos aún no despachados; disponible = stock - reserved.
-  reserved  Int      @default(0)
-  minStock  Int      @default(10)
-  price     Float    @default(0.0)
+  reserved  Decimal      @default(0) @db.Decimal(12, 3)
+  minStock  Decimal      @default(10) @db.Decimal(12, 3)
+  price     Decimal    @default(0.0) @db.Decimal(12, 2)
+  // Precio para clientes con lista mayorista; si falta, se usa el precio normal.
+  wholesalePrice Decimal? @db.Decimal(12, 2)
   category    String   @default("General")
   categoriaId Int?
   categoria   Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
@@ -150,7 +161,8 @@ model Cliente {
   phone     String?
   email     String?
   address   String?
-  maxCredit Float       @default(1000.0)
+  maxCredit Decimal       @default(1000.0) @db.Decimal(12, 2)
+  priceList PriceList     @default(RETAIL)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
@@ -168,10 +180,12 @@ model Venta {
   // Un pedido recibe su número de comprobante recién al cobrarse.
   numDoc    String?         @unique
   payMethod MetodoPago      @default(EFECTIVO)
-  mixCash   Float?          @default(0)
-  mixDigital Float?         @default(0)
+  mixCash   Decimal?          @default(0) @db.Decimal(12, 2)
+  mixDigital Decimal?         @default(0) @db.Decimal(12, 2)
   payCode   String?
-  total     Float           @default(0)
+  total     Decimal           @default(0) @db.Decimal(12, 2)
+  // Descuento sobre la suma de las líneas: total = suma de subtotales - discount.
+  discount  Decimal           @default(0) @db.Decimal(12, 2)
   status    SaleStatus      @default(DISPATCHED)
   createdAt DateTime        @default(now())
   paidAt       DateTime?
@@ -193,6 +207,9 @@ model Venta {
   dispatchedById Int?
   dispatchedBy   Usuario? @relation("DespachadorVentas", fields: [dispatchedById], references: [id], onDelete: SetNull)
 
+  discountById Int?
+  discountBy   Usuario? @relation("DescuentoVentas", fields: [discountById], references: [id], onDelete: SetNull)
+
   cotizacionId Int?
   cotizacion   Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
 
@@ -205,9 +222,9 @@ model Venta {
 
 model DetalleVenta {
   id        Int   @id @default(autoincrement())
-  quantity  Int
-  unitPrice Float
-  subtotal  Float
+  quantity  Decimal @db.Decimal(12, 3)
+  unitPrice Decimal @db.Decimal(12, 2)
+  subtotal  Decimal @db.Decimal(12, 2)
 
   ventaId Int
   venta   Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
@@ -221,8 +238,8 @@ model DetalleVenta {
 model MovimientoKardex {
   id         Int        @id @default(autoincrement())
   type       TipoKardex
-  qty        Int
-  stockAfter Int
+  qty        Decimal @db.Decimal(12, 3)
+  stockAfter Decimal @db.Decimal(12, 3)
   ref        String
   createdAt  DateTime   @default(now())
 
@@ -266,7 +283,7 @@ model Entrega {
 
 model DetalleEntrega {
   id       Int @id @default(autoincrement())
-  quantity Int
+  quantity Decimal @db.Decimal(12, 3)
 
   entregaId Int
   entrega   Entrega @relation(fields: [entregaId], references: [id], onDelete: Cascade)
@@ -279,8 +296,8 @@ model DetalleEntrega {
 
 model CreditoCliente {
   id           Int      @id @default(autoincrement())
-  debtTotal    Float    @default(0)
-  maxCredit    Float    @default(1000.0)
+  debtTotal    Decimal    @default(0) @db.Decimal(12, 2)
+  maxCredit    Decimal    @default(1000.0) @db.Decimal(12, 2)
   lastPurchase DateTime @default(now())
 
   clienteId Int     @unique
@@ -293,7 +310,7 @@ model CreditoCliente {
 
 model AbonoCredito {
   id        Int                   @id @default(autoincrement())
-  amount    Float
+  amount    Decimal @db.Decimal(12, 2)
   docRef    String
   desc      String?
   type      TipoMovimientoCredito @default(ABONO)
@@ -307,11 +324,11 @@ model AbonoCredito {
 
 model CajaChica {
   id               Int        @id @default(autoincrement())
-  montoInicial     Float      @default(0)
-  ventasEfectivo   Float      @default(0)
-  ventasDigital    Float      @default(0)
-  montoCierreConteo Float?   @default(0)
-  diferencia       Float?     @default(0)
+  montoInicial     Decimal      @default(0) @db.Decimal(12, 2)
+  ventasEfectivo   Decimal      @default(0) @db.Decimal(12, 2)
+  ventasDigital    Decimal      @default(0) @db.Decimal(12, 2)
+  montoCierreConteo Decimal?   @default(0) @db.Decimal(12, 2)
+  diferencia       Decimal?     @default(0) @db.Decimal(12, 2)
   estado           EstadoCaja @default(ABIERTA)
   createdAt        DateTime   @default(now())
   closedAt         DateTime?
@@ -340,7 +357,7 @@ model Proveedor {
 model Compra {
   id        Int      @id @default(autoincrement())
   numDoc    String
-  total     Float    @default(0)
+  total     Decimal    @default(0) @db.Decimal(12, 2)
   createdAt DateTime @default(now())
 
   proveedorId Int
@@ -353,9 +370,9 @@ model Compra {
 
 model DetalleCompra {
   id        Int   @id @default(autoincrement())
-  quantity  Int
-  unitPrice Float
-  subtotal  Float
+  quantity  Decimal @db.Decimal(12, 3)
+  unitPrice Decimal @db.Decimal(12, 2)
+  subtotal  Decimal @db.Decimal(12, 2)
 
   compraId Int
   compra   Compra @relation(fields: [compraId], references: [id], onDelete: Cascade)
@@ -369,7 +386,7 @@ model DetalleCompra {
 model Cotizacion {
   id        Int              @id @default(autoincrement())
   numDoc    String           @unique
-  total     Float            @default(0)
+  total     Decimal            @default(0) @db.Decimal(12, 2)
   validDays Int              @default(7)
   status    EstadoCotizacion @default(PENDIENTE)
   createdAt DateTime         @default(now())
@@ -388,9 +405,9 @@ model Cotizacion {
 
 model DetalleCotizacion {
   id        Int   @id @default(autoincrement())
-  quantity  Int
-  unitPrice Float
-  subtotal  Float
+  quantity  Decimal @db.Decimal(12, 3)
+  unitPrice Decimal @db.Decimal(12, 2)
+  subtotal  Decimal @db.Decimal(12, 2)
 
   cotizacionId Int
   cotizacion   Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
@@ -415,6 +432,8 @@ model BusinessSettings {
   ticketFooter   String?
   enabledModules Json
   saleFlowMode   SaleFlowMode @default(DIRECT)
+  // Descuento máximo (%) que puede aplicar quien no es administrador; 0 = no puede descontar.
+  maxDiscountPercent Decimal @default(0) @db.Decimal(5, 2)
   updatedAt      DateTime @updatedAt
 
   @@map("business_settings")
