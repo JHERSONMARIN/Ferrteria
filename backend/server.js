@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './src/routes/auth.js';
 import personalRoutes from './src/routes/personal.js';
@@ -19,14 +18,16 @@ import categoriesRoutes from './src/routes/categories.js';
 import settingsRoutes from './src/routes/settings.js';
 import { prisma } from './src/db.js';
 import { initializeDocumentSeries } from './src/services/documentSeries.js';
+import { authenticate } from './src/middleware/authenticate.js';
+import { allowModules } from './src/middleware/authorize.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middlewares
-app.use(cors());
+// Sin CORS: el navegador siempre llega por el mismo dominio a través del proxy del frontend,
+// así que ningún otro sitio web puede llamar a la API con la sesión del usuario.
 app.use(express.json());
 
 // Logging Middleware
@@ -35,38 +36,50 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rutas de la API
+// ---------- Rutas públicas ----------
 app.use('/api/auth', authRoutes);
-app.use('/api/personal', personalRoutes);
-app.use('/api/clientes', consultaDocRoutes);
-app.use('/api/clientes', clientesRoutes);
-app.use('/api/productos', productosRoutes);
-app.use('/api/categorias', categoriesRoutes);
-app.use('/api/kardex', kardexRoutes);
-app.use('/api/ventas', ventasRoutes);
-app.use('/api/entregas', entregasRoutes);
-app.use('/api/creditos', creditosRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/caja', cajaRoutes);
-app.use('/api/proveedores', proveedoresRoutes);
-app.use('/api/compras', comprasRoutes);
-app.use('/api/cotizaciones', cotizacionesRoutes);
-app.use('/api/settings', settingsRoutes);
 
 // Información pública para la pantalla de inicio de sesión
 app.get('/api/app-info', (req, res) => {
   res.json({ demoMode: process.env.DEMO_MODE === 'true' });
 });
 
-// Healthcheck
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', system: 'FerreSys v4.8 API', timestamp: new Date() });
 });
 
+// ---------- A partir de aquí todo requiere sesión ----------
+app.use('/api', authenticate);
+
+// Catálogos que consultan varias pantallas (POS, compras, entregas…); modificarlos exige su módulo.
+const CATALOG_READERS = ['pos', 'cotizaciones', 'inventory', 'categories', 'kardex', 'compras', 'deliveries'];
+
+app.use('/api/settings', allowModules({ GET: 'authenticated', default: 'admin' }), settingsRoutes);
+app.use('/api/personal', allowModules({ GET: ['personal', 'pos', 'deliveries'], default: ['personal'] }), personalRoutes);
+app.use('/api/clientes', allowModules({
+  GET: ['pos', 'cotizaciones', 'client-dir', 'customers', 'deliveries'],
+  PUT: ['client-dir', 'customers'],
+  default: ['client-dir'],
+}), consultaDocRoutes, clientesRoutes);
+app.use('/api/productos', allowModules({ GET: CATALOG_READERS, default: ['inventory'] }), productosRoutes);
+app.use('/api/categorias', allowModules({ GET: CATALOG_READERS, default: ['categories', 'inventory'] }), categoriesRoutes);
+app.use('/api/kardex', allowModules({ default: ['kardex', 'inventory'] }), kardexRoutes);
+app.use('/api/ventas', allowModules({ GET: ['pos', 'dashboard'], default: ['pos'] }), ventasRoutes);
+app.use('/api/cotizaciones', allowModules({ DELETE: ['cotizaciones'], default: ['cotizaciones', 'pos'] }), cotizacionesRoutes);
+app.use('/api/caja', allowModules({ GET: ['caja', 'pos'], default: ['caja'] }), cajaRoutes);
+app.use('/api/entregas', allowModules({ default: ['deliveries'] }), entregasRoutes);
+app.use('/api/creditos', allowModules({ default: ['customers'] }), creditosRoutes);
+app.use('/api/dashboard', allowModules({ default: ['dashboard'] }), dashboardRoutes);
+app.use('/api/proveedores', allowModules({ default: ['compras'] }), proveedoresRoutes);
+app.use('/api/compras', allowModules({ default: ['compras'] }), comprasRoutes);
+
+// Cualquier otra ruta de la API
+app.use('/api', (req, res) => res.status(404).json({ error: 'Recurso no encontrado.' }));
+
 // Manejo Global de Errores
 app.use((err, req, res, next) => {
-  console.error('❌ Error no capturado:', err);
-  res.status(500).json({ error: err.message || 'Error interno del servidor.' });
+  console.error(`❌ Error no capturado en ${req.method} ${req.originalUrl}:`, err);
+  res.status(500).json({ error: 'Error interno del servidor.' });
 });
 
 // Si falla, el servidor arranca igual: las ventas responderán que no hay serie configurada.

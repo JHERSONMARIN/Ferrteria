@@ -20,6 +20,9 @@ const DEFAULT_SETTINGS = {
 export class SettingsValidationError extends Error {}
 
 export async function getSettings(db) {
+  // Se consulta en cada petición (permisos): la lectura simple evita escribir en la base.
+  const existing = await db.businessSettings.findUnique({ where: { id: SETTINGS_ID } });
+  if (existing) return existing;
   // upsert evita que dos peticiones simultáneas intenten crear la fila a la vez.
   return db.businessSettings.upsert({
     where: { id: SETTINGS_ID },

@@ -84,7 +84,7 @@ export default function CajaPage({ currentUser }) {
   const loadEstadoCaja = async ({ silencioso = false } = {}) => {
     try {
       if (!silencioso) setLoading(true);
-      const data = await api.get(`/caja/estado-actual?usuarioId=${currentUser.id}`);
+      const data = await api.get(`/caja/estado-actual`);
       setEstadoCaja(data);
     } catch (err) {
       console.error('Error cargando estado de caja:', err);

@@ -138,7 +138,7 @@ export default function PosPage({ currentUser, onTriggerPrint }) {
 
   const loadEstadoCaja = async () => {
     try {
-      const data = await api.get(`/caja/estado-actual?usuarioId=${currentUser.id}`);
+      const data = await api.get(`/caja/estado-actual`);
       setEstadoCaja(data);
       return data;
     } catch (err) {
