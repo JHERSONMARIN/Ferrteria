@@ -15,7 +15,8 @@ const EDITABLE_FIELDS = [
   'currencySymbol', 'taxRate', 'ticketFooter', 'enabledModules',
 ];
 
-const toForm = (settings) => ({
+// Los módulos no contratados se muestran apagados y no se envían al guardar.
+const toForm = (settings, licensedModules) => ({
   legalName: settings.legalName || '',
   tradeName: settings.tradeName || '',
   taxId: settings.taxId || '',
@@ -25,7 +26,7 @@ const toForm = (settings) => ({
   currencySymbol: settings.currencySymbol || 'S/',
   taxRate: String(settings.taxRate ?? 18),
   ticketFooter: settings.ticketFooter || '',
-  enabledModules: settings.enabledModules || [],
+  enabledModules: (settings.enabledModules || []).filter(m => !licensedModules || licensedModules.includes(m)),
 });
 
 function validateForm(form) {
@@ -67,6 +68,7 @@ export default function SettingsPage({ onSaved }) {
   const [savedSettings, setSavedSettings] = useState(null);
   const [form, setForm] = useState(null);
   const [documentSeries, setDocumentSeries] = useState([]);
+  const [licensedModules, setLicensedModules] = useState(null);
   const [errors, setErrors] = useState({});
   const [loadError, setLoadError] = useState('');
   const [saveMessage, setSaveMessage] = useState(null);
@@ -81,7 +83,8 @@ export default function SettingsPage({ onSaved }) {
       setLoadError('');
       const res = await api.get('/settings');
       setSavedSettings(res.settings);
-      setForm(toForm(res.settings));
+      setLicensedModules(res.licensedModules || null);
+      setForm(toForm(res.settings, res.licensedModules));
       setDocumentSeries(res.documentSeries || []);
     } catch (err) {
       setLoadError(err.message || 'No se pudo cargar la configuración.');
@@ -90,9 +93,9 @@ export default function SettingsPage({ onSaved }) {
 
   const hasChanges = useMemo(() => {
     if (!form || !savedSettings) return false;
-    const saved = toForm(savedSettings);
+    const saved = toForm(savedSettings, licensedModules);
     return EDITABLE_FIELDS.some(field => JSON.stringify(form[field]) !== JSON.stringify(saved[field]));
-  }, [form, savedSettings]);
+  }, [form, savedSettings, licensedModules]);
 
   const setField = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -100,8 +103,10 @@ export default function SettingsPage({ onSaved }) {
     setSaveMessage(null);
   };
 
+  const isLicensed = (moduleId) => !licensedModules || licensedModules.includes(moduleId);
+
   const toggleModule = (moduleId) => {
-    if (ALWAYS_ENABLED_MODULES.includes(moduleId)) return;
+    if (ALWAYS_ENABLED_MODULES.includes(moduleId) || !isLicensed(moduleId)) return;
     setField(
       'enabledModules',
       form.enabledModules.includes(moduleId)
@@ -122,7 +127,7 @@ export default function SettingsPage({ onSaved }) {
       setSaving(true);
       const res = await api.put('/settings', { ...form, taxRate: Number(form.taxRate) });
       setSavedSettings(res.settings);
-      setForm(toForm(res.settings));
+      setForm(toForm(res.settings, licensedModules));
       setSaveMessage({ type: 'success', text: 'Configuración guardada.' });
       if (onSaved) onSaved(res.settings);
     } catch (err) {
@@ -247,10 +252,18 @@ export default function SettingsPage({ onSaved }) {
           title="Módulos activos"
           description="Los módulos desactivados se ocultan para todos los usuarios, aunque los tengan asignados."
         >
+          {licensedModules && licensedModules.length < MODULE_OPTIONS.length && (
+            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-3">
+              <i className="fa-solid fa-lock mr-1.5 text-slate-400"></i>
+              Los módulos bloqueados no están incluidos en su plan. Para habilitarlos, comuníquese con su proveedor.
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {MODULE_OPTIONS.map(mod => {
-              const locked = ALWAYS_ENABLED_MODULES.includes(mod.value);
-              const enabled = locked || form.enabledModules.includes(mod.value);
+              const alwaysOn = ALWAYS_ENABLED_MODULES.includes(mod.value);
+              const notLicensed = !isLicensed(mod.value);
+              const locked = alwaysOn || notLicensed;
+              const enabled = alwaysOn || (!notLicensed && form.enabledModules.includes(mod.value));
               return (
                 <button
                   key={mod.value}
@@ -261,12 +274,17 @@ export default function SettingsPage({ onSaved }) {
                     enabled
                       ? 'border-orange-300 bg-orange-50'
                       : 'border-slate-200 bg-white hover:bg-slate-50'
-                  } ${locked ? 'cursor-not-allowed' : ''}`}
+                  } ${locked ? 'cursor-not-allowed' : ''} ${notLicensed ? 'opacity-60' : ''}`}
                 >
                   <i className={`fa-solid ${mod.icon} w-5 text-center ${enabled ? 'text-orange-600' : 'text-slate-400'}`}></i>
                   <span className={`flex-1 text-sm font-semibold ${enabled ? 'text-slate-800' : 'text-slate-500'}`}>
                     {mod.label}
-                    {locked && <span className="block text-[10px] font-normal text-slate-400">Siempre activo</span>}
+                    {alwaysOn && <span className="block text-[10px] font-normal text-slate-400">Siempre activo</span>}
+                    {notLicensed && (
+                      <span className="block text-[10px] font-normal text-slate-400">
+                        <i className="fa-solid fa-lock mr-1"></i>No incluido en su plan
+                      </span>
+                    )}
                   </span>
                   <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${enabled ? 'bg-orange-500' : 'bg-slate-300'}`}>
                     <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${enabled ? 'left-[18px]' : 'left-0.5'}`}></span>
@@ -288,7 +306,7 @@ export default function SettingsPage({ onSaved }) {
           </p>
           <div className="flex gap-2">
             <button
-              onClick={() => { setForm(toForm(savedSettings)); setErrors({}); setSaveMessage(null); }}
+              onClick={() => { setForm(toForm(savedSettings, licensedModules)); setErrors({}); setSaveMessage(null); }}
               disabled={!hasChanges || saving}
               className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-40"
             >

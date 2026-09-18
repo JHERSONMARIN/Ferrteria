@@ -3,15 +3,10 @@ import { prisma } from '../db.js';
 
 const router = express.Router();
 
-// GET /api/caja/estado-actual?usuarioId=1
+// GET /api/caja/estado-actual (caja del usuario de la sesión)
 router.get('/estado-actual', async (req, res) => {
   try {
-    const { usuarioId } = req.query;
-    if (!usuarioId) {
-      return res.status(400).json({ error: 'usuarioId requerido.' });
-    }
-
-    const uId = parseInt(usuarioId);
+    const uId = req.user.id;
 
     // Buscar caja abierta para este usuario
     const cajaAbierta = await prisma.cajaChica.findFirst({
@@ -62,12 +57,9 @@ router.get('/estado-actual', async (req, res) => {
 // POST /api/caja/apertura
 router.post('/apertura', async (req, res) => {
   try {
-    const { usuarioId, montoInicial } = req.body;
+    const { montoInicial } = req.body;
     const monto = parseFloat(montoInicial) || 0;
-
-    if (!usuarioId) return res.status(400).json({ error: 'Usuario requerido.' });
-
-    const uId = parseInt(usuarioId);
+    const uId = req.user.id;
 
     // Verificar que no tenga ya una caja abierta
     const existente = await prisma.cajaChica.findFirst({
@@ -108,6 +100,10 @@ router.post('/cierre', async (req, res) => {
         ventas: { select: { total: true, payMethod: true, mixCash: true, mixDigital: true } }
       }
     });
+
+    if (caja && caja.usuarioId !== req.user.id && req.user.role !== 'ADMINISTRADOR') {
+      return res.status(403).json({ error: 'Solo puede cerrar su propia caja.' });
+    }
 
     if (!caja || caja.estado === 'CERRADA') {
       return res.status(400).json({ error: 'La caja especificada no existe o ya está cerrada.' });

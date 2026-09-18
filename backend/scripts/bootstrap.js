@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../src/db.js';
 import { AVAILABLE_MODULES } from '../src/services/settings.js';
+import { hashPassword } from '../src/services/passwords.js';
 
 // Prepara una base recién creada para una empresa nueva: configuración y administrador inicial.
 // En bases que ya tienen usuarios no hace nada, por lo que puede ejecutarse en cada arranque.
@@ -19,15 +20,15 @@ async function bootstrap() {
   const providedPassword = process.env.INITIAL_ADMIN_PASSWORD?.trim();
   const password = providedPassword || randomBytes(9).toString('base64url');
 
-  // TODO(Fase 2): guardar la contraseña con hash y obligar a cambiarla en el primer ingreso.
   await prisma.usuario.create({
     data: {
       name: 'Administrador',
       user: adminUser,
-      pass: password,
+      pass: await hashPassword(password),
       role: 'ADMINISTRADOR',
       modules: AVAILABLE_MODULES,
       active: true,
+      mustChangePassword: true,
     },
   });
 

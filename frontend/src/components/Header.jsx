@@ -20,12 +20,14 @@ export default function Header({ pageTitle, user, onResetDemo, onToggleSidebar }
         </h2>
       </div>
 
-      <button
-        onClick={onResetDemo}
-        className="text-xs text-red-500 hover:text-red-700 bg-red-50 px-2 py-1 rounded font-bold border border-red-200 shrink-0 hidden sm:block"
-      >
-        Reset Demo
-      </button>
+      {onResetDemo && (
+        <button
+          onClick={onResetDemo}
+          className="text-xs text-red-500 hover:text-red-700 bg-red-50 px-2 py-1 rounded font-bold border border-red-200 shrink-0 hidden sm:block"
+        >
+          Reset Demo
+        </button>
+      )}
     </header>
   );
 }

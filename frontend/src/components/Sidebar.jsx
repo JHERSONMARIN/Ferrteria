@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Sidebar({ activeTab, onSwitchTab, user, modules, businessName, open, onClose, onLogout }) {
+export default function Sidebar({ activeTab, onSwitchTab, user, modules, businessName, open, onClose, onLogout, onChangePassword }) {
   const allowedModules = modules || [];
 
   const handleSwitchTab = (tabId) => {
@@ -131,6 +131,13 @@ export default function Sidebar({ activeTab, onSwitchTab, user, modules, busines
               <p className="text-[10px] text-slate-500 uppercase truncate">{user.role}</p>
             </div>
           </div>
+          <button
+            onClick={() => { onChangePassword(); if (onClose) onClose(); }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors"
+          >
+            <i className="fa-solid fa-key w-5"></i>
+            Cambiar contraseña
+          </button>
           <button
             onClick={onLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-sm font-bold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"

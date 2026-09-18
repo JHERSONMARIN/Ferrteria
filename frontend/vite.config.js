@@ -17,6 +17,7 @@ export default defineConfig({
         target: process.env.BACKEND_URL || 'http://backend:3000',
         changeOrigin: true,
         secure: false,
+        xfwd: true,
         agent: agent,
       }
     }

@@ -52,7 +52,8 @@ router.get('/', async (req, res) => {
 // POST /api/cotizaciones (Generar nueva Cotización / Proforma)
 router.post('/', async (req, res) => {
   try {
-    const { clienteId, vendedorId, validDays } = req.body;
+    const { clienteId, validDays } = req.body;
+    const vendedorId = req.user.id;
 
     const items = normalizarCarrito(req.body.cart);
     const productos = await cargarProductosActivos(prisma, items);
@@ -108,7 +109,8 @@ router.post('/:id/convertir', async (req, res) => {
     });
     if (!cot) return res.status(404).json({ error: 'Cotización no encontrada.' });
 
-    const { docType, payMethod, mixCash, mixDigital, payCode, usuarioCajaId, vendedorId } = req.body;
+    const { docType, payMethod, mixCash, mixDigital, payCode, vendedorId } = req.body;
+    const usuarioCajaId = req.user.id;
 
     const venta = await procesarVenta(prisma, {
       docType,

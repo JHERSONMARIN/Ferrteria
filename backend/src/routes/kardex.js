@@ -131,7 +131,8 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { productoId, type, qty, ref, usuarioId } = req.body;
+    const { productoId, type, qty, ref } = req.body;
+    const usuarioId = req.user.id;
     const qtyNum = parseInt(qty, 10);
 
     if (!productoId || !type || isNaN(qtyNum) || qtyNum <= 0) {

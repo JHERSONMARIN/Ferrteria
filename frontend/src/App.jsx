@@ -16,6 +16,7 @@ import CajaPage from './pages/CajaPage.jsx';
 import ComprasPage from './pages/ComprasPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import FieldError from './components/FieldError.jsx';
+import ChangePasswordForm from './components/ChangePasswordForm.jsx';
 import { api } from './api.js';
 
 const DEMO_TEST_USERS = [
@@ -82,7 +83,18 @@ export default function App() {
   const [ticketData, setTicketData] = useState(null);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Todas');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+
+  const handlePasswordChanged = () => {
+    setShowChangePassword(false);
+    setCurrentUser(prev => {
+      const updated = { ...prev, mustChangePassword: false };
+      localStorage.setItem('ferre_user', JSON.stringify(updated));
+      return updated;
+    });
+  };
   const [settings, setSettings] = useState(null);
+  const [licensedModules, setLicensedModules] = useState(null);
   const [settingsStatus, setSettingsStatus] = useState('loading');
 
   // Los usuarios de prueba solo se ofrecen en la instancia de demostración.
@@ -99,8 +111,10 @@ export default function App() {
     const userModules = currentUser?.modules || [];
     if (settingsStatus === 'loading') return [];
     if (!settings) return userModules;
-    return userModules.filter(m => settings.enabledModules.includes(m));
-  }, [currentUser, settings, settingsStatus]);
+    return userModules.filter(m =>
+      settings.enabledModules.includes(m) && (!licensedModules || licensedModules.includes(m))
+    );
+  }, [currentUser, settings, licensedModules, settingsStatus]);
 
   const isAdmin = currentUser?.role === 'ADMINISTRADOR';
 
@@ -114,6 +128,7 @@ export default function App() {
     try {
       const res = await api.get('/settings');
       setSettings(res.settings);
+      setLicensedModules(res.licensedModules || null);
       setSettingsStatus('ready');
     } catch (err) {
       console.error('Error cargando la configuración de la empresa:', err);
@@ -122,46 +137,52 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (currentUser?.id) loadSettings();
+    // Con clave temporal la API rechaza todo salvo el cambio de clave: se carga después.
+    if (currentUser?.id && !currentUser.mustChangePassword) loadSettings();
+  }, [currentUser?.id, currentUser?.mustChangePassword]);
+
+  // Aplica al estado local los datos del usuario que devuelve el servidor.
+  const syncUser = (serverUser) => {
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const hasChanged = JSON.stringify(serverUser.modules) !== JSON.stringify(prev.modules) ||
+                         serverUser.role !== prev.role || serverUser.name !== prev.name ||
+                         Boolean(serverUser.mustChangePassword) !== Boolean(prev.mustChangePassword);
+      if (!hasChanged) return prev;
+      const updated = {
+        ...prev,
+        modules: serverUser.modules,
+        role: serverUser.role,
+        name: serverUser.name,
+        mustChangePassword: Boolean(serverUser.mustChangePassword),
+      };
+      localStorage.setItem('ferre_user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  // Latido cada 8s: confirma que la sesión sigue válida y sincroniza rol y módulos.
+  // Si la sesión venció o el usuario fue desactivado, api.js emite "sesion-expirada".
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const checkSession = () => api.get('/auth/me').then(res => syncUser(res.user)).catch(() => {});
+    checkSession();
+    const heartbeatInterval = setInterval(checkSession, 8000);
+    return () => clearInterval(heartbeatInterval);
   }, [currentUser?.id]);
 
-  // Heartbeat cada 8s para sincronizar roles y estado activo del usuario
   useEffect(() => {
-    if (!currentUser || !currentUser.id) return;
-
-    const heartbeatInterval = setInterval(async () => {
-      try {
-        const res = await api.get(`/usuarios/check/${currentUser.id}`);
-        const serverUser = res?.user || res;
-
-        if (!res?.active || (serverUser && !serverUser.active)) {
-          alert('Tu usuario ha sido desactivado o tus permisos han sido modificados.');
-          handleLogout();
-          return;
-        }
-
-        const newModules = serverUser?.modules ?? res?.modules;
-        const newRole = serverUser?.role ?? res?.role;
-        const newName = serverUser?.name ?? res?.name;
-
-        // Solo actualizar si recibimos datos válidos y no destructivos
-        if (newModules !== undefined && newRole !== undefined && newName !== undefined) {
-          const hasChanged = JSON.stringify(newModules) !== JSON.stringify(currentUser.modules) ||
-                             newRole !== currentUser.role ||
-                             newName !== currentUser.name;
-          if (hasChanged) {
-            const updated = { ...currentUser, modules: newModules, role: newRole, name: newName };
-            setCurrentUser(updated);
-            localStorage.setItem('ferre_user', JSON.stringify(updated));
-          }
-        }
-      } catch (err) {
-        // En caso de caída de backend temporal, no desloguear agresivamente
+    const onSessionExpired = () => {
+      if (localStorage.getItem('ferre_user')) {
+        localStorage.removeItem('ferre_user');
+        alert('Su sesión terminó o su usuario fue modificado. Inicie sesión nuevamente.');
       }
-    }, 8000);
-
-    return () => clearInterval(heartbeatInterval);
-  }, [currentUser]);
+      setCurrentUser(null);
+    };
+    window.addEventListener('sesion-expirada', onSessionExpired);
+    return () => window.removeEventListener('sesion-expirada', onSessionExpired);
+  }, []);
 
   // Si el usuario cambia de tab a uno al que no tiene acceso, redirigirlo al primero accesible
   useEffect(() => {
@@ -219,6 +240,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    api.post('/auth/logout', {}).catch(() => {});
     setCurrentUser(null);
     localStorage.removeItem('ferre_user');
     setLoginUser('');
@@ -342,9 +364,22 @@ export default function App() {
             )}
           </div>
         </div>
+      ) : currentUser.mustChangePassword ? (
+        /* Clave temporal: hay que cambiarla antes de usar el sistema */
+        <div className="fixed inset-0 bg-slate-900 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+          <ChangePasswordForm mandatory onDone={handlePasswordChanged} onLogout={handleLogout} />
+        </div>
       ) : (
         /* Layout Principal Full-Stack React */
         <div className="print:hidden h-screen flex overflow-hidden">
+          {showChangePassword && (
+            <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+              <ChangePasswordForm
+                onDone={() => { handlePasswordChanged(); alert('Contraseña actualizada.'); }}
+                onCancel={() => setShowChangePassword(false)}
+              />
+            </div>
+          )}
           <Sidebar
             activeTab={activeTab}
             onSwitchTab={handleSwitchTab}
@@ -354,13 +389,14 @@ export default function App() {
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             onLogout={handleLogout}
+            onChangePassword={() => setShowChangePassword(true)}
           />
 
           <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
             <Header
               pageTitle={pageTitles[activeTab] || 'Punto de Venta'}
               user={currentUser}
-              onResetDemo={handleResetDemo}
+              onResetDemo={demoMode ? handleResetDemo : undefined}
               onToggleSidebar={() => setSidebarOpen(o => !o)}
             />
 

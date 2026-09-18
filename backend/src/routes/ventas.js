@@ -56,7 +56,12 @@ router.get('/', async (req, res) => {
 // POST /api/ventas (Venta atómica con Kardex, control de stock y límite de crédito)
 router.post('/', async (req, res) => {
   try {
-    const venta = await procesarVenta(prisma, req.body);
+    // La caja es siempre la del usuario de la sesión; el vendedor puede elegirse en el POS.
+    const venta = await procesarVenta(prisma, {
+      ...req.body,
+      usuarioCajaId: req.user.id,
+      vendedorId: req.body.vendedorId || req.user.id,
+    });
     res.status(201).json({ success: true, venta });
   } catch (error) {
     responderErrorVenta(res, error, 'ventas.js');

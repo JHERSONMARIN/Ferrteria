@@ -71,6 +71,8 @@ COMPANY_NAME="$COMPANY_NAME"
 WEB_PORT=$WEB_PORT
 DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@$DB_CONTAINER:5432/$DB_NAME?schema=public&connection_limit=5
 DEMO_MODE=false
+LICENSED_MODULES=
+JWT_SECRET=$(random_secret 32)
 INITIAL_ADMIN_USER=admin
 INITIAL_ADMIN_PASSWORD=$ADMIN_PASSWORD
 ENV
@@ -96,7 +98,7 @@ cat <<INFO
 ✅ Empresa creada: $COMPANY_NAME
    URL:         http://127.0.0.1:$WEB_PORT
    Usuario:     admin
-   Contraseña:  $ADMIN_PASSWORD   (anótela: no se vuelve a mostrar)
+   Contraseña:  $ADMIN_PASSWORD   (temporal: se pedirá cambiarla al ingresar)
    Base datos:  $DB_NAME
    Config.:     $COMPANY_ENV
 INFO

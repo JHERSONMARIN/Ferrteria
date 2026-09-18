@@ -11,7 +11,14 @@ services:
       TZ: America/Lima
       DATABASE_URL: ${DATABASE_URL}
       DEMO_MODE: ${DEMO_MODE:-false}
+      JWT_SECRET: ${JWT_SECRET}
+      # Poner true cuando la instancia se sirva por HTTPS (proxy del servidor).
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Proxies delante del backend: 1 (frontend); 2 cuando se agregue el proxy HTTPS.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
       COMPANY_NAME: ${COMPANY_NAME}
+      # Módulos contratados; vacío = todos. Se cambia con deploy/set-modules.sh
+      LICENSED_MODULES: ${LICENSED_MODULES:-}
       INITIAL_ADMIN_USER: ${INITIAL_ADMIN_USER:-admin}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
     networks:
