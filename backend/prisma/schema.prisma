@@ -57,6 +57,21 @@ enum EstadoCaja {
   CERRADA
 }
 
+// Ciclo de una venta. En modo directo pasa a DISPATCHED en un solo paso.
+enum SaleStatus {
+  PENDING_PAYMENT
+  PAID
+  DISPATCHED
+  CANCELLED
+}
+
+// Cómo trabaja la empresa: una persona hace todo, o se reparte entre vendedor, caja y despacho.
+enum SaleFlowMode {
+  DIRECT
+  SEPARATE_CASHIER
+  STAGED
+}
+
 enum EstadoCotizacion {
   PENDIENTE
   CONVERTIDO
@@ -77,6 +92,7 @@ model Usuario {
   updatedAt DateTime @updatedAt
 
   ventasAsignadas   Venta[]        @relation("VendedorVentas")
+  ventasDespachadas Venta[]        @relation("DespachadorVentas")
   entregasAsignadas Entrega[]      @relation("RepartidorEntregas")
   cajasChicas       CajaChica[]
   cotizaciones      Cotizacion[]   @relation("VendedorCotizaciones")
@@ -91,6 +107,8 @@ model Producto {
   name      String
   unit      String   @default("Unidad")
   stock     Int      @default(0)
+  // Unidades apartadas por pedidos aún no despachados; disponible = stock - reserved.
+  reserved  Int      @default(0)
   minStock  Int      @default(10)
   price     Float    @default(0.0)
   category    String   @default("General")
@@ -147,14 +165,21 @@ model Cliente {
 model Venta {
   id        Int             @id @default(autoincrement())
   docType   TipoComprobante @default(NOTA_VENTA)
-  numDoc    String          @unique
+  // Un pedido recibe su número de comprobante recién al cobrarse.
+  numDoc    String?         @unique
   payMethod MetodoPago      @default(EFECTIVO)
   mixCash   Float?          @default(0)
   mixDigital Float?         @default(0)
   payCode   String?
   total     Float           @default(0)
-  status    String          @default("COMPLETADO")
+  status    SaleStatus      @default(DISPATCHED)
   createdAt DateTime        @default(now())
+  paidAt       DateTime?
+  dispatchedAt DateTime?
+  cancelledAt  DateTime?
+  cancelReason String?
+  // Un pedido sin cobrar vence al cierre del día y libera su stock reservado.
+  expiresAt    DateTime?
 
   clienteId Int?
   cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
@@ -165,8 +190,15 @@ model Venta {
   cajaId Int?
   caja   CajaChica? @relation(fields: [cajaId], references: [id], onDelete: SetNull)
 
+  dispatchedById Int?
+  dispatchedBy   Usuario? @relation("DespachadorVentas", fields: [dispatchedById], references: [id], onDelete: SetNull)
+
+  cotizacionId Int?
+  cotizacion   Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
+
   detalles DetalleVenta[]
 
+  @@index([status])
   @@map("ventas")
 }
 
@@ -338,6 +370,7 @@ model Cotizacion {
   vendedor   Usuario? @relation("VendedorCotizaciones", fields: [vendedorId], references: [id], onDelete: SetNull)
 
   detalles DetalleCotizacion[]
+  ventas   Venta[]
 
   @@map("cotizaciones")
 }
@@ -370,6 +403,7 @@ model BusinessSettings {
   taxRate        Float    @default(18)
   ticketFooter   String?
   enabledModules Json
+  saleFlowMode   SaleFlowMode @default(DIRECT)
   updatedAt      DateTime @updatedAt
 
   @@map("business_settings")

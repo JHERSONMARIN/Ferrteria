@@ -14,6 +14,7 @@ router.get('/', async (req, res) => {
         name: true,
         unit: true,
         stock: true,
+        reserved: true,
         minStock: true,
         price: true,
         category: true,

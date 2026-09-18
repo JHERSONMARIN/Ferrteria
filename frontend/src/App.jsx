@@ -15,9 +15,12 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import CajaPage from './pages/CajaPage.jsx';
 import ComprasPage from './pages/ComprasPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
+import CashierQueuePage from './pages/CashierQueuePage.jsx';
+import DispatchQueuePage from './pages/DispatchQueuePage.jsx';
 import FieldError from './components/FieldError.jsx';
 import ChangePasswordForm from './components/ChangePasswordForm.jsx';
 import { api } from './api.js';
+import { MODULE_OPTIONS } from './constants/modules.js';
 
 const DEMO_TEST_USERS = [
   {
@@ -108,7 +111,10 @@ export default function App() {
   // Mientras carga no se muestra ninguno (evita enseñar módulos desactivados); si la carga
   // falla se usan los del usuario para no dejarlo sin acceso.
   const effectiveModules = useMemo(() => {
-    const userModules = currentUser?.modules || [];
+    // El administrador tiene todos los módulos que la empresa tenga activos y contratados.
+    const userModules = currentUser?.role === 'ADMINISTRADOR'
+      ? MODULE_OPTIONS.map(m => m.value)
+      : currentUser?.modules || [];
     if (settingsStatus === 'loading') return [];
     if (!settings) return userModules;
     return userModules.filter(m =>
@@ -119,10 +125,15 @@ export default function App() {
   const isAdmin = currentUser?.role === 'ADMINISTRADOR';
 
   // La configuración no es un módulo desactivable: la ve siempre el administrador.
-  const navigableTabs = useMemo(
-    () => (isAdmin ? [...effectiveModules, 'settings'] : effectiveModules),
-    [effectiveModules, isAdmin]
-  );
+  const saleFlowMode = settings?.saleFlowMode || 'DIRECT';
+
+  // Pantallas que dependen del modo de trabajo: "Por cobrar" (con pedidos) y "Por despachar" (por etapas).
+  const navigableTabs = useMemo(() => {
+    const tabs = effectiveModules.filter(m => m !== 'despacho' || saleFlowMode === 'STAGED');
+    if (saleFlowMode !== 'DIRECT' && effectiveModules.includes('caja')) tabs.push('cobros');
+    if (isAdmin) tabs.push('settings');
+    return tabs;
+  }, [effectiveModules, isAdmin, saleFlowMode]);
 
   const loadSettings = async () => {
     try {
@@ -274,6 +285,8 @@ export default function App() {
     'personal': 'Módulo de Personal',
     'dashboard': 'Finanzas / Reportes',
     'settings': 'Configuración de la Empresa',
+    'cobros': 'Pedidos por Cobrar',
+    'despacho': 'Pedidos por Despachar',
   };
 
   return (
@@ -410,6 +423,7 @@ export default function App() {
                 <PosPage
                   currentUser={currentUser}
                   onTriggerPrint={setTicketData}
+                  saleFlowMode={saleFlowMode}
                 />
               )}
               {activeTab === 'caja' && <CajaPage currentUser={currentUser} />}
@@ -443,6 +457,10 @@ export default function App() {
               {activeTab === 'personal' && <PersonalPage currentUser={currentUser} />}
               {activeTab === 'dashboard' && <DashboardPage />}
               {activeTab === 'settings' && isAdmin && <SettingsPage onSaved={setSettings} />}
+              {activeTab === 'cobros' && (
+                <CashierQueuePage currentUser={currentUser} onTriggerPrint={setTicketData} saleFlowMode={saleFlowMode} />
+              )}
+              {activeTab === 'despacho' && <DispatchQueuePage />}
               </>)}
             </div>
           </main>

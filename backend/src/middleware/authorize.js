@@ -5,9 +5,10 @@ import { getActiveModules } from '../services/license.js';
 const isAdmin = (user) => user.role === 'ADMINISTRADOR';
 
 // Un módulo se puede usar si está contratado y activo en la empresa, y asignado al usuario.
+// El administrador tiene todos los módulos activos de la empresa sin asignárselos uno a uno.
 async function canUseAnyModule(user, modules) {
   const activeModules = getActiveModules(await getSettings(prisma));
-  return modules.some(m => activeModules.includes(m) && user.modules.includes(m));
+  return modules.some(m => activeModules.includes(m) && (isAdmin(user) || user.modules.includes(m)));
 }
 
 const forbidden = (res) =>

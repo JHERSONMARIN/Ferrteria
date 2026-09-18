@@ -1,4 +1,4 @@
-import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '../config/modules.js';
+import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES, SALE_FLOW_MODES } from '../config/modules.js';
 import { isModuleLicensed } from './license.js';
 
 export { AVAILABLE_MODULES };
@@ -83,6 +83,23 @@ export function validateSettingsInput(input) {
     throw new SettingsValidationError('El símbolo de moneda es obligatorio.');
   }
 
+  const enabledModules = normalizeModules(input.enabledModules);
+
+  // El modo es opcional en la petición: si no viene, se conserva el actual.
+  let saleFlowMode;
+  if (input.saleFlowMode !== undefined) {
+    if (!SALE_FLOW_MODES.includes(input.saleFlowMode)) {
+      throw new SettingsValidationError('Modo de trabajo no válido.');
+    }
+    saleFlowMode = input.saleFlowMode;
+    if (saleFlowMode !== 'DIRECT' && !enabledModules.includes('caja')) {
+      throw new SettingsValidationError('Para trabajar con pedidos debe estar activo el módulo Arqueo de Caja (ahí se cobran).');
+    }
+    if (saleFlowMode === 'STAGED' && !enabledModules.includes('despacho')) {
+      throw new SettingsValidationError('Para trabajar por etapas debe estar activo el módulo Despacho.');
+    }
+  }
+
   return {
     legalName,
     tradeName: optionalText(input.tradeName, 100, 'El nombre comercial'),
@@ -93,12 +110,25 @@ export function validateSettingsInput(input) {
     currencySymbol,
     taxRate,
     ticketFooter: optionalText(input.ticketFooter, 300, 'El pie del ticket'),
-    enabledModules: normalizeModules(input.enabledModules),
+    enabledModules,
+    saleFlowMode,
   };
 }
 
 export async function updateSettings(db, input) {
   const data = validateSettingsInput(input);
+
+  // Cambiar de modo con pedidos en curso los dejaría sin pantalla donde cobrarlos o despacharlos.
+  const current = await getSettings(db);
+  if (data.saleFlowMode && data.saleFlowMode !== current.saleFlowMode) {
+    const openOrders = await db.venta.count({ where: { status: { in: ['PENDING_PAYMENT', 'PAID'] } } });
+    if (openOrders > 0) {
+      throw new SettingsValidationError(
+        `Hay ${openOrders} pedido(s) sin cobrar o sin despachar. Complételos o anúlelos antes de cambiar el modo de trabajo.`
+      );
+    }
+  }
+
   return db.businessSettings.upsert({
     where: { id: SETTINGS_ID },
     update: data,

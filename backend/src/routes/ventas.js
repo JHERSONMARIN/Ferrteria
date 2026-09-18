@@ -8,6 +8,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const sales = await prisma.venta.findMany({
+      where: { status: { in: ['PAID', 'DISPATCHED'] } },
       select: {
         id: true,
         docType: true,

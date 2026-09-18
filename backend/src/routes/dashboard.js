@@ -3,6 +3,9 @@ import { prisma } from '../db.js';
 
 const router = express.Router();
 
+// Solo cuentan como venta las cobradas: los pedidos pendientes o anulados no son ingresos.
+const COMPLETED_SALE = { status: { in: ['PAID', 'DISPATCHED'] } };
+
 // GET /api/dashboard/stats
 router.get('/stats', async (req, res) => {
   try {
@@ -11,7 +14,7 @@ router.get('/stats', async (req, res) => {
       _sum: { total: true },
       where: {
         payMethod: { not: 'FIADO' },
-        status: 'COMPLETADO',
+        ...COMPLETED_SALE,
       },
     });
 
@@ -21,7 +24,7 @@ router.get('/stats', async (req, res) => {
     });
 
     // Total ventas realizadas
-    const salesCount = await prisma.venta.count();
+    const salesCount = await prisma.venta.count({ where: COMPLETED_SALE });
 
     // Métricas macro de almacén e inventario
     const products = await prisma.producto.findMany({
@@ -54,6 +57,7 @@ router.get('/stats', async (req, res) => {
         name: true,
         role: true,
         ventasAsignadas: {
+          where: COMPLETED_SALE,
           select: { total: true },
         },
         entregasAsignadas: {
@@ -82,6 +86,7 @@ router.get('/stats', async (req, res) => {
 
     // Últimas transacciones de venta
     const recentSales = await prisma.venta.findMany({
+      where: COMPLETED_SALE,
       take: 10,
       orderBy: { id: 'desc' },
       select: {
