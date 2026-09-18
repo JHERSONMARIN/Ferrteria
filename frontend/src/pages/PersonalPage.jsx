@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
+import { MODULE_OPTIONS as moduleOptions } from '../constants/modules.js';
 
 export default function PersonalPage({ currentUser }) {
   const [staff, setStaff] = useState([]);
@@ -19,21 +20,6 @@ export default function PersonalPage({ currentUser }) {
   const [errors, setErrors] = useState({});
 
   const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
-
-  const moduleOptions = [
-    { value: 'pos', label: 'Punto de Venta', icon: 'fa-cash-register' },
-    { value: 'cotizaciones', label: 'Cotizaciones', icon: 'fa-file-invoice' },
-    { value: 'caja', label: 'Arqueo de Caja', icon: 'fa-vault' },
-    { value: 'inventory', label: 'Almacén (Productos)', icon: 'fa-box' },
-    { value: 'categories', label: 'Categorías', icon: 'fa-tags' },
-    { value: 'kardex', label: 'Kardex / Movimientos', icon: 'fa-receipt' },
-    { value: 'compras', label: 'Compras', icon: 'fa-cart-flatbed' },
-    { value: 'deliveries', label: 'Entregas', icon: 'fa-truck-fast' },
-    { value: 'client-dir', label: 'Dir. Clientes', icon: 'fa-users' },
-    { value: 'customers', label: 'Créditos / Fiados', icon: 'fa-book-journal-whills' },
-    { value: 'personal', label: 'Módulo Personal', icon: 'fa-id-badge' },
-    { value: 'dashboard', label: 'Finanzas / Reportes', icon: 'fa-chart-pie' },
-  ];
 
   const roleBadgeStyles = {
     ADMINISTRADOR: 'bg-purple-100 text-purple-700 border-purple-200',

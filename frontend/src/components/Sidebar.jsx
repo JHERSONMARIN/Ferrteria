@@ -27,6 +27,7 @@ export default function Sidebar({ activeTab, onSwitchTab, user, modules, busines
       { id: 'customers', label: 'Créditos / Fiados', icon: 'fa-book-journal-whills' },
       { id: 'personal', label: 'Módulo Personal', icon: 'fa-id-badge' },
       { id: 'dashboard', label: 'Finanzas / Reportes', icon: 'fa-chart-pie' },
+      { id: 'settings', label: 'Configuración', icon: 'fa-gear' },
     ]}
   ];
 

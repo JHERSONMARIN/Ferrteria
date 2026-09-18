@@ -14,6 +14,7 @@ import PersonalPage from './pages/PersonalPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import CajaPage from './pages/CajaPage.jsx';
 import ComprasPage from './pages/ComprasPage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
 import FieldError from './components/FieldError.jsx';
 import { api } from './api.js';
 
@@ -89,6 +90,14 @@ export default function App() {
     return userModules.filter(m => settings.enabledModules.includes(m));
   }, [currentUser, settings]);
 
+  const isAdmin = currentUser?.role === 'ADMINISTRADOR';
+
+  // La configuración no es un módulo desactivable: la ve siempre el administrador.
+  const navigableTabs = useMemo(
+    () => (isAdmin ? [...effectiveModules, 'settings'] : effectiveModules),
+    [effectiveModules, isAdmin]
+  );
+
   const loadSettings = async () => {
     try {
       const res = await api.get('/settings');
@@ -142,13 +151,13 @@ export default function App() {
 
   // Si el usuario cambia de tab a uno al que no tiene acceso, redirigirlo al primero accesible
   useEffect(() => {
-    if (currentUser && effectiveModules.length > 0) {
-      const isAllowed = effectiveModules.includes(activeTab) || (activeTab === 'categories' && effectiveModules.includes('inventory'));
+    if (currentUser && navigableTabs.length > 0) {
+      const isAllowed = navigableTabs.includes(activeTab) || (activeTab === 'categories' && navigableTabs.includes('inventory'));
       if (!isAllowed) {
-        setActiveTab(effectiveModules[0]);
+        setActiveTab(navigableTabs[0]);
       }
     }
-  }, [currentUser, activeTab, effectiveModules]);
+  }, [currentUser, activeTab, navigableTabs]);
 
   const handleLogin = async (e, customUser, customPass) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -228,6 +237,7 @@ export default function App() {
     'customers': 'Módulo de Créditos',
     'personal': 'Módulo de Personal',
     'dashboard': 'Finanzas / Reportes',
+    'settings': 'Configuración de la Empresa',
   };
 
   return (
@@ -323,7 +333,7 @@ export default function App() {
             activeTab={activeTab}
             onSwitchTab={handleSwitchTab}
             user={currentUser}
-            modules={effectiveModules}
+            modules={navigableTabs}
             businessName={settings?.tradeName || settings?.legalName}
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
@@ -375,6 +385,7 @@ export default function App() {
               {activeTab === 'customers' && <CreditosPage />}
               {activeTab === 'personal' && <PersonalPage currentUser={currentUser} />}
               {activeTab === 'dashboard' && <DashboardPage />}
+              {activeTab === 'settings' && isAdmin && <SettingsPage onSaved={setSettings} />}
             </div>
           </main>
         </div>

@@ -13,8 +13,11 @@ const prisma = new PrismaClient();
 // GET /api/settings
 router.get('/', async (req, res) => {
   try {
-    const settings = await getSettings(prisma);
-    res.json({ settings, availableModules: AVAILABLE_MODULES });
+    const [settings, documentSeries] = await Promise.all([
+      getSettings(prisma),
+      prisma.documentSeries.findMany({ orderBy: [{ documentType: 'asc' }, { series: 'asc' }] }),
+    ]);
+    res.json({ settings, documentSeries, availableModules: AVAILABLE_MODULES });
   } catch (error) {
     console.error('[settings.js] Error al obtener la configuración:', error);
     res.status(500).json({ error: 'No se pudo obtener la configuración de la empresa.' });
