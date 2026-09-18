@@ -1,5 +1,5 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../db.js';
 import {
   getSettings,
   updateSettings,
@@ -8,7 +8,6 @@ import {
 } from '../services/settings.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // GET /api/settings
 router.get('/', async (req, res) => {
