@@ -1,5 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
+import { takeAvailableStock } from '../services/stock.js';
 
 const router = express.Router();
 
@@ -100,11 +101,8 @@ router.post('/', async (req, res) => {
           }
         });
 
-        // Actualizar Stock
-        const updatedProd = await tx.producto.update({
-          where: { id: item.id },
-          data: { stock: { decrement: item.qty } }
-        });
+        // Solo del disponible (stock menos lo reservado por pedidos); antes podía quedar negativo.
+        const stockAfter = await takeAvailableStock(tx, parseInt(item.id, 10), parseInt(item.qty, 10));
 
         // Registrar Kardex
         await tx.movimientoKardex.create({
@@ -112,7 +110,7 @@ router.post('/', async (req, res) => {
             productoId: item.id,
             type: 'SALIDA',
             qty: item.qty,
-            stockAfter: updatedProd.stock,
+            stockAfter,
             ref: `Orden de Entrega ${refCode}`,
           }
         });

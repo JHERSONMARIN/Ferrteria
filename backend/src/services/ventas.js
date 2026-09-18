@@ -1,4 +1,6 @@
 import { nextDocumentNumber, DocumentSeriesError } from './documentSeries.js';
+import { takeAvailableStock, StockError } from './stock.js';
+import { getSettings } from './settings.js';
 
 export class VentaError extends Error {
   constructor(message, status = 400, codigo = null, extra = null) {
@@ -66,15 +68,15 @@ function cotizacionVigente(cot) {
   return vence >= new Date();
 }
 
-async function ejecutarVenta(tx, datos) {
-  const {
-    items, docTypeEnum, payMethodEnum, mixCash, mixDigital, payCode,
-    clienteId, vendedorId, cajaUsuarioId, cotizacionId, totalEsperado,
-  } = datos;
+const toId = (v) => (v === undefined || v === null || v === '' ? null : parseInt(v, 10) || null);
 
+export const toDocTypeEnum = (docType) => DOC_TYPES[docType] || 'NOTA_VENTA';
+export const toPayMethodEnum = (payMethod) => PAY_METHODS[payMethod] || 'EFECTIVO';
+
+// Precios de cada línea: los de la cotización si sigue vigente; si no, los actuales del producto.
+export async function priceLines(tx, items, cotizacionId) {
   const productos = await cargarProductosActivos(tx, items);
 
-  // Una cotización vigente respeta los precios cotizados; vencida, se cobra a precio actual.
   const preciosCotizados = new Map();
   if (cotizacionId) {
     const cot = await tx.cotizacion.findUnique({
@@ -88,12 +90,6 @@ async function ejecutarVenta(tx, datos) {
     if (cotizacionVigente(cot)) {
       cot.detalles.forEach(d => preciosCotizados.set(d.productoId, d.unitPrice));
     }
-
-    const { count } = await tx.cotizacion.updateMany({
-      where: { id: cotizacionId, status: 'PENDIENTE' },
-      data: { status: 'CONVERTIDO' },
-    });
-    if (count === 0) throw new VentaError(`La cotización ${cot.numDoc} ya fue procesada.`, 409);
   }
 
   const lineas = items.map(item => {
@@ -101,28 +97,42 @@ async function ejecutarVenta(tx, datos) {
     const price = preciosCotizados.get(item.id) ?? prod.price;
     return { ...item, name: prod.name, code: prod.code, price, subtotal: redondear(price * item.qty) };
   });
-  const totalVenta = redondear(lineas.reduce((sum, l) => sum + l.subtotal, 0));
+  return { lineas, total: redondear(lineas.reduce((sum, l) => sum + l.subtotal, 0)) };
+}
 
-  if (totalEsperado !== undefined && totalEsperado !== null && Math.abs(Number(totalEsperado) - totalVenta) > 0.01) {
+export async function markQuoteConverted(tx, cotizacionId) {
+  const { count } = await tx.cotizacion.updateMany({
+    where: { id: cotizacionId, status: 'PENDIENTE' },
+    data: { status: 'CONVERTIDO' },
+  });
+  if (count === 0) throw new VentaError('La cotización ya fue procesada.', 409);
+}
+
+export function assertExpectedTotal(totalEsperado, lineas, total) {
+  if (totalEsperado === undefined || totalEsperado === null) return;
+  if (Math.abs(Number(totalEsperado) - total) > 0.01) {
     throw new VentaError(
-      `Los precios cambiaron: el total actual es S/ ${totalVenta.toFixed(2)} y no S/ ${Number(totalEsperado).toFixed(2)}. Revise el carrito antes de cobrar.`,
+      `Los precios cambiaron: el total actual es S/ ${total.toFixed(2)} y no S/ ${Number(totalEsperado).toFixed(2)}. Revise el carrito antes de cobrar.`,
       409,
       'PRECIOS_CAMBIARON',
       { precios: lineas.map(l => ({ id: l.id, price: l.price })) }
     );
   }
+}
 
-  let efectivoVenta = 0;
-  let digitalVenta = 0;
-  if (payMethodEnum === 'EFECTIVO') efectivoVenta = totalVenta;
-  else if (['TARJETA', 'YAPE_PLIN', 'TRANSFERENCIA'].includes(payMethodEnum)) digitalVenta = totalVenta;
+// Valida el medio de pago y devuelve cuánto entra en efectivo y cuánto en digital.
+export async function validatePayment(tx, { payMethodEnum, mixCash, mixDigital, clienteId, total }) {
+  let cash = 0;
+  let digital = 0;
+  if (payMethodEnum === 'EFECTIVO') cash = total;
+  else if (['TARJETA', 'YAPE_PLIN', 'TRANSFERENCIA'].includes(payMethodEnum)) digital = total;
   else if (payMethodEnum === 'PAGO_MIXTO') {
-    efectivoVenta = Number(mixCash);
-    digitalVenta = Number(mixDigital);
-    if (!Number.isFinite(efectivoVenta) || !Number.isFinite(digitalVenta) || efectivoVenta < 0 || digitalVenta < 0) {
+    cash = Number(mixCash);
+    digital = Number(mixDigital);
+    if (!Number.isFinite(cash) || !Number.isFinite(digital) || cash < 0 || digital < 0) {
       throw new VentaError('Los montos del pago mixto son inválidos.');
     }
-    if (Math.abs(efectivoVenta + digitalVenta - totalVenta) > 0.01) {
+    if (Math.abs(cash + digital - total) > 0.01) {
       throw new VentaError('El pago mixto no coincide con el total de la venta.');
     }
   }
@@ -135,114 +145,131 @@ async function ejecutarVenta(tx, datos) {
     const deudaActual = cliente.creditoCliente ? cliente.creditoCliente.debtTotal : 0;
     const limite = cliente.maxCredit || 1000.0;
     const disponible = limite - deudaActual;
-    if (totalVenta > disponible) {
-      throw new VentaError(`Crédito insuficiente para ${cliente.name}. Límite: S/ ${limite.toFixed(2)}, Deuda Actual: S/ ${deudaActual.toFixed(2)}, Disponible: S/ ${disponible.toFixed(2)}. Intentó fiar: S/ ${totalVenta.toFixed(2)}.`);
+    if (total > disponible) {
+      throw new VentaError(`Crédito insuficiente para ${cliente.name}. Límite: S/ ${limite.toFixed(2)}, Deuda Actual: S/ ${deudaActual.toFixed(2)}, Disponible: S/ ${disponible.toFixed(2)}. Intentó fiar: S/ ${total.toFixed(2)}.`);
     }
   }
+  return { cash, digital };
+}
 
-  const cajaAbierta = await tx.cajaChica.findFirst({
-    where: { usuarioId: cajaUsuarioId, estado: 'ABIERTA' },
+export async function findOpenCashRegister(tx, userId) {
+  const caja = await tx.cajaChica.findFirst({
+    where: { usuarioId: userId, estado: 'ABIERTA' },
     orderBy: { createdAt: 'desc' },
   });
-  if (!cajaAbierta) throw new VentaError('No hay una caja abierta para este usuario.');
+  if (!caja) throw new VentaError('No hay una caja abierta para este usuario.');
+  return caja;
+}
 
+export async function recordCashIncome(tx, cajaId, { cash, digital }) {
+  if (cash <= 0 && digital <= 0) return;
+  await tx.cajaChica.update({
+    where: { id: cajaId },
+    data: { ventasEfectivo: { increment: cash }, ventasDigital: { increment: digital } },
+  });
+}
+
+export async function recordCreditCharge(tx, { clienteId, total, numDoc, lineas }) {
+  let credito = await tx.creditoCliente.findUnique({ where: { clienteId } });
+  if (!credito) {
+    credito = await tx.creditoCliente.create({ data: { clienteId, debtTotal: 0, maxCredit: 1000.0 } });
+  }
+  await tx.creditoCliente.update({
+    where: { clienteId },
+    data: { debtTotal: { increment: total }, lastPurchase: new Date() },
+  });
+  await tx.abonoCredito.create({
+    data: {
+      creditoId: credito.id,
+      amount: total,
+      docRef: numDoc,
+      desc: lineas.map(l => `${l.qty}x ${l.name}`).join(', '),
+      type: 'CARGO',
+    },
+  });
+}
+
+export async function writeKardexExit(tx, { productId, qty, stockAfter, ref, userId }) {
+  await tx.movimientoKardex.create({
+    data: { productoId: productId, type: 'SALIDA', qty, stockAfter, ref, usuarioId: userId },
+  });
+}
+
+export const publicLines = (lineas) =>
+  lineas.map(({ id, name, code, qty, price, subtotal }) => ({ id, name, code, qty, price, subtotal }));
+
+// Venta directa (modo DIRECTO): se cobra, se emite el comprobante y se entrega en un solo paso.
+async function ejecutarVenta(tx, datos) {
+  const {
+    items, docTypeEnum, payMethodEnum, mixCash, mixDigital, payCode,
+    clienteId, vendedorId, cajaUsuarioId, cotizacionId, totalEsperado,
+  } = datos;
+
+  const { lineas, total } = await priceLines(tx, items, cotizacionId);
+  assertExpectedTotal(totalEsperado, lineas, total);
+  if (cotizacionId) await markQuoteConverted(tx, cotizacionId);
+
+  const payment = await validatePayment(tx, { payMethodEnum, mixCash, mixDigital, clienteId, total });
+  const cajaAbierta = await findOpenCashRegister(tx, cajaUsuarioId);
   const numDoc = await nextDocumentNumber(tx, docTypeEnum);
+  const now = new Date();
 
   const venta = await tx.venta.create({
     data: {
       docType: docTypeEnum,
       numDoc,
       payMethod: payMethodEnum,
-      mixCash: payMethodEnum === 'PAGO_MIXTO' ? efectivoVenta : 0,
-      mixDigital: payMethodEnum === 'PAGO_MIXTO' ? digitalVenta : 0,
+      mixCash: payMethodEnum === 'PAGO_MIXTO' ? payment.cash : 0,
+      mixDigital: payMethodEnum === 'PAGO_MIXTO' ? payment.digital : 0,
       payCode: payCode ? String(payCode).trim() : null,
-      total: totalVenta,
+      total,
       clienteId,
       vendedorId,
       cajaId: cajaAbierta.id,
+      cotizacionId,
+      status: 'DISPATCHED',
+      paidAt: now,
+      dispatchedAt: now,
+      dispatchedById: vendedorId,
     },
   });
 
-  if (efectivoVenta > 0 || digitalVenta > 0) {
-    await tx.cajaChica.update({
-      where: { id: cajaAbierta.id },
-      data: {
-        ventasEfectivo: { increment: efectivoVenta },
-        ventasDigital: { increment: digitalVenta },
-      },
-    });
-  }
+  await recordCashIncome(tx, cajaAbierta.id, payment);
 
   for (const linea of lineas) {
-    // Descuento condicional: si otra venta ya tomó el stock, no se actualiza ninguna fila.
-    const { count } = await tx.producto.updateMany({
-      where: { id: linea.id, active: true, stock: { gte: linea.qty } },
-      data: { stock: { decrement: linea.qty } },
-    });
-    const { stock } = await tx.producto.findUnique({ where: { id: linea.id }, select: { stock: true } });
-    if (count === 0) {
-      throw new VentaError(`Stock insuficiente para ${linea.name}. Disponible: ${stock}.`, 409);
-    }
-
+    const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty);
     await tx.detalleVenta.create({
-      data: {
-        ventaId: venta.id,
-        productoId: linea.id,
-        quantity: linea.qty,
-        unitPrice: linea.price,
-        subtotal: linea.subtotal,
-      },
+      data: { ventaId: venta.id, productoId: linea.id, quantity: linea.qty, unitPrice: linea.price, subtotal: linea.subtotal },
     });
-
-    await tx.movimientoKardex.create({
-      data: {
-        productoId: linea.id,
-        type: 'SALIDA',
-        qty: linea.qty,
-        stockAfter: stock,
-        ref: cotizacionId ? `Venta ${numDoc} (por cotización)` : `Venta ${numDoc}`,
-        usuarioId: vendedorId,
-      },
+    await writeKardexExit(tx, {
+      productId: linea.id,
+      qty: linea.qty,
+      stockAfter,
+      ref: cotizacionId ? `Venta ${numDoc} (por cotización)` : `Venta ${numDoc}`,
+      userId: vendedorId,
     });
   }
 
-  if (payMethodEnum === 'FIADO') {
-    let credito = await tx.creditoCliente.findUnique({ where: { clienteId } });
-    if (!credito) {
-      credito = await tx.creditoCliente.create({ data: { clienteId, debtTotal: 0, maxCredit: 1000.0 } });
-    }
+  if (payMethodEnum === 'FIADO') await recordCreditCharge(tx, { clienteId, total, numDoc, lineas });
 
-    await tx.creditoCliente.update({
-      where: { clienteId },
-      data: { debtTotal: { increment: totalVenta }, lastPurchase: new Date() },
-    });
-
-    await tx.abonoCredito.create({
-      data: {
-        creditoId: credito.id,
-        amount: totalVenta,
-        docRef: numDoc,
-        desc: lineas.map(l => `${l.qty}x ${l.name}`).join(', '),
-        type: 'CARGO',
-      },
-    });
-  }
-
-  return { ...venta, items: lineas.map(({ id, name, code, qty, price, subtotal }) => ({ id, name, code, qty, price, subtotal })) };
+  return { ...venta, items: publicLines(lineas) };
 }
 
 export async function procesarVenta(prisma, payload) {
-  const items = normalizarCarrito(payload.cart);
-  const toId = (v) => (v === undefined || v === null || v === '' ? null : parseInt(v, 10) || null);
+  const settings = await getSettings(prisma);
+  if (settings.saleFlowMode !== 'DIRECT') {
+    throw new VentaError('La empresa trabaja con pedidos: registre la venta como pedido y cóbrela en caja.', 409, 'MODO_PEDIDOS');
+  }
 
+  const items = normalizarCarrito(payload.cart);
   const vendedorId = toId(payload.vendedorId);
   const cajaUsuarioId = toId(payload.usuarioCajaId) || vendedorId;
   if (!cajaUsuarioId) throw new VentaError('Debe indicarse el usuario de caja.');
 
   const datos = {
     items,
-    docTypeEnum: DOC_TYPES[payload.docType] || 'NOTA_VENTA',
-    payMethodEnum: PAY_METHODS[payload.payMethod] || 'EFECTIVO',
+    docTypeEnum: toDocTypeEnum(payload.docType),
+    payMethodEnum: toPayMethodEnum(payload.payMethod),
     mixCash: payload.mixCash,
     mixDigital: payload.mixDigital,
     payCode: payload.payCode,
@@ -262,6 +289,9 @@ export function responderErrorVenta(res, error, contexto) {
   }
   if (error instanceof DocumentSeriesError) {
     return res.status(400).json({ error: error.message });
+  }
+  if (error instanceof StockError) {
+    return res.status(error.status).json({ error: error.message });
   }
   if (error.code === 'P2002') {
     return res.status(409).json({ error: 'No se pudo generar el número de comprobante. Intente nuevamente.' });

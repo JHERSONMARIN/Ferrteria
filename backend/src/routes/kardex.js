@@ -145,8 +145,10 @@ router.post('/', async (req, res) => {
       });
       if (!prod) throw new Error('Producto no encontrado.');
 
-      if (type === 'SALIDA' && qtyNum > prod.stock) {
-        throw new Error(`Stock insuficiente. Disponible: ${prod.stock}`);
+      // Lo reservado por pedidos no se puede sacar manualmente.
+      const available = prod.stock - prod.reserved;
+      if (type === 'SALIDA' && qtyNum > available) {
+        throw new Error(`Stock insuficiente. Disponible: ${available}${prod.reserved > 0 ? ` (${prod.reserved} reservado para pedidos)` : ''}`);
       }
 
       const newStock = type === 'ENTRADA' ? prod.stock + qtyNum : prod.stock - qtyNum;
