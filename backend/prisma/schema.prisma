@@ -103,6 +103,8 @@ model Usuario {
   auditLogs           AuditLog[]
   entregasAsignadas Entrega[]      @relation("RepartidorEntregas")
   cajasChicas       CajaChica[]
+  cashSessions      CashSessionMember[]
+  ventasCobradas    Venta[]        @relation("CobradorVentas")
   cotizaciones      Cotizacion[]   @relation("VendedorCotizaciones")
   movimientosKardex MovimientoKardex[] @relation("UsuarioKardex")
 
@@ -210,6 +212,10 @@ model Venta {
 
   discountById Int?
   discountBy   Usuario? @relation("DescuentoVentas", fields: [discountById], references: [id], onDelete: SetNull)
+
+  // Quién cobró: en una caja compartida varios cajeros cobran en el mismo turno (cajaId).
+  paidById Int?
+  paidBy   Usuario? @relation("CobradorVentas", fields: [paidById], references: [id], onDelete: SetNull)
 
   cotizacionId Int?
   cotizacion   Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
@@ -334,12 +340,47 @@ model CajaChica {
   createdAt        DateTime   @default(now())
   closedAt         DateTime?
 
+  // Quien abrió el turno. Los cajeros que se suman están en members.
   usuarioId Int
   usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
 
-  ventas Venta[]
+  // Null solo en turnos abiertos antes de existir las cajas compartidas.
+  cashRegisterId Int?
+  cashRegister   CashRegister? @relation(fields: [cashRegisterId], references: [id], onDelete: Restrict)
+
+  ventas  Venta[]
+  members CashSessionMember[]
 
   @@map("cajas_chicas")
+}
+
+// Caja física (gaveta). Cada caja tiene a lo más un turno abierto (índice parcial en la migración 10).
+model CashRegister {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions CajaChica[]
+
+  @@map("cash_registers")
+}
+
+// Cajeros de un turno. Un usuario está en a lo más un turno abierto (leftAt null; índice parcial).
+model CashSessionMember {
+  id        Int       @id @default(autoincrement())
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+
+  sessionId Int
+  session   CajaChica @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  userId Int
+  user   Usuario @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([sessionId])
+  @@map("cash_session_members")
 }
 
 model Proveedor {

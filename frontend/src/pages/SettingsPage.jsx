@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
+import CashRegistersSettings from '../components/CashRegistersSettings.jsx';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../constants/modules.js';
@@ -301,6 +302,10 @@ export default function SettingsPage({ onSaved }) {
               El administrador no tiene tope. Cada venta guarda el monto descontado y quién lo aplicó.
             </p>
           </div>
+        </Card>
+
+        <Card icon="fa-cash-register" title="Cajas" description="Gavetas físicas. Varios cajeros pueden compartir el turno de una caja. Se guarda al momento.">
+          <CashRegistersSettings />
         </Card>
 
         <Card

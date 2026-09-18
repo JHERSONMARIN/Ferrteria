@@ -4,6 +4,7 @@ import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } fro
 import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, DeliveryError } from './deliveries.js';
 import { recordAudit } from './audit.js';
+import { requireOpenSession, CashError } from './cashRegisters.js';
 
 export class VentaError extends Error {
   constructor(message, status = 400, codigo = null, extra = null) {
@@ -212,13 +213,9 @@ export async function validatePayment(tx, { payMethodEnum, mixCash, mixDigital, 
   return { cash, digital };
 }
 
+// Turno de caja en el que está quien cobra (puede ser compartido con otros cajeros).
 export async function findOpenCashRegister(tx, userId) {
-  const caja = await tx.cajaChica.findFirst({
-    where: { usuarioId: userId, estado: 'ABIERTA' },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (!caja) throw new VentaError('No hay una caja abierta para este usuario.');
-  return caja;
+  return { id: await requireOpenSession(tx, userId) };
 }
 
 export async function recordCashIncome(tx, cajaId, { cash, digital }) {
@@ -290,6 +287,7 @@ async function ejecutarVenta(tx, datos) {
       clienteId,
       vendedorId,
       cajaId: cajaAbierta.id,
+      paidById: cajaUsuarioId,
       cotizacionId,
       status: 'DISPATCHED',
       paidAt: now,
@@ -365,6 +363,9 @@ export function responderErrorVenta(res, error, contexto) {
     return res.status(400).json({ error: error.message });
   }
   if (error instanceof DeliveryError) {
+    return res.status(error.status).json({ error: error.message });
+  }
+  if (error instanceof CashError) {
     return res.status(error.status).json({ error: error.message });
   }
   if (error instanceof StockError) {

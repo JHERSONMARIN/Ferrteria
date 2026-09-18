@@ -150,6 +150,7 @@ export async function payOrder(db, orderId, payload, cashier) {
       payCode: payload.payCode ? String(payload.payCode).trim() : null,
       clienteId,
       cajaId: caja.id,
+      paidById: cashier.id,
       paidAt: now,
     }, 'Este pedido ya fue cobrado o anulado.');
 
