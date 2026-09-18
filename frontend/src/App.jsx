@@ -15,6 +15,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import CajaPage from './pages/CajaPage.jsx';
 import ComprasPage from './pages/ComprasPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
+import CashierQueuePage from './pages/CashierQueuePage.jsx';
 import FieldError from './components/FieldError.jsx';
 import ChangePasswordForm from './components/ChangePasswordForm.jsx';
 import { api } from './api.js';
@@ -455,6 +456,9 @@ export default function App() {
               {activeTab === 'personal' && <PersonalPage currentUser={currentUser} />}
               {activeTab === 'dashboard' && <DashboardPage />}
               {activeTab === 'settings' && isAdmin && <SettingsPage onSaved={setSettings} />}
+              {activeTab === 'cobros' && (
+                <CashierQueuePage currentUser={currentUser} onTriggerPrint={setTicketData} saleFlowMode={saleFlowMode} />
+              )}
               </>)}
             </div>
           </main>

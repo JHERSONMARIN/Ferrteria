@@ -64,7 +64,7 @@ const CATALOG_READERS = ['pos', 'cotizaciones', 'inventory', 'categories', 'kard
 app.use('/api/settings', allowModules({ GET: 'authenticated', default: 'admin' }), settingsRoutes);
 app.use('/api/personal', allowModules({ GET: ['personal', 'pos', 'deliveries'], default: ['personal'] }), personalRoutes);
 app.use('/api/clientes', allowModules({
-  GET: ['pos', 'cotizaciones', 'client-dir', 'customers', 'deliveries'],
+  GET: ['pos', 'caja', 'cotizaciones', 'client-dir', 'customers', 'deliveries'],
   PUT: ['client-dir', 'customers'],
   default: ['client-dir'],
 }), consultaDocRoutes, clientesRoutes);
