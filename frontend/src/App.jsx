@@ -396,7 +396,7 @@ export default function App() {
             <Header
               pageTitle={pageTitles[activeTab] || 'Punto de Venta'}
               user={currentUser}
-              onResetDemo={handleResetDemo}
+              onResetDemo={demoMode ? handleResetDemo : undefined}
               onToggleSidebar={() => setSidebarOpen(o => !o)}
             />
 
