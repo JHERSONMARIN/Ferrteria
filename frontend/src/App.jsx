@@ -421,6 +421,7 @@ export default function App() {
                 <PosPage
                   currentUser={currentUser}
                   onTriggerPrint={setTicketData}
+                  saleFlowMode={saleFlowMode}
                 />
               )}
               {activeTab === 'caja' && <CajaPage currentUser={currentUser} />}

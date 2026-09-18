@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
             quantity: true,
             unitPrice: true,
             subtotal: true,
-            producto: { select: { id: true, name: true, code: true, price: true, stock: true } }
+            producto: { select: { id: true, name: true, code: true, price: true, stock: true, reserved: true } }
           }
         }
       },
