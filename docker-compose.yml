@@ -24,6 +24,8 @@ services:
     restart: always
     environment:
       PORT: 3000
+      # Este compose es el entorno de desarrollo/demo; las empresas reales usan DEMO_MODE=false.
+      DEMO_MODE: ${DEMO_MODE:-true}
       DATABASE_URL: postgresql://${POSTGRES_USER:-ferreuser}:${POSTGRES_PASSWORD:-ferrepass123}@db:5432/${POSTGRES_DB:-ferresys_db}?schema=public
     ports:
       - "${BACKEND_PORT:-3085}:3000"

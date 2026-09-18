@@ -1,8 +1,7 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../db.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // GET /api/entregas (Optimizado para polling continuo <15ms)
 router.get('/', async (req, res) => {

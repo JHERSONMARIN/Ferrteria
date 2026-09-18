@@ -71,8 +71,9 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [loginUser, setLoginUser] = useState('admin');
-  const [loginPass, setLoginPass] = useState('1234');
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [demoMode, setDemoMode] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [loginFieldErrors, setLoginFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -83,6 +84,13 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settings, setSettings] = useState(null);
   const [settingsStatus, setSettingsStatus] = useState('loading');
+
+  // Los usuarios de prueba solo se ofrecen en la instancia de demostración.
+  useEffect(() => {
+    api.get('/app-info')
+      .then(info => setDemoMode(Boolean(info?.demoMode)))
+      .catch(() => setDemoMode(false));
+  }, []);
 
   // Módulos visibles: los asignados al usuario que además estén activos en la empresa.
   // Mientras carga no se muestra ninguno (evita enseñar módulos desactivados); si la carga
@@ -298,6 +306,7 @@ export default function App() {
             </form>
 
             {/* Panel de Usuarios de Prueba (Demo Rápido) */}
+            {demoMode && (
             <div className="bg-slate-50 border-t border-slate-200 p-4">
               <div className="flex items-center justify-between mb-2.5">
                 <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
@@ -330,6 +339,7 @@ export default function App() {
                 ))}
               </div>
             </div>
+            )}
           </div>
         </div>
       ) : (

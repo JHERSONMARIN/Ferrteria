@@ -1,0 +1,36 @@
+# PostgreSQL compartido: una base de datos (y un usuario propio) por empresa.
+# No publica puertos: solo los backends de la red "ferresys-infra" pueden conectarse.
+name: ferresys-infra
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ferresys-infra-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_DB: postgres
+      TZ: America/Lima
+      PGTZ: America/Lima
+    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-200}"]
+    volumes:
+      - infra_postgres_data:/var/lib/postgresql/data
+    networks:
+      - ferresys-infra
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  infra_postgres_data:
+
+networks:
+  ferresys-infra:
+    name: ferresys-infra

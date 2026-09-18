@@ -17,7 +17,7 @@ import comprasRoutes from './src/routes/compras.js';
 import cotizacionesRoutes from './src/routes/cotizaciones.js';
 import categoriesRoutes from './src/routes/categories.js';
 import settingsRoutes from './src/routes/settings.js';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from './src/db.js';
 import { initializeDocumentSeries } from './src/services/documentSeries.js';
 
 dotenv.config();
@@ -54,6 +54,11 @@ app.use('/api/compras', comprasRoutes);
 app.use('/api/cotizaciones', cotizacionesRoutes);
 app.use('/api/settings', settingsRoutes);
 
+// Información pública para la pantalla de inicio de sesión
+app.get('/api/app-info', (req, res) => {
+  res.json({ demoMode: process.env.DEMO_MODE === 'true' });
+});
+
 // Healthcheck
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', system: 'FerreSys v4.8 API', timestamp: new Date() });
@@ -67,7 +72,7 @@ app.use((err, req, res, next) => {
 
 // Si falla, el servidor arranca igual: las ventas responderán que no hay serie configurada.
 try {
-  await initializeDocumentSeries(new PrismaClient());
+  await initializeDocumentSeries(prisma);
 } catch (error) {
   console.error('❌ No se pudieron inicializar las series de comprobantes:', error);
 }

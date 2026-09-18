@@ -1,0 +1,46 @@
+# Plantilla de una empresa: se levanta una copia por empresa con su propio archivo .env
+#   docker compose -p ferresys-<empresa> -f deploy/company/docker-compose.yml --env-file deploy/companies/<empresa>/.env up -d
+services:
+  backend:
+    build:
+      context: ../../backend
+    image: ferresys-backend:local
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      TZ: America/Lima
+      DATABASE_URL: ${DATABASE_URL}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      COMPANY_NAME: ${COMPANY_NAME}
+      INITIAL_ADMIN_USER: ${INITIAL_ADMIN_USER:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+    networks:
+      - default
+      - ferresys-infra
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    build:
+      context: ../../frontend
+    image: ferresys-web:local
+    restart: unless-stopped
+    environment:
+      VITE_PORT: 5180
+      BACKEND_URL: http://backend:3000
+      TZ: America/Lima
+    ports:
+      # Solo local por defecto: en el servidor el acceso público pasará por el proxy HTTPS.
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT}:5180"
+    depends_on:
+      - backend
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  ferresys-infra:
+    external: true
