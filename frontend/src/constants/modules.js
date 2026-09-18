@@ -8,6 +8,7 @@ export const MODULE_OPTIONS = [
   { value: 'kardex', label: 'Kardex / Movimientos', icon: 'fa-receipt' },
   { value: 'compras', label: 'Compras', icon: 'fa-cart-flatbed' },
   { value: 'deliveries', label: 'Entregas', icon: 'fa-truck-fast' },
+  { value: 'despacho', label: 'Despacho', icon: 'fa-dolly' },
   { value: 'client-dir', label: 'Dir. Clientes', icon: 'fa-users' },
   { value: 'customers', label: 'Créditos / Fiados', icon: 'fa-book-journal-whills' },
   { value: 'personal', label: 'Módulo Personal', icon: 'fa-id-badge' },

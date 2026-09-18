@@ -12,7 +12,34 @@ const DOCUMENT_TYPE_LABELS = {
 
 const EDITABLE_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email',
-  'currencySymbol', 'taxRate', 'ticketFooter', 'enabledModules',
+  'currencySymbol', 'taxRate', 'ticketFooter', 'enabledModules', 'saleFlowMode',
+];
+
+const SALE_FLOW_OPTIONS = [
+  {
+    id: 'DIRECT',
+    title: 'Directo',
+    icon: 'fa-user',
+    description: 'Una persona atiende, cobra y entrega. Ideal para ferreterías pequeñas.',
+    steps: ['Venta y cobro en el Punto de Venta'],
+    requires: [],
+  },
+  {
+    id: 'SEPARATE_CASHIER',
+    title: 'Vendedor y caja',
+    icon: 'fa-users',
+    description: 'El vendedor arma el pedido; el cliente paga en caja y ahí recibe sus productos.',
+    steps: ['Vendedor: pedido', 'Caja: cobro y entrega'],
+    requires: ['caja'],
+  },
+  {
+    id: 'STAGED',
+    title: 'Por etapas',
+    icon: 'fa-people-arrows',
+    description: 'Vendedor, caja y almacén separados: el cliente recoge en despacho después de pagar.',
+    steps: ['Vendedor: pedido', 'Caja: cobro', 'Almacén: despacho'],
+    requires: ['caja', 'despacho'],
+  },
 ];
 
 // Los módulos no contratados se muestran apagados y no se envían al guardar.
@@ -27,6 +54,7 @@ const toForm = (settings, licensedModules) => ({
   taxRate: String(settings.taxRate ?? 18),
   ticketFooter: settings.ticketFooter || '',
   enabledModules: (settings.enabledModules || []).filter(m => !licensedModules || licensedModules.includes(m)),
+  saleFlowMode: settings.saleFlowMode || 'DIRECT',
 });
 
 function validateForm(form) {
@@ -113,6 +141,17 @@ export default function SettingsPage({ onSaved }) {
         ? form.enabledModules.filter(m => m !== moduleId)
         : [...form.enabledModules, moduleId]
     );
+  };
+
+  // Al elegir un modo se activan los módulos que necesita (si están contratados).
+  const selectSaleFlow = (option) => {
+    if (option.requires.some(m => !isLicensed(m))) return;
+    setForm(prev => ({
+      ...prev,
+      saleFlowMode: option.id,
+      enabledModules: [...new Set([...prev.enabledModules, ...option.requires])],
+    }));
+    setSaveMessage(null);
   };
 
   const handleSave = async () => {
@@ -245,6 +284,54 @@ export default function SettingsPage({ onSaved }) {
               </div>
             )}
           </div>
+        </Card>
+
+        <Card
+          icon="fa-route"
+          title="Modo de trabajo"
+          description="Define cómo se reparte una venta entre las personas del negocio."
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {SALE_FLOW_OPTIONS.map(option => {
+              const selected = form.saleFlowMode === option.id;
+              const missing = option.requires.filter(m => !isLicensed(m));
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => selectSaleFlow(option)}
+                  disabled={missing.length > 0}
+                  className={`text-left rounded-xl border p-4 transition-colors flex flex-col gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    selected ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <i className={`fa-solid ${option.icon} ${selected ? 'text-orange-600' : 'text-slate-400'}`}></i>
+                    <span className="font-bold text-slate-800">{option.title}</span>
+                    {selected && <i className="fa-solid fa-circle-check text-orange-600 ml-auto"></i>}
+                  </div>
+                  <p className="text-xs text-slate-500">{option.description}</p>
+                  <ol className="text-[11px] text-slate-600 flex flex-col gap-0.5 mt-1">
+                    {option.steps.map((step, i) => (
+                      <li key={step}><span className="font-bold text-orange-600">{i + 1}.</span> {step}</li>
+                    ))}
+                  </ol>
+                  {missing.length > 0 && (
+                    <span className="text-[10px] text-slate-400">
+                      <i className="fa-solid fa-lock mr-1"></i>Requiere un módulo no incluido en su plan
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {form.saleFlowMode !== (savedSettings.saleFlowMode || 'DIRECT') && (
+            <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <i className="fa-solid fa-circle-info mr-1.5"></i>
+              Asigne en Personal los módulos a cada empleado: Punto de Venta al vendedor, Arqueo de Caja al cajero
+              {form.saleFlowMode === 'STAGED' && ' y Despacho a almacén'}.
+            </p>
+          )}
         </Card>
 
         <Card

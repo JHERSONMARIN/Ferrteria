@@ -11,6 +11,8 @@ export default function Sidebar({ activeTab, onSwitchTab, user, modules, busines
   const navItems = [
     { section: 'Operaciones', items: [
       { id: 'pos', label: 'Punto de Venta', icon: 'fa-cash-register' },
+      { id: 'cobros', label: 'Por cobrar', icon: 'fa-hand-holding-dollar' },
+      { id: 'despacho', label: 'Por despachar', icon: 'fa-dolly' },
       { id: 'cotizaciones', label: 'Cotizaciones', icon: 'fa-file-invoice' },
       { id: 'caja', label: 'Arqueo de Caja', icon: 'fa-vault' },
       { id: 'inventory', label: 'Almacén', icon: 'fa-boxes-stacked', subItems: [
