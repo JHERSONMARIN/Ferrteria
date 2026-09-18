@@ -1,6 +1,7 @@
 import { nextDocumentNumber } from './documentSeries.js';
 import { getSettings } from './settings.js';
 import { reserveStock, consumeReservedStock, releaseReservedStock } from './stock.js';
+import { parseDeliveryRequest, scheduleDeliveryForSale } from './deliveries.js';
 import {
   VentaError, normalizarCarrito, priceLines, assertExpectedTotal, validatePayment,
   findOpenCashRegister, recordCashIncome, recordCreditCharge, writeKardexExit, publicLines,
@@ -25,6 +26,7 @@ const ORDER_INCLUDE = {
   cliente: { select: { id: true, name: true, doc: true, type: true } },
   vendedor: { select: { name: true } },
   detalles: { select: { productoId: true, quantity: true, unitPrice: true, subtotal: true, producto: { select: { name: true, code: true } } } },
+  entrega: { select: { ref: true, address: true } },
 };
 
 const linesOf = (order) => order.detalles.map(d => ({
@@ -48,6 +50,7 @@ export function formatOrder(order) {
     customerType: order.cliente ? order.cliente.type : null,
     seller: order.vendedor ? order.vendedor.name : 'General',
     items: publicLines(linesOf(order)),
+    delivery: order.entrega ? { ref: order.entrega.ref, address: order.entrega.address } : null,
   };
 }
 
@@ -104,6 +107,7 @@ export async function createOrder(db, payload, user) {
 
 export async function payOrder(db, orderId, payload, cashier) {
   const settings = await getSettings(db);
+  const delivery = parseDeliveryRequest(payload.delivery);
 
   return db.$transaction(async (tx) => {
     const order = await tx.venta.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE });
@@ -140,6 +144,7 @@ export async function payOrder(db, orderId, payload, cashier) {
 
     await recordCashIncome(tx, caja.id, payment);
     if (payMethodEnum === 'FIADO') await recordCreditCharge(tx, { clienteId, total: order.total, numDoc, lineas: lines });
+    if (delivery) await scheduleDeliveryForSale(tx, { ventaId: orderId, numDoc, clienteId, lines, delivery });
     if (order.cotizacionId) {
       await tx.cotizacion.updateMany({ where: { id: order.cotizacionId, status: 'PENDIENTE' }, data: { status: 'CONVERTIDO' } });
     }
