@@ -83,6 +83,7 @@ export default function App() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Todas');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settings, setSettings] = useState(null);
+  const [licensedModules, setLicensedModules] = useState(null);
   const [settingsStatus, setSettingsStatus] = useState('loading');
 
   // Los usuarios de prueba solo se ofrecen en la instancia de demostración.
@@ -99,8 +100,10 @@ export default function App() {
     const userModules = currentUser?.modules || [];
     if (settingsStatus === 'loading') return [];
     if (!settings) return userModules;
-    return userModules.filter(m => settings.enabledModules.includes(m));
-  }, [currentUser, settings, settingsStatus]);
+    return userModules.filter(m =>
+      settings.enabledModules.includes(m) && (!licensedModules || licensedModules.includes(m))
+    );
+  }, [currentUser, settings, licensedModules, settingsStatus]);
 
   const isAdmin = currentUser?.role === 'ADMINISTRADOR';
 
@@ -114,6 +117,7 @@ export default function App() {
     try {
       const res = await api.get('/settings');
       setSettings(res.settings);
+      setLicensedModules(res.licensedModules || null);
       setSettingsStatus('ready');
     } catch (err) {
       console.error('Error cargando la configuración de la empresa:', err);

@@ -1,5 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
+import { LICENSED_MODULES } from '../services/license.js';
 import {
   getSettings,
   updateSettings,
@@ -16,7 +17,7 @@ router.get('/', async (req, res) => {
       getSettings(prisma),
       prisma.documentSeries.findMany({ orderBy: [{ documentType: 'asc' }, { series: 'asc' }] }),
     ]);
-    res.json({ settings, documentSeries, availableModules: AVAILABLE_MODULES });
+    res.json({ settings, documentSeries, availableModules: AVAILABLE_MODULES, licensedModules: LICENSED_MODULES });
   } catch (error) {
     console.error('[settings.js] Error al obtener la configuración:', error);
     res.status(500).json({ error: 'No se pudo obtener la configuración de la empresa.' });

@@ -1,13 +1,9 @@
+import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '../config/modules.js';
+import { isModuleLicensed } from './license.js';
+
+export { AVAILABLE_MODULES };
+
 const SETTINGS_ID = 1;
-
-// Identificadores de módulo; deben coincidir con los del menú del frontend.
-export const AVAILABLE_MODULES = [
-  'pos', 'cotizaciones', 'caja', 'inventory', 'categories', 'kardex',
-  'compras', 'deliveries', 'client-dir', 'customers', 'personal', 'dashboard',
-];
-
-// Sin "personal" nadie podría administrar usuarios ni reactivar módulos.
-const ALWAYS_ENABLED_MODULES = ['personal'];
 
 // Valores de la instalación original, para que las bases existentes no cambien su ticket.
 const DEFAULT_SETTINGS = {
@@ -48,6 +44,10 @@ function normalizeModules(modules) {
   const unknown = modules.filter(m => !AVAILABLE_MODULES.includes(m));
   if (unknown.length > 0) {
     throw new SettingsValidationError(`Módulos desconocidos: ${unknown.join(', ')}.`);
+  }
+  const notLicensed = modules.filter(m => !isModuleLicensed(m));
+  if (notLicensed.length > 0) {
+    throw new SettingsValidationError(`Estos módulos no están incluidos en su plan: ${notLicensed.join(', ')}.`);
   }
   const enabled = new Set([...modules, ...ALWAYS_ENABLED_MODULES]);
   // Se conserva el orden del menú.

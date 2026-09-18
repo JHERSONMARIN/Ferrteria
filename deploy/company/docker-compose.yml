@@ -12,6 +12,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       DEMO_MODE: ${DEMO_MODE:-false}
       COMPANY_NAME: ${COMPANY_NAME}
+      # Módulos contratados; vacío = todos. Se cambia con deploy/set-modules.sh
+      LICENSED_MODULES: ${LICENSED_MODULES:-}
       INITIAL_ADMIN_USER: ${INITIAL_ADMIN_USER:-admin}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
     networks:
