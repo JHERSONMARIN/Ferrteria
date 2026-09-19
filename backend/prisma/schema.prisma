@@ -497,7 +497,6 @@ model BusinessSettings {
   taxRate        Float    @default(18)
   ticketFooter   String?
   enabledModules Json
-  saleFlowMode   SaleFlowMode @default(DIRECT)
   // Descuento máximo (%) que puede aplicar quien no es administrador; 0 = no puede descontar.
   maxDiscountPercent Decimal @default(0) @db.Decimal(5, 2)
   updatedAt      DateTime @updatedAt
@@ -551,6 +550,8 @@ model Branch {
   name      String   @unique
   address   String?
   active    Boolean  @default(true)
+  // Cada sucursal trabaja en su modo: una tienda chica en directo y otra grande por etapas.
+  saleFlowMode SaleFlowMode @default(DIRECT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

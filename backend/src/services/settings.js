@@ -1,4 +1,4 @@
-import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES, SALE_FLOW_MODES } from '../config/modules.js';
+import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '../config/modules.js';
 import { isModuleLicensed } from './license.js';
 import { recordAudit, changedFields } from './audit.js';
 
@@ -86,22 +86,8 @@ export function validateSettingsInput(input) {
 
   const enabledModules = normalizeModules(input.enabledModules);
 
-  // El modo es opcional en la petición: si no viene, se conserva el actual.
-  let saleFlowMode;
-  if (input.saleFlowMode !== undefined) {
-    if (!SALE_FLOW_MODES.includes(input.saleFlowMode)) {
-      throw new SettingsValidationError('Modo de trabajo no válido.');
-    }
-    saleFlowMode = input.saleFlowMode;
-    if (saleFlowMode !== 'DIRECT' && !enabledModules.includes('caja')) {
-      throw new SettingsValidationError('Para trabajar con pedidos debe estar activo el módulo Arqueo de Caja (ahí se cobran).');
-    }
-    if (saleFlowMode === 'STAGED' && !enabledModules.includes('despacho')) {
-      throw new SettingsValidationError('Para trabajar por etapas debe estar activo el módulo Despacho.');
-    }
-  }
-
-  // Opcional como el modo: si no viene, se conserva el tope actual.
+  // Opcional: si no viene, se conserva el tope actual.
+  // El modo de trabajo ya no está aquí: es de cada sucursal (services/branches.js).
   let maxDiscountPercent;
   if (input.maxDiscountPercent !== undefined) {
     maxDiscountPercent = Number(input.maxDiscountPercent);
@@ -122,28 +108,27 @@ export function validateSettingsInput(input) {
     taxRate,
     ticketFooter: optionalText(input.ticketFooter, 300, 'El pie del ticket'),
     enabledModules,
-    saleFlowMode,
     maxDiscountPercent,
   };
 }
 
 const AUDITED_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email', 'currencySymbol', 'taxRate',
-  'ticketFooter', 'enabledModules', 'saleFlowMode', 'maxDiscountPercent',
+  'ticketFooter', 'enabledModules', 'maxDiscountPercent',
 ];
 
 export async function updateSettings(db, input, user = null) {
   const data = validateSettingsInput(input);
 
-  // Cambiar de modo con pedidos en curso los dejaría sin pantalla donde cobrarlos o despacharlos.
   const current = await getSettings(db);
-  if (data.saleFlowMode && data.saleFlowMode !== current.saleFlowMode) {
-    const openOrders = await db.venta.count({ where: { status: { in: ['PENDING_PAYMENT', 'PAID'] } } });
-    if (openOrders > 0) {
-      throw new SettingsValidationError(
-        `Hay ${openOrders} pedido(s) sin cobrar o sin despachar. Complételos o anúlelos antes de cambiar el modo de trabajo.`
-      );
-    }
+
+  // Las sucursales que trabajan con pedidos cobran en Caja; las que van por etapas despachan en Despacho.
+  const modes = (await db.branch.findMany({ where: { active: true }, select: { saleFlowMode: true } })).map(b => b.saleFlowMode);
+  if (!data.enabledModules.includes('caja') && modes.some(m => m !== 'DIRECT')) {
+    throw new SettingsValidationError('Hay sucursales que trabajan con pedidos: el módulo Arqueo de Caja debe seguir activo.');
+  }
+  if (!data.enabledModules.includes('despacho') && modes.includes('STAGED')) {
+    throw new SettingsValidationError('Hay sucursales que trabajan por etapas: el módulo Despacho debe seguir activo.');
   }
 
   return db.$transaction(async (tx) => {

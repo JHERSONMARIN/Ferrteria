@@ -1,3 +1,7 @@
+import { SALE_FLOW_MODES } from '../config/modules.js';
+import { getSettings } from './settings.js';
+import { recordAudit } from './audit.js';
+
 // Sucursales o almacenes de la empresa. Las operaciones de stock usan la sucursal del usuario; el
 // administrador puede indicar otra (por ejemplo, registrar una compra que llegó a otro almacén).
 
@@ -51,9 +55,26 @@ function parseBranchInput(input, { partial = false } = {}) {
 
 const isUniqueViolation = (error) => error?.code === 'P2002';
 
+const MODE_LABELS = { DIRECT: 'Directo', SEPARATE_CASHIER: 'Vendedor y caja', STAGED: 'Por etapas' };
+
+// Un modo con pedidos necesita Caja (ahí se cobra) y "por etapas", además, Despacho.
+async function parseSaleFlowMode(db, value) {
+  if (!SALE_FLOW_MODES.includes(value)) throw new BranchError('Modo de trabajo no válido.');
+  const { enabledModules } = await getSettings(db);
+  if (value !== 'DIRECT' && !enabledModules.includes('caja')) {
+    throw new BranchError('Para trabajar con pedidos active primero el módulo Arqueo de Caja (ahí se cobran).');
+  }
+  if (value === 'STAGED' && !enabledModules.includes('despacho')) {
+    throw new BranchError('Para trabajar por etapas active primero el módulo Despacho.');
+  }
+  return value;
+}
+
 export async function createBranch(db, input) {
+  const data = parseBranchInput(input);
+  if (input.saleFlowMode !== undefined) data.saleFlowMode = await parseSaleFlowMode(db, input.saleFlowMode);
   try {
-    return await db.branch.create({ data: parseBranchInput(input) });
+    return await db.branch.create({ data });
   } catch (error) {
     if (isUniqueViolation(error)) throw new BranchError('Ya existe una sucursal con ese nombre.', 409);
     throw error;
@@ -61,10 +82,22 @@ export async function createBranch(db, input) {
 }
 
 // Una sucursal no se borra (tiene ventas y movimientos); se desactiva cuando ya no opera.
-export async function updateBranch(db, id, input) {
+// user: quien hace el cambio (para la auditoría del modo de trabajo).
+export async function updateBranch(db, id, input, user = null) {
   const branch = await db.branch.findUnique({ where: { id } });
   if (!branch) throw new BranchError('La sucursal no existe.', 404);
   const data = parseBranchInput(input, { partial: true });
+
+  if (input.saleFlowMode !== undefined && input.saleFlowMode !== branch.saleFlowMode) {
+    data.saleFlowMode = await parseSaleFlowMode(db, input.saleFlowMode);
+    // Cambiar de modo con pedidos en curso los dejaría sin pantalla donde cobrarlos o despacharlos.
+    const openOrders = await db.venta.count({ where: { branchId: id, status: { in: ['PENDING_PAYMENT', 'PAID'] } } });
+    if (openOrders > 0) {
+      throw new BranchError(
+        `${branch.name} tiene ${openOrders} pedido(s) sin cobrar o sin despachar. Complételos o anúlelos antes de cambiar el modo.`, 409
+      );
+    }
+  }
 
   if (input.active !== undefined) {
     if (typeof input.active !== 'boolean') throw new BranchError('Estado no válido.');
@@ -84,7 +117,20 @@ export async function updateBranch(db, id, input) {
   }
 
   try {
-    return await db.branch.update({ where: { id }, data });
+    return await db.$transaction(async (tx) => {
+      const saved = await tx.branch.update({ where: { id }, data });
+      if (data.saleFlowMode) {
+        await recordAudit(tx, {
+          action: 'SETTINGS_CHANGED',
+          entity: 'Sucursal',
+          entityId: id,
+          summary: `${saved.name}: modo de trabajo ${MODE_LABELS[branch.saleFlowMode]} → ${MODE_LABELS[saved.saleFlowMode]}`,
+          details: { saleFlowMode: { before: branch.saleFlowMode, after: saved.saleFlowMode } },
+          user,
+        });
+      }
+      return saved;
+    });
   } catch (error) {
     if (isUniqueViolation(error)) throw new BranchError('Ya existe una sucursal con ese nombre.', 409);
     throw error;

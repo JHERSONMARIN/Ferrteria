@@ -128,7 +128,8 @@ export default function App() {
   const isAdmin = currentUser?.role === 'ADMINISTRADOR';
 
   // La configuración no es un módulo desactivable: la ve siempre el administrador.
-  const saleFlowMode = settings?.saleFlowMode || 'DIRECT';
+  // El modo de trabajo es de la sucursal del usuario.
+  const saleFlowMode = currentUser?.branch?.saleFlowMode || 'DIRECT';
   // El envío a domicilio solo se ofrece si la empresa usa (y tiene contratado) el módulo de entregas.
   const deliveriesEnabled = Boolean(settings?.enabledModules?.includes('deliveries'))
     && (!licensedModules || licensedModules.includes('deliveries'));
@@ -168,7 +169,8 @@ export default function App() {
       if (!prev) return prev;
       const hasChanged = JSON.stringify(serverUser.modules) !== JSON.stringify(prev.modules) ||
                          serverUser.role !== prev.role || serverUser.name !== prev.name ||
-                         Boolean(serverUser.mustChangePassword) !== Boolean(prev.mustChangePassword);
+                         Boolean(serverUser.mustChangePassword) !== Boolean(prev.mustChangePassword) ||
+                         JSON.stringify(serverUser.branch) !== JSON.stringify(prev.branch);
       if (!hasChanged) return prev;
       const updated = {
         ...prev,
@@ -176,6 +178,8 @@ export default function App() {
         role: serverUser.role,
         name: serverUser.name,
         mustChangePassword: Boolean(serverUser.mustChangePassword),
+        branchId: serverUser.branchId,
+        branch: serverUser.branch,
       };
       localStorage.setItem('ferre_user', JSON.stringify(updated));
       return updated;
@@ -190,7 +194,12 @@ export default function App() {
     const checkSession = () => api.get('/auth/me').then(res => syncUser(res.user)).catch(() => {});
     checkSession();
     const heartbeatInterval = setInterval(checkSession, 8000);
-    return () => clearInterval(heartbeatInterval);
+    // Al cambiar el modo de una sucursal en Configuración se refresca al momento.
+    window.addEventListener('refrescar-sesion', checkSession);
+    return () => {
+      clearInterval(heartbeatInterval);
+      window.removeEventListener('refrescar-sesion', checkSession);
+    };
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -471,7 +480,7 @@ export default function App() {
               {activeTab === 'customers' && <CreditosPage />}
               {activeTab === 'personal' && <PersonalPage currentUser={currentUser} />}
               {activeTab === 'dashboard' && <DashboardPage />}
-              {activeTab === 'settings' && isAdmin && <SettingsPage onSaved={setSettings} />}
+              {activeTab === 'settings' && isAdmin && <SettingsPage currentUser={currentUser} onSaved={setSettings} />}
               {activeTab === 'audit' && isAdmin && <AuditPage />}
               {activeTab === 'transfers' && <TransfersPage currentUser={currentUser} />}
               {activeTab === 'cobros' && (
