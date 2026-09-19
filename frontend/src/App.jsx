@@ -16,6 +16,7 @@ import CajaPage from './pages/CajaPage.jsx';
 import ComprasPage from './pages/ComprasPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import AuditPage from './pages/AuditPage.jsx';
+import TransfersPage from './pages/TransfersPage.jsx';
 import CashierQueuePage from './pages/CashierQueuePage.jsx';
 import DispatchQueuePage from './pages/DispatchQueuePage.jsx';
 import FieldError from './components/FieldError.jsx';
@@ -136,9 +137,11 @@ export default function App() {
   const navigableTabs = useMemo(() => {
     const tabs = effectiveModules.filter(m => m !== 'despacho' || saleFlowMode === 'STAGED');
     if (saleFlowMode !== 'DIRECT' && effectiveModules.includes('caja')) tabs.push('cobros');
+    // Transferencias: solo con más de una sucursal, para quien maneja inventario o kardex.
+    if (branchCount > 1 && (effectiveModules.includes('inventory') || effectiveModules.includes('kardex'))) tabs.push('transfers');
     if (isAdmin) tabs.push('audit', 'settings');
     return tabs;
-  }, [effectiveModules, isAdmin, saleFlowMode]);
+  }, [effectiveModules, isAdmin, saleFlowMode, branchCount]);
 
   const loadSettings = async () => {
     // Las sucursales solo se muestran si hay más de una; un error aquí no bloquea la aplicación.
@@ -293,6 +296,7 @@ export default function App() {
     'dashboard': 'Finanzas / Reportes',
     'settings': 'Configuración de la Empresa',
     'audit': 'Auditoría',
+    'transfers': 'Transferencias entre Sucursales',
     'cobros': 'Pedidos por Cobrar',
     'despacho': 'Pedidos por Despachar',
   };
@@ -469,6 +473,7 @@ export default function App() {
               {activeTab === 'dashboard' && <DashboardPage />}
               {activeTab === 'settings' && isAdmin && <SettingsPage onSaved={setSettings} />}
               {activeTab === 'audit' && isAdmin && <AuditPage />}
+              {activeTab === 'transfers' && <TransfersPage currentUser={currentUser} />}
               {activeTab === 'cobros' && (
                 <CashierQueuePage
                   currentUser={currentUser}

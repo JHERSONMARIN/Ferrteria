@@ -110,6 +110,7 @@ model Usuario {
   branchId Int    @default(1)
   branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
   ventasCobradas    Venta[]        @relation("CobradorVentas")
+  transferencias    StockTransfer[]
   cotizaciones      Cotizacion[]   @relation("VendedorCotizaciones")
   movimientosKardex MovimientoKardex[] @relation("UsuarioKardex")
 
@@ -143,6 +144,7 @@ model Producto {
   detallesCompra     DetalleCompra[]
   detallesCotizacion DetalleCotizacion[]
   branchStocks       BranchStock[]
+  transferItems      StockTransferItem[]
 
   @@map("productos")
 }
@@ -553,6 +555,8 @@ model Branch {
   ventas        Venta[]
   compras       Compra[]
   kardex        MovimientoKardex[]
+  transfersOut  StockTransfer[] @relation("TransferOrigin")
+  transfersIn   StockTransfer[] @relation("TransferDestination")
 
   @@map("branches")
 }
@@ -573,4 +577,38 @@ model BranchStock {
   @@unique([branchId, productoId])
   @@index([productoId])
   @@map("branch_stock")
+}
+
+// Transferencia de stock entre sucursales. Se hace en un solo paso: sale del origen y entra al destino
+// en la misma transacción, con su movimiento de kardex en cada sucursal. El total de la empresa no cambia.
+model StockTransfer {
+  id        Int      @id @default(autoincrement())
+  notes     String?
+  createdAt DateTime @default(now())
+
+  fromBranchId Int
+  fromBranch   Branch @relation("TransferOrigin", fields: [fromBranchId], references: [id], onDelete: Restrict)
+  toBranchId   Int
+  toBranch     Branch @relation("TransferDestination", fields: [toBranchId], references: [id], onDelete: Restrict)
+
+  createdById Int?
+  createdBy   Usuario? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  items StockTransferItem[]
+
+  @@index([createdAt])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id       Int     @id @default(autoincrement())
+  quantity Decimal @db.Decimal(12, 3)
+
+  transferId Int
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+
+  @@map("stock_transfer_items")
 }

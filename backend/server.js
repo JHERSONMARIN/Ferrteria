@@ -22,6 +22,7 @@ import { prisma } from './src/db.js';
 import { initializeDocumentSeries } from './src/services/documentSeries.js';
 import { ensureBranchStockRows } from './src/services/stock.js';
 import sucursalesRoutes from './src/routes/sucursales.js';
+import transferenciasRoutes from './src/routes/transferencias.js';
 import { expireOrders } from './src/services/saleOrders.js';
 import { authenticate, requirePasswordChanged } from './src/middleware/authenticate.js';
 import { allowModules } from './src/middleware/authorize.js';
@@ -67,6 +68,7 @@ const CATALOG_READERS = ['pos', 'cotizaciones', 'inventory', 'categories', 'kard
 app.use('/api/settings', allowModules({ GET: 'authenticated', default: 'admin' }), settingsRoutes);
 app.use('/api/auditoria', allowModules({ default: 'admin' }), auditoriaRoutes);
 app.use('/api/sucursales', allowModules({ GET: 'authenticated', default: 'admin' }), sucursalesRoutes);
+app.use('/api/transferencias', allowModules({ default: ['inventory', 'kardex'] }), transferenciasRoutes);
 app.use('/api/personal', allowModules({ GET: ['personal', 'pos', 'deliveries'], default: ['personal'] }), personalRoutes);
 app.use('/api/clientes', allowModules({
   GET: ['pos', 'caja', 'cotizaciones', 'client-dir', 'customers', 'deliveries'],

@@ -21,6 +21,7 @@ export default function Sidebar({ activeTab, onSwitchTab, user, modules, busines
         // { id: 'suppliers', label: 'Proveedores', icon: 'fa-truck' },
       ]},
       { id: 'kardex', label: 'Kardex / Movimientos', icon: 'fa-receipt' },
+      { id: 'transfers', label: 'Transferencias', icon: 'fa-right-left' },
       { id: 'compras', label: 'Compras a Proveedores', icon: 'fa-cart-flatbed' },
       { id: 'deliveries', label: 'Entregas', icon: 'fa-truck-fast' },
     ]},

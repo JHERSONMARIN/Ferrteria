@@ -7,6 +7,7 @@ export const AUDIT_ACTIONS = {
   PRICE_CHANGED: 'Cambio de precio',
   CASH_CLOSED: 'Cierre de caja',
   STOCK_ADJUSTED: 'Ajuste manual de stock',
+  STOCK_TRANSFERRED: 'Transferencia entre sucursales',
   SETTINGS_CHANGED: 'Configuración modificada',
   USER_CREATED: 'Usuario creado',
   USER_UPDATED: 'Usuario modificado',
