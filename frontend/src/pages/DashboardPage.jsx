@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { roleLabel } from '../constants/roles.js';
 import { api } from '../api.js';
 import SalesReports from '../components/SalesReports.jsx';
 
@@ -189,7 +190,7 @@ export default function DashboardPage() {
               stats.vendedores.map((v) => (
                 <tr key={v.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-bold text-slate-700">
-                    {v.name} <span className="text-xs text-slate-400 font-normal">({v.role})</span>
+                    {v.name} <span className="text-xs text-slate-400 font-normal">({roleLabel(v.role)})</span>
                   </td>
                   <td className="px-4 py-3 text-center font-semibold text-slate-600">{v.ventasCount}</td>
                   <td className="px-4 py-3 text-right font-black text-slate-800">

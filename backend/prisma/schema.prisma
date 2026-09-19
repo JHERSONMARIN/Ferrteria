@@ -13,6 +13,9 @@ enum Role {
   VENDEDOR
   CAJERO
   REPARTIDOR
+  // Productos, compras, kardex y despacho. El rol es el cargo y la plantilla de módulos: los permisos
+  // reales son los módulos asignados a cada persona.
+  ALMACEN
 }
 
 enum TipoCliente {
