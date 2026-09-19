@@ -552,6 +552,8 @@ model Branch {
   active    Boolean  @default(true)
   // Cada sucursal trabaja en su modo: una tienda chica en directo y otra grande por etapas.
   saleFlowMode SaleFlowMode @default(DIRECT)
+  // Envíos a domicilio: se activan por sucursal, con cualquier modo de trabajo.
+  deliveriesEnabled Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

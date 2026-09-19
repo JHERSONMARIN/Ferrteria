@@ -31,18 +31,19 @@ router.get('/', handle(async (req, res) => {
   res.json(await listDeliveries(prisma, {
     finished: req.query.estado === 'finalizadas',
     onlyUserId: req.query.mias === '1' ? req.user.id : null,
+    branchId: req.user.branchId,
   }));
 }));
 
 // GET /api/entregas/venta/:numDoc  (vista previa para programar el envío de una venta ya cobrada)
 router.get('/venta/:numDoc', handle(async (req, res) => {
-  res.json(await findSaleForDelivery(prisma, req.params.numDoc));
+  res.json(await findSaleForDelivery(prisma, req.params.numDoc, req.user));
 }));
 
 // POST /api/entregas  { numDoc, address, contactName, contactPhone, notes }
 router.post('/', handle(async (req, res) => {
   const { numDoc, ...delivery } = req.body;
-  res.status(201).json({ success: true, entrega: await scheduleDeliveryForExistingSale(prisma, numDoc, delivery) });
+  res.status(201).json({ success: true, entrega: await scheduleDeliveryForExistingSale(prisma, numDoc, delivery, req.user) });
 }));
 
 // PATCH /api/entregas/:id/repartidor  { repartidorId | null }
@@ -50,7 +51,7 @@ router.patch('/:id/repartidor', handle(async (req, res) => {
   const id = deliveryId(req, res);
   if (id === null) return;
   const courierId = req.body.repartidorId ? parseInt(req.body.repartidorId, 10) : null;
-  res.json(await assignCourier(prisma, id, courierId));
+  res.json(await assignCourier(prisma, id, courierId, req.user));
 }));
 
 // POST /api/entregas/:id/salir | /entregar | /cancelar

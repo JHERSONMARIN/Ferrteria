@@ -2,7 +2,7 @@ import { nextDocumentNumber, DocumentSeriesError } from './documentSeries.js';
 import { takeAvailableStock, StockError } from './stock.js';
 import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
-import { parseDeliveryRequest, scheduleDeliveryForSale, DeliveryError } from './deliveries.js';
+import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers, DeliveryError } from './deliveries.js';
 import { recordAudit } from './audit.js';
 import { requireOpenSession, CashError } from './cashRegisters.js';
 
@@ -355,6 +355,8 @@ export async function procesarVenta(prisma, payload, user) {
     user,
     maxDiscountPercent: settings.maxDiscountPercent,
   };
+
+  if (datos.delivery) assertBranchDelivers(user.branch);
 
   return prisma.$transaction(tx => ejecutarVenta(tx, datos));
 }

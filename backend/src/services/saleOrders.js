@@ -1,7 +1,7 @@
 import { nextDocumentNumber } from './documentSeries.js';
 import { getSettings } from './settings.js';
 import { reserveStock, consumeReservedStock, releaseReservedStock } from './stock.js';
-import { parseDeliveryRequest, scheduleDeliveryForSale } from './deliveries.js';
+import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers } from './deliveries.js';
 import { roundMoney } from '../utils/quantities.js';
 import { recordAudit } from './audit.js';
 import {
@@ -29,7 +29,7 @@ const ORDER_INCLUDE = {
   vendedor: { select: { name: true } },
   detalles: { select: { productoId: true, quantity: true, unitPrice: true, subtotal: true, producto: { select: { name: true, code: true } } } },
   entrega: { select: { ref: true, address: true } },
-  branch: { select: { id: true, name: true, saleFlowMode: true } },
+  branch: { select: { id: true, name: true, saleFlowMode: true, deliveriesEnabled: true } },
 };
 
 const linesOf = (order) => order.detalles.map(d => ({
@@ -136,6 +136,7 @@ export async function payOrder(db, orderId, payload, cashier) {
     if (!order) throw new VentaError('El pedido no existe.', 404);
     if (order.status !== 'PENDING_PAYMENT') throw new VentaError('Este pedido ya fue cobrado o anulado.', 409);
     assertSameBranch(order, cashier);
+    if (delivery) assertBranchDelivers(order.branch);
     if (order.expiresAt && order.expiresAt < new Date()) {
       throw new VentaError('El pedido venció. Pida al vendedor que lo registre nuevamente.', 409);
     }

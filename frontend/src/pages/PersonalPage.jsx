@@ -21,6 +21,10 @@ export default function PersonalPage({ currentUser }) {
   const [branches, setBranches] = useState([]);
   // Con una sola sucursal no se muestra nada de sucursales.
   const multiBranch = branches.length > 1;
+  // Sucursal del formulario: la elegida o, al crear sin elegir, la del administrador.
+  const formBranch = branches.find(b => b.id === Number(branchId)) || branches.find(b => b.id === currentUser?.branchId) || null;
+  // "Por despachar" solo existe en sucursales por etapas: en las demás se entrega al cobrar.
+  const dispatchUnused = formBranch && formBranch.saleFlowMode !== 'STAGED';
   const [errors, setErrors] = useState({});
 
   const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
@@ -483,11 +487,22 @@ export default function PersonalPage({ currentUser }) {
                         />
                         <i className={`fa-solid ${opt.icon} text-xs ${isChecked ? 'text-orange-500' : 'text-slate-400'}`}></i>
                         <span className="truncate">{opt.label}</span>
+                        {opt.value === 'despacho' && dispatchUnused && (
+                          <span className="ml-auto text-[10px] text-slate-400 whitespace-nowrap">solo por etapas</span>
+                        )}
                       </label>
                     );
                   })}
                 </div>
                 <FieldError msg={errors.modules} />
+                {modules.includes('despacho') && dispatchUnused && (
+                  <p className="mt-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                    <i className="fa-solid fa-circle-info mr-1"></i>
+                    {multiBranch ? `${formBranch.name} no` : 'La empresa no'} trabaja por etapas, así que "Por despachar" no aparecerá:
+                    la mercadería se entrega al cobrar. Para envíos a domicilio, el cobro ofrece "Envío a domicilio" y el
+                    repartidor los ve en Entregas.
+                  </p>
+                )}
               </div>
 
               {/* Estado de la cuenta (Activo / Inactivo) */}

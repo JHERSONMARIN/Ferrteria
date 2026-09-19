@@ -70,9 +70,15 @@ async function parseSaleFlowMode(db, value) {
   return value;
 }
 
+function parseDeliveriesEnabled(value) {
+  if (typeof value !== 'boolean') throw new BranchError('Valor no válido para los envíos a domicilio.');
+  return value;
+}
+
 export async function createBranch(db, input) {
   const data = parseBranchInput(input);
   if (input.saleFlowMode !== undefined) data.saleFlowMode = await parseSaleFlowMode(db, input.saleFlowMode);
+  if (input.deliveriesEnabled !== undefined) data.deliveriesEnabled = parseDeliveriesEnabled(input.deliveriesEnabled);
   try {
     return await db.branch.create({ data });
   } catch (error) {
@@ -87,6 +93,8 @@ export async function updateBranch(db, id, input, user = null) {
   const branch = await db.branch.findUnique({ where: { id } });
   if (!branch) throw new BranchError('La sucursal no existe.', 404);
   const data = parseBranchInput(input, { partial: true });
+
+  if (input.deliveriesEnabled !== undefined) data.deliveriesEnabled = parseDeliveriesEnabled(input.deliveriesEnabled);
 
   if (input.saleFlowMode !== undefined && input.saleFlowMode !== branch.saleFlowMode) {
     data.saleFlowMode = await parseSaleFlowMode(db, input.saleFlowMode);
@@ -119,6 +127,16 @@ export async function updateBranch(db, id, input, user = null) {
   try {
     return await db.$transaction(async (tx) => {
       const saved = await tx.branch.update({ where: { id }, data });
+      if (data.deliveriesEnabled !== undefined && data.deliveriesEnabled !== branch.deliveriesEnabled) {
+        await recordAudit(tx, {
+          action: 'SETTINGS_CHANGED',
+          entity: 'Sucursal',
+          entityId: id,
+          summary: `${saved.name}: envíos a domicilio ${saved.deliveriesEnabled ? 'activados' : 'desactivados'}`,
+          details: { deliveriesEnabled: { before: branch.deliveriesEnabled, after: saved.deliveriesEnabled } },
+          user,
+        });
+      }
       if (data.saleFlowMode) {
         await recordAudit(tx, {
           action: 'SETTINGS_CHANGED',

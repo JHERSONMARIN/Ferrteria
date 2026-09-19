@@ -130,9 +130,11 @@ export default function App() {
   // La configuración no es un módulo desactivable: la ve siempre el administrador.
   // El modo de trabajo es de la sucursal del usuario.
   const saleFlowMode = currentUser?.branch?.saleFlowMode || 'DIRECT';
-  // El envío a domicilio solo se ofrece si la empresa usa (y tiene contratado) el módulo de entregas.
+  // El envío a domicilio se ofrece si la empresa usa (y tiene contratado) el módulo de entregas y la
+  // sucursal del usuario tiene activados los envíos.
   const deliveriesEnabled = Boolean(settings?.enabledModules?.includes('deliveries'))
-    && (!licensedModules || licensedModules.includes('deliveries'));
+    && (!licensedModules || licensedModules.includes('deliveries'))
+    && currentUser?.branch?.deliveriesEnabled !== false;
 
   // Pantallas que dependen del modo de trabajo: "Por cobrar" (con pedidos) y "Por despachar" (por etapas).
   const navigableTabs = useMemo(() => {

@@ -40,7 +40,7 @@ export async function authenticate(req, res, next) {
       where: { id: claims.sub },
       select: {
         id: true, name: true, user: true, role: true, modules: true, active: true,
-        mustChangePassword: true, pass: true, branchId: true, branch: { select: { id: true, name: true, saleFlowMode: true } },
+        mustChangePassword: true, pass: true, branchId: true, branch: { select: { id: true, name: true, saleFlowMode: true, deliveriesEnabled: true } },
       },
     });
     if (!user || !user.active || passwordFingerprint(user.pass) !== claims.pwf) {

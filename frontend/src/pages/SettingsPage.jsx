@@ -161,6 +161,23 @@ export default function SettingsPage({ currentUser, onSaved }) {
 
   const modeBranch = branches.find(b => b.id === modeBranchId) || branches[0] || null;
 
+  const toggleDeliveries = async () => {
+    if (!modeBranch) return;
+    const enable = !modeBranch.deliveriesEnabled;
+    try {
+      setSavingMode(true);
+      setModeMessage(null);
+      await api.put(`/sucursales/${modeBranch.id}`, { deliveriesEnabled: enable });
+      await loadBranches();
+      setModeMessage({ type: 'success', text: enable ? 'Envíos a domicilio activados.' : 'Envíos a domicilio desactivados: la opción ya no aparece al cobrar.' });
+      window.dispatchEvent(new Event('refrescar-sesion'));
+    } catch (err) {
+      setModeMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingMode(false);
+    }
+  };
+
   // Al elegir un modo se activan (y guardan) los módulos que necesita, y se guarda el modo de la sucursal.
   const selectSaleFlow = async (option) => {
     if (!modeBranch || option.id === modeBranch.saleFlowMode || option.requires.some(m => !isLicensed(m))) return;
@@ -398,6 +415,28 @@ export default function SettingsPage({ currentUser, onSaved }) {
               );
             })}
           </div>
+          {modeBranch && (
+            <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${savedSettings.enabledModules.includes('deliveries') ? 'border-slate-200 cursor-pointer hover:bg-slate-50' : 'border-slate-200 opacity-60'}`}>
+              <input
+                type="checkbox"
+                checked={modeBranch.deliveriesEnabled}
+                onChange={toggleDeliveries}
+                disabled={savingMode || !savedSettings.enabledModules.includes('deliveries')}
+                className="mt-0.5 accent-orange-600"
+              />
+              <span>
+                <span className="font-bold text-slate-800 text-sm">
+                  <i className="fa-solid fa-truck-fast mr-1.5 text-slate-400"></i>
+                  Envíos a domicilio{branches.length > 1 ? ` en ${modeBranch.name}` : ''}
+                </span>
+                <span className="block text-xs text-slate-500 mt-0.5">
+                  {savedSettings.enabledModules.includes('deliveries')
+                    ? 'Al cobrar se ofrece "Envío a domicilio" y el repartidor lo ve en Entregas. Funciona con cualquier modo de trabajo.'
+                    : 'Active primero el módulo Entregas en "Módulos activos".'}
+                </span>
+              </span>
+            </label>
+          )}
           {modeMessage && (
             <p className={`mt-3 text-xs rounded-lg px-3 py-2 border ${modeMessage.type === 'error' ? 'text-red-700 bg-red-50 border-red-200' : 'text-emerald-700 bg-emerald-50 border-emerald-200'}`}>
               {modeMessage.text}
