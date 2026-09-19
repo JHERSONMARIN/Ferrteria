@@ -1,6 +1,9 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { quantityProblem, roundQuantity } from '../utils/quantities.js';
+import { recordAudit } from '../services/audit.js';
+import { takeAvailableStock, addStock, StockError } from '../services/stock.js';
+import { resolveBranchId, BranchError } from '../services/branches.js';
 
 const router = express.Router();
 
@@ -14,9 +17,16 @@ const router = express.Router();
  */
 router.get('/', async (req, res) => {
   try {
-    const { productCode, type, period = 'month', startDate, endDate } = req.query;
+    const { productCode, type, period = 'month', startDate, endDate, branchId } = req.query;
 
     const where = {};
+
+    // Filtro por sucursal (sin filtro: todas).
+    if (branchId) {
+      const id = parseInt(branchId, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ error: 'Sucursal no válida.' });
+      where.branchId = id;
+    }
 
     // Filtro por producto
     if (productCode && productCode.trim()) {
@@ -80,6 +90,7 @@ router.get('/', async (req, res) => {
             role: true,
           },
         },
+        branch: { select: { id: true, name: true } },
       },
       orderBy: { id: 'desc' },
     });
@@ -97,6 +108,7 @@ router.get('/', async (req, res) => {
       ref: r.ref,
       user: r.usuario ? r.usuario.name : 'Sistema / General',
       userRole: r.usuario ? r.usuario.role : '',
+      branch: r.branch,
     }));
 
     // Métricas del periodo filtrado
@@ -140,6 +152,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Parámetros inválidos para registrar el movimiento.' });
     }
 
+    const branchId = await resolveBranchId(prisma, req.user, req.body.branchId);
     const result = await prisma.$transaction(async (tx) => {
       const prod = await tx.producto.findUnique({
         where: { id: parseInt(productoId, 10) },
@@ -148,19 +161,16 @@ router.post('/', async (req, res) => {
       const problem = quantityProblem(qtyNum, prod.allowsFractions);
       if (problem) throw new Error(`La cantidad ${problem}.`);
 
-      // Lo reservado por pedidos no se puede sacar manualmente.
-      const available = prod.stock - prod.reserved;
-      if (type === 'SALIDA' && qtyNum > available) {
-        throw new Error(`Stock insuficiente. Disponible: ${available}${prod.reserved > 0 ? ` (${prod.reserved} reservado para pedidos)` : ''}`);
-      }
-
-      const newStock = roundQuantity(type === 'ENTRADA' ? prod.stock + qtyNum : prod.stock - qtyNum);
-
-      // Actualizar stock del producto
-      await tx.producto.update({
-        where: { id: prod.id },
-        data: { stock: newStock },
+      const before = await tx.branchStock.findUnique({
+        where: { branchId_productoId: { branchId, productoId: prod.id } },
+        select: { stock: true },
       });
+      const stockBefore = before?.stock ?? 0;
+
+      // Lo reservado por pedidos no se puede sacar manualmente (takeAvailableStock lo impide).
+      const newStock = type === 'ENTRADA'
+        ? await addStock(tx, prod.id, qtyNum, branchId)
+        : await takeAvailableStock(tx, prod.id, qtyNum, branchId);
 
       // Crear registro en Kardex
       const km = await tx.movimientoKardex.create({
@@ -171,7 +181,18 @@ router.post('/', async (req, res) => {
           stockAfter: newStock,
           ref: ref ? ref.trim() : 'Movimiento Manual',
           usuarioId: usuarioId ? parseInt(usuarioId, 10) : null,
+          branchId,
         },
+      });
+
+      await recordAudit(tx, {
+        action: 'STOCK_ADJUSTED',
+        entity: 'Producto',
+        entityId: prod.id,
+        summary: `${km.type === 'ENTRADA' ? 'Entrada' : 'Salida'} manual de ${qtyNum} ${prod.unit} de ${prod.code} ${prod.name} `
+          + `(stock ${stockBefore} → ${newStock}): ${km.ref}`,
+        details: { type: km.type, qty: qtyNum, stockBefore, stockAfter: newStock, ref: km.ref, branchId },
+        user: req.user,
       });
 
       return { km, newStock };
@@ -179,6 +200,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(result);
   } catch (error) {
+    if (error instanceof BranchError || error instanceof StockError) return res.status(error.status).json({ error: error.message });
     console.error('[kardex.js] Error al registrar movimiento:', error);
     res.status(400).json({ error: error.message || 'Error al procesar movimiento de Kardex.' });
   }

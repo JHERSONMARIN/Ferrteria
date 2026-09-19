@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
+import SalesReports from '../components/SalesReports.jsx';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -13,6 +14,7 @@ export default function DashboardPage() {
     recentSales: [],
   });
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState('summary');
 
   useEffect(() => {
     loadDashboardStats();
@@ -39,15 +41,32 @@ export default function DashboardPage() {
             Visión estratégica de ingresos en caja, cuentas por cobrar, capital de inventario y rotación comercial.
           </p>
         </div>
-        <button
+        {view === 'summary' && <button
           onClick={loadDashboardStats}
           disabled={loading}
           className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold py-2 px-3 rounded-lg shadow-sm transition-all flex items-center gap-1.5"
         >
           <i className={`fa-solid fa-arrows-rotate ${loading ? 'fa-spin' : ''}`}></i>
           Actualizar
-        </button>
+        </button>}
       </div>
+
+      <div className="flex gap-1 mb-5 border-b border-slate-200" role="tablist">
+        {[['summary', 'Resumen general', 'fa-gauge'], ['reports', 'Reportes por período', 'fa-chart-column']].map(([id, label, icon]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px ${view === id ? 'border-orange-600 text-orange-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            <i className={`fa-solid ${icon} mr-1.5`}></i>{label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'reports' ? <SalesReports /> : <>
 
       {/* Métricas Principales (Finanzas + Inventario) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -225,6 +244,7 @@ export default function DashboardPage() {
           </table>
         </div>
       </div>
+      </>}
     </div>
   );
 }

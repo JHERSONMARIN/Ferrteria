@@ -1,5 +1,6 @@
 import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES, SALE_FLOW_MODES } from '../config/modules.js';
 import { isModuleLicensed } from './license.js';
+import { recordAudit, changedFields } from './audit.js';
 
 export { AVAILABLE_MODULES };
 
@@ -126,7 +127,12 @@ export function validateSettingsInput(input) {
   };
 }
 
-export async function updateSettings(db, input) {
+const AUDITED_FIELDS = [
+  'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email', 'currencySymbol', 'taxRate',
+  'ticketFooter', 'enabledModules', 'saleFlowMode', 'maxDiscountPercent',
+];
+
+export async function updateSettings(db, input, user = null) {
   const data = validateSettingsInput(input);
 
   // Cambiar de modo con pedidos en curso los dejaría sin pantalla donde cobrarlos o despacharlos.
@@ -140,9 +146,22 @@ export async function updateSettings(db, input) {
     }
   }
 
-  return db.businessSettings.upsert({
-    where: { id: SETTINGS_ID },
-    update: data,
-    create: { ...data, id: SETTINGS_ID },
+  return db.$transaction(async (tx) => {
+    const saved = await tx.businessSettings.upsert({
+      where: { id: SETTINGS_ID },
+      update: data,
+      create: { ...data, id: SETTINGS_ID },
+    });
+    const changes = changedFields(current, saved, AUDITED_FIELDS);
+    if (changes) {
+      await recordAudit(tx, {
+        action: 'SETTINGS_CHANGED',
+        entity: 'Configuracion',
+        summary: `Configuración modificada: ${Object.keys(changes).join(', ')}`,
+        details: changes,
+        user,
+      });
+    }
+    return saved;
   });
 }

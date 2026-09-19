@@ -154,7 +154,7 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
       {cajaAbierta === false && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
           <i className="fa-solid fa-lock"></i>
-          <span><strong>Su caja está cerrada.</strong> Ábrala en "Arqueo de Caja" para poder cobrar pedidos.</span>
+          <span><strong>No está en un turno de caja.</strong> Abra una caja o únase a un turno en "Arqueo de Caja" para cobrar pedidos.</span>
         </div>
       )}
 

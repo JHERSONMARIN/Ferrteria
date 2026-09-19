@@ -291,7 +291,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const confirmDirectSale = async (payment) => {
     const caja = await loadEstadoCaja();
     if (!caja) throw new Error('No se pudo verificar el estado de la caja. Revise su conexión e intente nuevamente.');
-    if (!caja.abierta) throw new Error('La caja está cerrada. Abra su turno en "Arqueo de Caja" para poder cobrar.');
+    if (!caja.abierta) throw new Error('No está en un turno de caja. Abra una caja o únase a un turno en "Arqueo de Caja" para poder cobrar.');
 
     let res;
     try {
@@ -636,7 +636,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
           {cajaCerrada && (
             <div className="px-4 py-2.5 bg-red-50 border-b border-red-200 text-xs text-red-700 flex items-center gap-2">
               <i className="fa-solid fa-lock"></i>
-              <span><strong>Caja cerrada.</strong> Abra su turno en "Arqueo de Caja" para poder cobrar.</span>
+              <span><strong>Sin turno de caja.</strong> Abra una caja o únase a un turno en "Arqueo de Caja" para poder cobrar.</span>
             </div>
           )}
 

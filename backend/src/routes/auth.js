@@ -38,6 +38,8 @@ router.post('/login', async (req, res) => {
         modules: true,
         active: true,
         mustChangePassword: true,
+        branchId: true,
+        branch: { select: { id: true, name: true } },
       }
     });
 

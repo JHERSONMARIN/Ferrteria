@@ -1,6 +1,16 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { hashPassword, validateNewPassword, PasswordPolicyError } from '../services/passwords.js';
+import { recordAudit, changedFields } from '../services/audit.js';
+
+// Sucursal asignada: debe existir y estar activa. Sin valor, se usa la del administrador que crea.
+async function parseBranch(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const branchId = parseInt(value, 10);
+  const branch = Number.isNaN(branchId) ? null : await prisma.branch.findUnique({ where: { id: branchId }, select: { active: true } });
+  if (!branch || !branch.active) return null;
+  return branchId;
+}
 
 const router = express.Router();
 
@@ -16,6 +26,8 @@ router.get('/', async (req, res) => {
         modules: true,
         active: true,
         createdAt: true,
+        branchId: true,
+        branch: { select: { id: true, name: true } },
       },
       orderBy: { id: 'desc' }
     });
@@ -40,25 +52,42 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'El nombre de usuario ya existe. Elija otro.' });
     }
 
-    const created = await prisma.usuario.create({
-      data: {
-        name: name.trim(),
-        user: user.trim(),
-        pass: await hashPassword(pass),
-        // La clave la define el administrador: el empleado debe cambiarla al ingresar.
-        mustChangePassword: true,
-        role: role || 'VENDEDOR',
-        modules: modules || ['pos'],
-        active: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        user: true,
-        role: true,
-        modules: true,
-        active: true,
-      }
+    const branchId = await parseBranch(req.body.branchId, req.user.branchId);
+    if (branchId === null) return res.status(400).json({ error: 'La sucursal elegida no existe o está desactivada.' });
+
+    const passwordHash = await hashPassword(pass);
+    const created = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.usuario.create({
+        data: {
+          name: name.trim(),
+          user: user.trim(),
+          pass: passwordHash,
+          // La clave la define el administrador: el empleado debe cambiarla al ingresar.
+          mustChangePassword: true,
+          role: role || 'VENDEDOR',
+          modules: modules || ['pos'],
+          active: true,
+          branchId,
+        },
+        select: {
+          id: true,
+          name: true,
+          user: true,
+          role: true,
+          modules: true,
+          active: true,
+          branchId: true,
+        }
+      });
+      await recordAudit(tx, {
+        action: 'USER_CREATED',
+        entity: 'Usuario',
+        entityId: newUser.id,
+        summary: `Usuario ${newUser.user} (${newUser.name}) creado como ${newUser.role}`,
+        details: { user: newUser.user, role: newUser.role, modules: newUser.modules, branchId: newUser.branchId },
+        user: req.user,
+      });
+      return newUser;
     });
 
     res.status(201).json(created);
@@ -108,6 +137,17 @@ router.put('/:id', async (req, res) => {
       modules: Array.isArray(modules) ? modules : current.modules,
     };
 
+    if (req.body.branchId !== undefined && req.body.branchId !== '') {
+      const branchId = await parseBranch(req.body.branchId, current.branchId);
+      if (branchId === null) return res.status(400).json({ error: 'La sucursal elegida no existe o está desactivada.' });
+      if (branchId !== current.branchId) {
+        // Lo que cobre iría a una caja de la otra sucursal: primero debe salir de su turno.
+        const inShift = await prisma.cashSessionMember.count({ where: { userId: id, leftAt: null, session: { estado: 'ABIERTA' } } });
+        if (inShift > 0) return res.status(409).json({ error: 'Está en un turno de caja abierto: debe cerrarlo o salir antes de cambiar de sucursal.' });
+      }
+      updateData.branchId = branchId;
+    }
+
     if (typeof active === 'boolean') {
       if (id === 1 && !active) {
         return res.status(400).json({ error: 'No se puede desactivar al Administrador principal del sistema.' });
@@ -127,19 +167,36 @@ router.put('/:id', async (req, res) => {
       updateData.mustChangePassword = id !== req.user.id;
     }
 
-    const updated = await prisma.usuario.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        user: true,
-        role: true,
-        modules: true,
-        active: true,
-        createdAt: true,
-        updatedAt: true,
+    const updated = await prisma.$transaction(async (tx) => {
+      const saved = await tx.usuario.update({
+        where: { id },
+        data: updateData,
+        select: {
+          id: true,
+          name: true,
+          user: true,
+          role: true,
+          modules: true,
+          active: true,
+          createdAt: true,
+          updatedAt: true,
+          branchId: true,
+        }
+      });
+      // La contraseña nunca se guarda en la auditoría: solo que se cambió.
+      const changes = changedFields(current, saved, ['name', 'user', 'role', 'modules', 'active', 'branchId']) || {};
+      if (updateData.pass) changes.password = { before: null, after: 'restablecida' };
+      if (Object.keys(changes).length > 0) {
+        await recordAudit(tx, {
+          action: 'USER_UPDATED',
+          entity: 'Usuario',
+          entityId: id,
+          summary: `Usuario ${saved.user}: ${Object.keys(changes).join(', ')}`,
+          details: changes,
+          user: req.user,
+        });
       }
+      return saved;
     });
 
     res.json(updated);
@@ -160,7 +217,21 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ error: 'No se puede eliminar el usuario administrador principal del sistema.' });
     }
 
-    await prisma.usuario.delete({ where: { id } });
+    const target = await prisma.usuario.findUnique({ where: { id }, select: { user: true, name: true, role: true } });
+    if (!target) return res.status(404).json({ error: 'Usuario no encontrado.' });
+
+    await prisma.$transaction(async (tx) => {
+      // La auditoría se escribe antes de borrar: su usuario queda en null pero conserva el nombre.
+      await recordAudit(tx, {
+        action: 'USER_DELETED',
+        entity: 'Usuario',
+        entityId: id,
+        summary: `Usuario ${target.user} (${target.name}) eliminado`,
+        details: target,
+        user: req.user,
+      });
+      await tx.usuario.delete({ where: { id } });
+    });
     res.json({ success: true });
   } catch (error) {
     if (error.code === 'P2003') {

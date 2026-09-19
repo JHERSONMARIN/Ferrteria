@@ -1,6 +1,8 @@
 // Envíos a domicilio. Una entrega nace de una venta cobrada y no mueve stock: el stock ya lo
 // descontó la venta (modo directo / caja) o lo descontará el despacho (modo por etapas).
 
+import { recordAudit } from './audit.js';
+
 export class DeliveryError extends Error {
   constructor(message, status = 400) {
     super(message);
@@ -156,10 +158,21 @@ export async function cancelDelivery(db, id, user, reason) {
     throw new DeliveryError('Esta entrega es anterior al registro de ventas y descontó stock por su cuenta: corríjala desde Kardex.', 409);
   }
   const note = `Envío cancelado por ${user.name}${reason?.trim() ? `: ${reason.trim()}` : ''}`;
-  return transition(db, id, ['PENDIENTE'], {
-    status: 'CANCELADO',
-    notes: [delivery.notes, note].filter(Boolean).join(' · ').slice(0, 300),
-  }, 'Solo se puede cancelar un envío que todavía no salió.');
+  return db.$transaction(async (tx) => {
+    const cancelled = await transition(tx, id, ['PENDIENTE'], {
+      status: 'CANCELADO',
+      notes: [delivery.notes, note].filter(Boolean).join(' · ').slice(0, 300),
+    }, 'Solo se puede cancelar un envío que todavía no salió.');
+    await recordAudit(tx, {
+      action: 'DELIVERY_CANCELLED',
+      entity: 'Entrega',
+      entityId: id,
+      summary: `Envío ${delivery.ref} cancelado${reason?.trim() ? `: ${reason.trim()}` : ''}`,
+      details: { ref: delivery.ref, address: delivery.address, reason: reason?.trim() || null },
+      user,
+    });
+    return cancelled;
+  });
 }
 
 // Envío programado después de la venta (el cliente lo pidió tras pagar).

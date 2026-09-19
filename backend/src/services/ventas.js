@@ -3,6 +3,8 @@ import { takeAvailableStock, StockError } from './stock.js';
 import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, DeliveryError } from './deliveries.js';
+import { recordAudit } from './audit.js';
+import { requireOpenSession, CashError } from './cashRegisters.js';
 
 export class VentaError extends Error {
   constructor(message, status = 400, codigo = null, extra = null) {
@@ -155,6 +157,18 @@ export function applyDiscount(subtotal, request, user, maxPercent) {
   return { discount, total: roundMoney(subtotal - discount) };
 }
 
+export async function auditDiscount(tx, { saleId, reference, subtotal, discount, total, request, user }) {
+  if (discount <= 0) return;
+  await recordAudit(tx, {
+    action: 'DISCOUNT_APPLIED',
+    entity: 'Venta',
+    entityId: saleId,
+    summary: `Descuento de S/ ${discount.toFixed(2)} en ${reference} (de S/ ${subtotal.toFixed(2)} a S/ ${total.toFixed(2)})`,
+    details: { subtotal, discount, total, type: request.type, value: request.value },
+    user,
+  });
+}
+
 export function assertExpectedTotal(totalEsperado, lineas, total) {
   if (totalEsperado === undefined || totalEsperado === null) return;
   if (Math.abs(Number(totalEsperado) - total) > 0.01) {
@@ -199,13 +213,9 @@ export async function validatePayment(tx, { payMethodEnum, mixCash, mixDigital, 
   return { cash, digital };
 }
 
+// Turno de caja en el que está quien cobra (puede ser compartido con otros cajeros).
 export async function findOpenCashRegister(tx, userId) {
-  const caja = await tx.cajaChica.findFirst({
-    where: { usuarioId: userId, estado: 'ABIERTA' },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (!caja) throw new VentaError('No hay una caja abierta para este usuario.');
-  return caja;
+  return { id: await requireOpenSession(tx, userId) };
 }
 
 export async function recordCashIncome(tx, cajaId, { cash, digital }) {
@@ -236,9 +246,9 @@ export async function recordCreditCharge(tx, { clienteId, total, numDoc, lineas 
   });
 }
 
-export async function writeKardexExit(tx, { productId, qty, stockAfter, ref, userId }) {
+export async function writeKardexExit(tx, { productId, qty, stockAfter, ref, userId, branchId }) {
   await tx.movimientoKardex.create({
-    data: { productoId: productId, type: 'SALIDA', qty, stockAfter, ref, usuarioId: userId },
+    data: { productoId: productId, type: 'SALIDA', qty, stockAfter, ref, usuarioId: userId, branchId },
   });
 }
 
@@ -260,7 +270,7 @@ async function ejecutarVenta(tx, datos) {
 
   const payment = await validatePayment(tx, { payMethodEnum, mixCash, mixDigital, clienteId, total });
   const cajaAbierta = await findOpenCashRegister(tx, cajaUsuarioId);
-  const numDoc = await nextDocumentNumber(tx, docTypeEnum);
+  const numDoc = await nextDocumentNumber(tx, docTypeEnum, user.branchId);
   const now = new Date();
 
   const venta = await tx.venta.create({
@@ -277,6 +287,9 @@ async function ejecutarVenta(tx, datos) {
       clienteId,
       vendedorId,
       cajaId: cajaAbierta.id,
+      paidById: cajaUsuarioId,
+      // La mercadería sale de la sucursal de quien cobra en el POS.
+      branchId: user.branchId,
       cotizacionId,
       status: 'DISPATCHED',
       paidAt: now,
@@ -286,9 +299,10 @@ async function ejecutarVenta(tx, datos) {
   });
 
   await recordCashIncome(tx, cajaAbierta.id, payment);
+  await auditDiscount(tx, { saleId: venta.id, reference: numDoc, subtotal, discount, total, request: discountRequest, user });
 
   for (const linea of lineas) {
-    const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty);
+    const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty, user.branchId);
     await tx.detalleVenta.create({
       data: { ventaId: venta.id, productoId: linea.id, quantity: linea.qty, unitPrice: linea.price, subtotal: linea.subtotal },
     });
@@ -298,6 +312,7 @@ async function ejecutarVenta(tx, datos) {
       stockAfter,
       ref: cotizacionId ? `Venta ${numDoc} (por cotización)` : `Venta ${numDoc}`,
       userId: vendedorId,
+      branchId: user.branchId,
     });
   }
 
@@ -351,6 +366,9 @@ export function responderErrorVenta(res, error, contexto) {
     return res.status(400).json({ error: error.message });
   }
   if (error instanceof DeliveryError) {
+    return res.status(error.status).json({ error: error.message });
+  }
+  if (error instanceof CashError) {
     return res.status(error.status).json({ error: error.message });
   }
   if (error instanceof StockError) {

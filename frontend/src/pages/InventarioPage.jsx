@@ -7,6 +7,10 @@ import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quan
 
 export default function InventarioPage({ initialCategory = 'Todas', onNavigateToCategories, currentUser }) {
   const [products, setProducts] = useState([]);
+  const [branches, setBranches] = useState([]);
+  // Con una sola sucursal no se muestra nada de sucursales.
+  const multiBranch = branches.length > 1;
+  const branchName = (id) => branches.find(b => b.id === id)?.name ?? `Sucursal ${id}`;
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -40,6 +44,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
   useEffect(() => {
     loadProducts();
     loadCategories();
+    api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
   }, []);
 
   const loadProducts = async () => {
@@ -336,7 +341,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                 <th className="px-4 py-3">Producto</th>
                 <th className="px-4 py-3">Categoría</th>
                 <th className="px-4 py-3 text-center">Unidad</th>
-                <th className="px-4 py-3 text-right">Stock</th>
+                <th className="px-4 py-3 text-right">{multiBranch ? 'Stock (mi sucursal)' : 'Stock'}</th>
                 <th className="px-4 py-3 text-right">Mínimo</th>
                 <th className="px-4 py-3 text-right">Precio</th>
                 <th className="px-4 py-3 text-center">Estado</th>
@@ -369,7 +374,17 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center text-xs text-slate-500">{p.unit}</td>
-                      <td className="px-4 py-3 text-right font-bold text-slate-700">{formatQuantity(p.stock)}</td>
+                      <td className="px-4 py-3 text-right font-bold text-slate-700">
+                        {formatQuantity(p.stock)}
+                        {multiBranch && (
+                          <span
+                            className="block text-[10px] font-normal text-slate-400 cursor-help"
+                            title={(p.branches || []).map(b => `${branchName(b.branchId)}: ${formatQuantity(b.stock)}`).join('\n')}
+                          >
+                            Empresa: {formatQuantity(p.totalStock ?? p.stock)}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right text-xs text-slate-400">{formatQuantity(p.minStock ?? 10)}</td>
                       <td className="px-4 py-3 text-right font-bold text-orange-600">
                         S/ {parseFloat(p.price).toFixed(2)}

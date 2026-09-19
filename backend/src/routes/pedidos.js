@@ -31,7 +31,7 @@ const handle = (action) => async (req, res) => {
 router.get('/', allowModules({ default: ['caja', 'despacho', 'pos'] }), handle(async (req, res) => {
   const status = req.query.status || 'PENDING_PAYMENT';
   if (!LISTABLE_STATUSES.includes(status)) return res.status(400).json({ error: 'Estado no válido.' });
-  res.json(await listOrders(prisma, status));
+  res.json(await listOrders(prisma, status, req.user));
 }));
 
 // GET /api/pedidos/:id

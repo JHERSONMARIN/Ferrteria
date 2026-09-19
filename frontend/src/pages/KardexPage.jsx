@@ -39,6 +39,10 @@ export default function KardexPage({ currentUser }) {
   const [endDate, setEndDate] = useState('');
   const [filterCode, setFilterCode] = useState('');
   const [filterType, setFilterType] = useState('TODOS'); // 'TODOS' | 'ENTRADA' | 'SALIDA'
+  const [filterBranch, setFilterBranch] = useState('');
+  const [branches, setBranches] = useState([]);
+  // Con una sola sucursal no se muestra nada de sucursales.
+  const multiBranch = branches.length > 1;
 
   // Modal Form
   const [showModal, setShowModal] = useState(false);
@@ -51,11 +55,12 @@ export default function KardexPage({ currentUser }) {
 
   useEffect(() => {
     loadProducts();
+    api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
   }, []);
 
   useEffect(() => {
     loadKardex();
-  }, [period, startDate, endDate, filterCode, filterType]);
+  }, [period, startDate, endDate, filterCode, filterType, filterBranch]);
 
   const loadProducts = async () => {
     try {
@@ -79,6 +84,7 @@ export default function KardexPage({ currentUser }) {
 
       if (filterCode) params.append('productCode', filterCode);
       if (filterType !== 'TODOS') params.append('type', filterType);
+      if (filterBranch) params.append('branchId', filterBranch);
 
       const res = await api.get(`/kardex?${params.toString()}`);
       if (res && res.records) {
@@ -364,6 +370,17 @@ export default function KardexPage({ currentUser }) {
                 (Limpiar filtro de producto)
               </button>
             )}
+            {multiBranch && (
+              <select
+                value={filterBranch}
+                onChange={(e) => setFilterBranch(e.target.value)}
+                aria-label="Sucursal"
+                className="border border-slate-200 bg-white p-2 rounded-lg outline-none focus:border-orange-500 text-xs font-medium"
+              >
+                <option value="">Todas las sucursales</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            )}
           </div>
         </div>
 
@@ -432,7 +449,12 @@ export default function KardexPage({ currentUser }) {
                           <span className="text-[10px] text-slate-400 font-medium">({k.userRole})</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-600">{k.ref}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600">
+                        {k.ref}
+                        {multiBranch && k.branch && (
+                          <span className="block text-[10px] text-slate-400"><i className="fa-solid fa-store mr-1"></i>{k.branch.name}</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })

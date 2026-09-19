@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
+import CashRegistersSettings from '../components/CashRegistersSettings.jsx';
+import BranchesSettings from '../components/BranchesSettings.jsx';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../constants/modules.js';
@@ -98,6 +100,8 @@ function Card({ icon, title, description, children }) {
 }
 
 export default function SettingsPage({ onSaved }) {
+  // Al crear o renombrar sucursales se recarga la lista de cajas (muestra su sucursal).
+  const [branchesVersion, setBranchesVersion] = useState(0);
   const [savedSettings, setSavedSettings] = useState(null);
   const [form, setForm] = useState(null);
   const [documentSeries, setDocumentSeries] = useState([]);
@@ -281,6 +285,9 @@ export default function SettingsPage({ onSaved }) {
                       {!s.isActive && <span className="text-[10px] font-bold text-slate-400">INACTIVA</span>}
                     </div>
                     <p className="font-mono font-bold text-slate-800">{s.series}</p>
+                    {new Set(documentSeries.map(x => x.branchId)).size > 1 && s.branch && (
+                      <p className="text-[11px] text-slate-500"><i className="fa-solid fa-store mr-1"></i>{s.branch.name}</p>
+                    )}
                     <p className="text-[11px] text-slate-500">
                       Último emitido: <span className="font-mono">{String(s.lastNumber).padStart(6, '0')}</span>
                     </p>
@@ -301,6 +308,14 @@ export default function SettingsPage({ onSaved }) {
               El administrador no tiene tope. Cada venta guarda el monto descontado y quién lo aplicó.
             </p>
           </div>
+        </Card>
+
+        <Card icon="fa-store" title="Sucursales" description="Sucursales o almacenes con stock propio. Con una sola, el sistema no muestra nada de sucursales. Se guarda al momento.">
+          <BranchesSettings onChanged={() => setBranchesVersion(v => v + 1)} />
+        </Card>
+
+        <Card icon="fa-cash-register" title="Cajas" description="Gavetas físicas. Varios cajeros pueden compartir el turno de una caja. Se guarda al momento.">
+          <CashRegistersSettings key={branchesVersion} />
         </Card>
 
         <Card
