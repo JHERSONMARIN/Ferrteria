@@ -328,8 +328,9 @@ async function ejecutarVenta(tx, datos) {
 // user: quien tiene la sesión; es quien aplica el descuento (el vendedor puede ser otro).
 export async function procesarVenta(prisma, payload, user) {
   const settings = await getSettings(prisma);
-  if (settings.saleFlowMode !== 'DIRECT') {
-    throw new VentaError('La empresa trabaja con pedidos: registre la venta como pedido y cóbrela en caja.', 409, 'MODO_PEDIDOS');
+  // El modo es de la sucursal de quien vende.
+  if (user.branch?.saleFlowMode !== 'DIRECT') {
+    throw new VentaError('Su sucursal trabaja con pedidos: registre la venta como pedido y cóbrela en caja.', 409, 'MODO_PEDIDOS');
   }
 
   const items = normalizarCarrito(payload.cart);

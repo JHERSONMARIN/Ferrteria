@@ -29,7 +29,7 @@ const ORDER_INCLUDE = {
   vendedor: { select: { name: true } },
   detalles: { select: { productoId: true, quantity: true, unitPrice: true, subtotal: true, producto: { select: { name: true, code: true } } } },
   entrega: { select: { ref: true, address: true } },
-  branch: { select: { id: true, name: true } },
+  branch: { select: { id: true, name: true, saleFlowMode: true } },
 };
 
 const linesOf = (order) => order.detalles.map(d => ({
@@ -88,8 +88,8 @@ async function dispatchLines(tx, order, numDoc, userId) {
 
 export async function createOrder(db, payload, user) {
   const settings = await getSettings(db);
-  if (settings.saleFlowMode === 'DIRECT') {
-    throw new VentaError('La empresa trabaja en modo directo: cobre la venta desde el Punto de Venta.', 409, 'MODO_DIRECTO');
+  if (user.branch?.saleFlowMode === 'DIRECT') {
+    throw new VentaError('Su sucursal trabaja en modo directo: cobre la venta desde el Punto de Venta.', 409, 'MODO_DIRECTO');
   }
   const items = normalizarCarrito(payload.cart);
   const cotizacionId = toId(payload.cotizacionId);
@@ -129,7 +129,6 @@ export async function createOrder(db, payload, user) {
 }
 
 export async function payOrder(db, orderId, payload, cashier) {
-  const settings = await getSettings(db);
   const delivery = parseDeliveryRequest(payload.delivery);
 
   return db.$transaction(async (tx) => {
@@ -175,7 +174,7 @@ export async function payOrder(db, orderId, payload, cashier) {
     }
 
     // Con caja separada el cajero entrega en mostrador: el pedido se despacha en el mismo momento.
-    if (settings.saleFlowMode !== 'STAGED') {
+    if (order.branch.saleFlowMode !== 'STAGED') {
       await transition(tx, orderId, 'PAID', { status: 'DISPATCHED', dispatchedAt: now, dispatchedById: cashier.id },
         'El pedido cambió de estado mientras se cobraba.');
       await dispatchLines(tx, order, numDoc, cashier.id);

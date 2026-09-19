@@ -14,7 +14,7 @@ const DOCUMENT_TYPE_LABELS = {
 
 const EDITABLE_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email',
-  'currencySymbol', 'taxRate', 'ticketFooter', 'enabledModules', 'saleFlowMode', 'maxDiscountPercent',
+  'currencySymbol', 'taxRate', 'ticketFooter', 'enabledModules', 'maxDiscountPercent',
 ];
 
 const SALE_FLOW_OPTIONS = [
@@ -56,7 +56,6 @@ const toForm = (settings, licensedModules) => ({
   taxRate: String(settings.taxRate ?? 18),
   ticketFooter: settings.ticketFooter || '',
   enabledModules: (settings.enabledModules || []).filter(m => !licensedModules || licensedModules.includes(m)),
-  saleFlowMode: settings.saleFlowMode || 'DIRECT',
   maxDiscountPercent: String(settings.maxDiscountPercent ?? 0),
 });
 
@@ -99,7 +98,7 @@ function Card({ icon, title, description, children }) {
   );
 }
 
-export default function SettingsPage({ onSaved }) {
+export default function SettingsPage({ currentUser, onSaved }) {
   // Al crear o renombrar sucursales se recarga la lista de cajas (muestra su sucursal).
   const [branchesVersion, setBranchesVersion] = useState(0);
   const [savedSettings, setSavedSettings] = useState(null);
@@ -110,6 +109,14 @@ export default function SettingsPage({ onSaved }) {
   const [loadError, setLoadError] = useState('');
   const [saveMessage, setSaveMessage] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Modo de trabajo: es de cada sucursal y se guarda al momento, aparte del formulario.
+  const [branches, setBranches] = useState([]);
+  const [modeBranchId, setModeBranchId] = useState(currentUser?.branchId ?? null);
+  const [modeMessage, setModeMessage] = useState(null);
+  const [savingMode, setSavingMode] = useState(false);
+
+  const loadBranches = () => api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
+  useEffect(() => { loadBranches(); }, [branchesVersion]);
 
   useEffect(() => {
     loadSettings();
@@ -152,15 +159,33 @@ export default function SettingsPage({ onSaved }) {
     );
   };
 
-  // Al elegir un modo se activan los módulos que necesita (si están contratados).
-  const selectSaleFlow = (option) => {
-    if (option.requires.some(m => !isLicensed(m))) return;
-    setForm(prev => ({
-      ...prev,
-      saleFlowMode: option.id,
-      enabledModules: [...new Set([...prev.enabledModules, ...option.requires])],
-    }));
-    setSaveMessage(null);
+  const modeBranch = branches.find(b => b.id === modeBranchId) || branches[0] || null;
+
+  // Al elegir un modo se activan (y guardan) los módulos que necesita, y se guarda el modo de la sucursal.
+  const selectSaleFlow = async (option) => {
+    if (!modeBranch || option.id === modeBranch.saleFlowMode || option.requires.some(m => !isLicensed(m))) return;
+    const label = branches.length > 1 ? `${modeBranch.name}` : 'la empresa';
+    if (!window.confirm(`¿Cambiar el modo de trabajo de ${label} a "${option.title}"?`)) return;
+    try {
+      setSavingMode(true);
+      setModeMessage(null);
+      const missing = option.requires.filter(m => !savedSettings.enabledModules.includes(m));
+      if (missing.length > 0) {
+        const res = await api.put('/settings', { ...savedSettings, enabledModules: [...savedSettings.enabledModules, ...missing] });
+        setSavedSettings(res.settings);
+        setForm(prev => ({ ...prev, enabledModules: [...new Set([...prev.enabledModules, ...missing])] }));
+        if (onSaved) onSaved(res.settings);
+      }
+      await api.put(`/sucursales/${modeBranch.id}`, { saleFlowMode: option.id });
+      await loadBranches();
+      setModeMessage({ type: 'success', text: `Modo "${option.title}" guardado. Asigne en Personal los módulos a cada empleado.` });
+      // Quien esté en esa sucursal ve sus pantallas nuevas sin volver a entrar.
+      window.dispatchEvent(new Event('refrescar-sesion'));
+    } catch (err) {
+      setModeMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingMode(false);
+    }
   };
 
   const handleSave = async () => {
@@ -321,18 +346,34 @@ export default function SettingsPage({ onSaved }) {
         <Card
           icon="fa-route"
           title="Modo de trabajo"
-          description="Define cómo se reparte una venta entre las personas del negocio."
+          description="Define cómo se reparte una venta entre las personas del negocio. Cada sucursal tiene el suyo. Se guarda al momento."
         >
+          {branches.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <span className="text-xs font-bold text-slate-600">Sucursal:</span>
+              {branches.map(b => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => { setModeBranchId(b.id); setModeMessage(null); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${modeBranch?.id === b.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}
+                >
+                  {b.name}
+                  <span className="ml-1.5 font-normal opacity-75">· {SALE_FLOW_OPTIONS.find(o => o.id === b.saleFlowMode)?.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {SALE_FLOW_OPTIONS.map(option => {
-              const selected = form.saleFlowMode === option.id;
+              const selected = modeBranch?.saleFlowMode === option.id;
               const missing = option.requires.filter(m => !isLicensed(m));
               return (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => selectSaleFlow(option)}
-                  disabled={missing.length > 0}
+                  disabled={missing.length > 0 || savingMode}
                   className={`text-left rounded-xl border p-4 transition-colors flex flex-col gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                     selected ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200 hover:bg-slate-50'
                   }`}
@@ -357,11 +398,9 @@ export default function SettingsPage({ onSaved }) {
               );
             })}
           </div>
-          {form.saleFlowMode !== (savedSettings.saleFlowMode || 'DIRECT') && (
-            <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              <i className="fa-solid fa-circle-info mr-1.5"></i>
-              Asigne en Personal los módulos a cada empleado: Punto de Venta al vendedor, Arqueo de Caja al cajero
-              {form.saleFlowMode === 'STAGED' && ' y Despacho a almacén'}.
+          {modeMessage && (
+            <p className={`mt-3 text-xs rounded-lg px-3 py-2 border ${modeMessage.type === 'error' ? 'text-red-700 bg-red-50 border-red-200' : 'text-emerald-700 bg-emerald-50 border-emerald-200'}`}>
+              {modeMessage.text}
             </p>
           )}
         </Card>
