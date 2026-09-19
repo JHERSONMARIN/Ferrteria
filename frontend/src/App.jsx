@@ -17,6 +17,7 @@ import ComprasPage from './pages/ComprasPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import AuditPage from './pages/AuditPage.jsx';
 import TransfersPage from './pages/TransfersPage.jsx';
+import { dispatchRoleModule } from './constants/dispatch.js';
 import CashierQueuePage from './pages/CashierQueuePage.jsx';
 import DispatchQueuePage from './pages/DispatchQueuePage.jsx';
 import FieldError from './components/FieldError.jsx';
@@ -136,15 +137,22 @@ export default function App() {
     && (!licensedModules || licensedModules.includes('deliveries'))
     && currentUser?.branch?.deliveriesEnabled !== false;
 
-  // Pantallas que dependen del modo de trabajo: "Por cobrar" (con pedidos) y "Por despachar" (por etapas).
+  // "Por despachar" existe por etapas (todo lo cobrado) y, en cualquier modo, para los envíos a domicilio.
+  // La atiende quien la sucursal eligió (vendedor, cajero o almacén), el administrador o quien tenga Despacho.
+  const dispatchNeeded = saleFlowMode === 'STAGED' || deliveriesEnabled;
+  const canDispatchHere = isAdmin || effectiveModules.includes('despacho')
+    || effectiveModules.includes(dispatchRoleModule(currentUser?.branch));
+
+  // Pantallas que dependen del modo de trabajo: "Por cobrar" (con pedidos) y "Por despachar".
   const navigableTabs = useMemo(() => {
-    const tabs = effectiveModules.filter(m => m !== 'despacho' || saleFlowMode === 'STAGED');
+    const tabs = effectiveModules.filter(m => m !== 'despacho');
+    if (dispatchNeeded && canDispatchHere) tabs.push('despacho');
     if (saleFlowMode !== 'DIRECT' && effectiveModules.includes('caja')) tabs.push('cobros');
     // Transferencias: solo con más de una sucursal, para quien maneja inventario o kardex.
     if (branchCount > 1 && (effectiveModules.includes('inventory') || effectiveModules.includes('kardex'))) tabs.push('transfers');
     if (isAdmin) tabs.push('audit', 'settings');
     return tabs;
-  }, [effectiveModules, isAdmin, saleFlowMode, branchCount]);
+  }, [effectiveModules, isAdmin, saleFlowMode, branchCount, dispatchNeeded, canDispatchHere]);
 
   const loadSettings = async () => {
     // Las sucursales solo se muestran si hay más de una; un error aquí no bloquea la aplicación.

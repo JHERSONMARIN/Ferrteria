@@ -1,4 +1,5 @@
 import { SALE_FLOW_MODES } from '../config/modules.js';
+import { DISPATCH_ROLES } from '../config/dispatch.js';
 import { getSettings } from './settings.js';
 import { recordAudit } from './audit.js';
 
@@ -95,6 +96,13 @@ export async function updateBranch(db, id, input, user = null) {
   const data = parseBranchInput(input, { partial: true });
 
   if (input.deliveriesEnabled !== undefined) data.deliveriesEnabled = parseDeliveriesEnabled(input.deliveriesEnabled);
+  if (input.dispatchRole !== undefined) {
+    if (input.dispatchRole !== null && !DISPATCH_ROLES.includes(input.dispatchRole)) throw new BranchError('Responsable de despacho no válido.');
+    if (input.dispatchRole === 'WAREHOUSE' && !(await getSettings(db)).enabledModules.includes('despacho')) {
+      throw new BranchError('Para que despache almacén active primero el módulo Despacho.');
+    }
+    data.dispatchRole = input.dispatchRole;
+  }
 
   if (input.saleFlowMode !== undefined && input.saleFlowMode !== branch.saleFlowMode) {
     data.saleFlowMode = await parseSaleFlowMode(db, input.saleFlowMode);
@@ -134,6 +142,17 @@ export async function updateBranch(db, id, input, user = null) {
           entityId: id,
           summary: `${saved.name}: envíos a domicilio ${saved.deliveriesEnabled ? 'activados' : 'desactivados'}`,
           details: { deliveriesEnabled: { before: branch.deliveriesEnabled, after: saved.deliveriesEnabled } },
+          user,
+        });
+      }
+      if (data.dispatchRole !== undefined && data.dispatchRole !== branch.dispatchRole) {
+        const ROLE_LABELS = { SELLER: 'vendedor', CASHIER: 'cajero', WAREHOUSE: 'almacén' };
+        await recordAudit(tx, {
+          action: 'SETTINGS_CHANGED',
+          entity: 'Sucursal',
+          entityId: id,
+          summary: `${saved.name}: despacha ${ROLE_LABELS[saved.dispatchRole] ?? 'según el modo'}`,
+          details: { dispatchRole: { before: branch.dispatchRole, after: saved.dispatchRole } },
           user,
         });
       }

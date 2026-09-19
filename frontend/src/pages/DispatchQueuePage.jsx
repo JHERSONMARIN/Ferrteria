@@ -11,7 +11,8 @@ function minutesAgo(date) {
   return `hace ${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 
-// Cola de pedidos pagados que esperan ser entregados en almacén (modo por etapas).
+// Cola de ventas cobradas que esperan salir del local: por etapas, todo lo cobrado; en los demás modos,
+// las ventas con envío a domicilio (se entregan al repartidor). La atiende quien la sucursal eligió.
 export default function DispatchQueuePage() {
   const [orders, setOrders] = useState([]);
   const [selectedId, setSelectedId] = useState(null);

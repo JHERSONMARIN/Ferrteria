@@ -1,5 +1,5 @@
 import { nextDocumentNumber, DocumentSeriesError } from './documentSeries.js';
-import { takeAvailableStock, StockError } from './stock.js';
+import { takeAvailableStock, reserveStock, StockError } from './stock.js';
 import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers, DeliveryError } from './deliveries.js';
@@ -291,10 +291,11 @@ async function ejecutarVenta(tx, datos) {
       // La mercadería sale de la sucursal de quien cobra en el POS.
       branchId: user.branchId,
       cotizacionId,
-      status: 'DISPATCHED',
+      // Con envío a domicilio la mercadería sigue en el local: queda por despachar hasta entregarla al repartidor.
+      status: delivery ? 'PAID' : 'DISPATCHED',
       paidAt: now,
-      dispatchedAt: now,
-      dispatchedById: vendedorId,
+      dispatchedAt: delivery ? null : now,
+      dispatchedById: delivery ? null : vendedorId,
     },
   });
 
@@ -302,10 +303,15 @@ async function ejecutarVenta(tx, datos) {
   await auditDiscount(tx, { saleId: venta.id, reference: numDoc, subtotal, discount, total, request: discountRequest, user });
 
   for (const linea of lineas) {
-    const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty, user.branchId);
     await tx.detalleVenta.create({
       data: { ventaId: venta.id, productoId: linea.id, quantity: linea.qty, unitPrice: linea.price, subtotal: linea.subtotal },
     });
+    // Por despachar: se reserva y el kardex registra la salida al despachar.
+    if (delivery) {
+      await reserveStock(tx, linea.id, linea.qty, user.branchId);
+      continue;
+    }
+    const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty, user.branchId);
     await writeKardexExit(tx, {
       productId: linea.id,
       qty: linea.qty,

@@ -3,6 +3,7 @@ import { getSettings } from './settings.js';
 import { reserveStock, consumeReservedStock, releaseReservedStock } from './stock.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers } from './deliveries.js';
 import { roundMoney } from '../utils/quantities.js';
+import { canDispatch } from '../config/dispatch.js';
 import { recordAudit } from './audit.js';
 import {
   VentaError, normalizarCarrito, priceLines, assertExpectedTotal, validatePayment, parseDiscountRequest, applyDiscount, auditDiscount,
@@ -29,7 +30,7 @@ const ORDER_INCLUDE = {
   vendedor: { select: { name: true } },
   detalles: { select: { productoId: true, quantity: true, unitPrice: true, subtotal: true, producto: { select: { name: true, code: true } } } },
   entrega: { select: { ref: true, address: true } },
-  branch: { select: { id: true, name: true, saleFlowMode: true, deliveriesEnabled: true } },
+  branch: { select: { id: true, name: true, saleFlowMode: true, deliveriesEnabled: true, dispatchRole: true } },
 };
 
 const linesOf = (order) => order.detalles.map(d => ({
@@ -175,7 +176,8 @@ export async function payOrder(db, orderId, payload, cashier) {
     }
 
     // Con caja separada el cajero entrega en mostrador: el pedido se despacha en el mismo momento.
-    if (order.branch.saleFlowMode !== 'STAGED') {
+    // Con envío a domicilio queda por despachar hasta entregarlo al repartidor.
+    if (order.branch.saleFlowMode !== 'STAGED' && !delivery) {
       await transition(tx, orderId, 'PAID', { status: 'DISPATCHED', dispatchedAt: now, dispatchedById: cashier.id },
         'El pedido cambió de estado mientras se cobraba.');
       await dispatchLines(tx, order, numDoc, cashier.id);
@@ -190,6 +192,7 @@ export async function dispatchOrder(db, orderId, user) {
     const order = await tx.venta.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE });
     if (!order) throw new VentaError('El pedido no existe.', 404);
     assertSameBranch(order, user);
+    if (!canDispatch(user, order.branch)) throw new VentaError('En esta sucursal despacha otra persona.', 403);
 
     await transition(tx, orderId, 'PAID', { status: 'DISPATCHED', dispatchedAt: new Date(), dispatchedById: user.id },
       order.status === 'PENDING_PAYMENT' ? 'El pedido todavía no fue cobrado.' : 'Este pedido ya fue despachado o anulado.');

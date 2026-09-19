@@ -52,7 +52,8 @@ router.post('/:id/cobrar', allowModules({ default: ['caja'] }), handle(async (re
 }));
 
 // POST /api/pedidos/:id/despachar
-router.post('/:id/despachar', allowModules({ default: ['despacho'] }), handle(async (req, res) => {
+// Quién despacha lo decide la sucursal (config/dispatch.js); aquí solo se exige alguno de esos módulos.
+router.post('/:id/despachar', allowModules({ default: ['despacho', 'pos', 'caja'] }), handle(async (req, res) => {
   const id = parseId(req, res);
   if (id !== null) res.json({ success: true, pedido: await dispatchOrder(prisma, id, req.user) });
 }));
