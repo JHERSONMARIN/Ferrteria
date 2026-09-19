@@ -15,7 +15,10 @@ router.get('/', async (req, res) => {
   try {
     const [settings, documentSeries] = await Promise.all([
       getSettings(prisma),
-      prisma.documentSeries.findMany({ orderBy: [{ documentType: 'asc' }, { series: 'asc' }] }),
+      prisma.documentSeries.findMany({
+        orderBy: [{ branchId: 'asc' }, { documentType: 'asc' }, { series: 'asc' }],
+        include: { branch: { select: { id: true, name: true } } },
+      }),
     ]);
     res.json({ settings, documentSeries, availableModules: AVAILABLE_MODULES, licensedModules: LICENSED_MODULES });
   } catch (error) {

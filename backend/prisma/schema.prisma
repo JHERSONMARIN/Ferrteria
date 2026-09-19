@@ -516,6 +516,11 @@ model DocumentSeries {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
+  // Cada sucursal (establecimiento) emite con sus propias series: T001/B001/F001, T002/B002/F002…
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([branchId, documentType])
   @@map("document_series")
 }
 
@@ -557,6 +562,7 @@ model Branch {
   kardex        MovimientoKardex[]
   transfersOut  StockTransfer[] @relation("TransferOrigin")
   transfersIn   StockTransfer[] @relation("TransferDestination")
+  documentSeries DocumentSeries[]
 
   @@map("branches")
 }

@@ -47,12 +47,19 @@ const PAY_METHOD_LABELS = {
 
 export async function salesReport(db, query) {
   const range = parseRange(query);
+  // Sucursal opcional: sin ella, toda la empresa.
+  let branchId = null;
+  if (query.branchId) {
+    branchId = parseInt(query.branchId, 10);
+    if (Number.isNaN(branchId)) throw new ReportError('Sucursal no válida.');
+  }
+  const inBranch = branchId ? Prisma.sql`AND v."branchId" = ${branchId}` : Prisma.empty;
   // Ventas cobradas dentro del rango; se reutiliza en todas las consultas. Las columnas guardan la hora
   // UTC sin zona y la sesión de PostgreSQL está en hora de Lima: los límites se pasan a UTC de forma
   // explícita para que la comparación no dependa de la zona de la sesión.
   const utc = (date) => Prisma.sql`(${date.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
   const inRange = Prisma.sql`v.status IN ('PAID', 'DISPATCHED')
-    AND COALESCE(v."paidAt", v."createdAt") >= ${utc(range.start)} AND COALESCE(v."paidAt", v."createdAt") < ${utc(range.end)}`;
+    AND COALESCE(v."paidAt", v."createdAt") >= ${utc(range.start)} AND COALESCE(v."paidAt", v."createdAt") < ${utc(range.end)} ${inBranch}`;
   const localDay = Prisma.sql`((COALESCE(v."paidAt", v."createdAt") AT TIME ZONE 'UTC') AT TIME ZONE ${BUSINESS_TIME_ZONE})::date`;
 
   const [summaryRows, payMethods, sellers, cashiers, daily, topProducts, products] = await Promise.all([
@@ -74,7 +81,10 @@ export async function salesReport(db, query) {
         count(DISTINCT d."ventaId")::int AS sales
       FROM detalle_ventas d JOIN ventas v ON v.id = d."ventaId" JOIN productos p ON p.id = d."productoId"
       WHERE ${inRange} GROUP BY p.id ORDER BY amount DESC LIMIT ${TOP_PRODUCTS}`,
-    db.$queryRaw`SELECT p.id, p.code, p.name, p.unit, p.stock::float8 AS stock, p.price::float8 AS price,
+    // Con sucursal, la rotación usa el stock de esa sucursal; sin ella, el total de la empresa.
+    db.$queryRaw`SELECT p.id, p.code, p.name, p.unit, ${branchId
+      ? Prisma.sql`COALESCE((SELECT b.stock FROM branch_stock b WHERE b."productoId" = p.id AND b."branchId" = ${branchId}), 0)::float8`
+      : Prisma.sql`p.stock::float8`} AS stock, p.price::float8 AS price,
         COALESCE(sold.quantity, 0)::float8 AS sold
       FROM productos p
       LEFT JOIN (
@@ -117,6 +127,7 @@ export async function salesReport(db, query) {
 
   return {
     range: { from: range.from, to: range.to, days: range.days },
+    branchId,
     summary: {
       sales: summary.sales,
       revenue: roundMoney(summary.revenue),

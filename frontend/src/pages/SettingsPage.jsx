@@ -285,6 +285,9 @@ export default function SettingsPage({ onSaved }) {
                       {!s.isActive && <span className="text-[10px] font-bold text-slate-400">INACTIVA</span>}
                     </div>
                     <p className="font-mono font-bold text-slate-800">{s.series}</p>
+                    {new Set(documentSeries.map(x => x.branchId)).size > 1 && s.branch && (
+                      <p className="text-[11px] text-slate-500"><i className="fa-solid fa-store mr-1"></i>{s.branch.name}</p>
+                    )}
                     <p className="text-[11px] text-slate-500">
                       Último emitido: <span className="font-mono">{String(s.lastNumber).padStart(6, '0')}</span>
                     </p>

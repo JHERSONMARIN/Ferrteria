@@ -270,7 +270,7 @@ async function ejecutarVenta(tx, datos) {
 
   const payment = await validatePayment(tx, { payMethodEnum, mixCash, mixDigital, clienteId, total });
   const cajaAbierta = await findOpenCashRegister(tx, cajaUsuarioId);
-  const numDoc = await nextDocumentNumber(tx, docTypeEnum);
+  const numDoc = await nextDocumentNumber(tx, docTypeEnum, user.branchId);
   const now = new Date();
 
   const venta = await tx.venta.create({

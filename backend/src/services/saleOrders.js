@@ -150,7 +150,7 @@ export async function payOrder(db, orderId, payload, cashier) {
       payMethodEnum, mixCash: payload.mixCash, mixDigital: payload.mixDigital, clienteId, total: order.total,
     });
     const caja = await findOpenCashRegister(tx, cashier.id);
-    const numDoc = await nextDocumentNumber(tx, docTypeEnum);
+    const numDoc = await nextDocumentNumber(tx, docTypeEnum, order.branchId);
     const now = new Date();
 
     await transition(tx, orderId, 'PENDING_PAYMENT', {

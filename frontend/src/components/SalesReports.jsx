@@ -127,18 +127,25 @@ export default function SalesReports() {
   const [error, setError] = useState('');
   const [productSort, setProductSort] = useState('amount');
   const [rotationView, setRotationView] = useState('low');
+  const [branchId, setBranchId] = useState('');
+  const [branches, setBranches] = useState([]);
+
+  useEffect(() => {
+    api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
+  }, []);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-      setData(await api.get(`/dashboard/reportes?from=${range.from}&to=${range.to}`));
+      const branchParam = branchId ? `&branchId=${branchId}` : '';
+      setData(await api.get(`/dashboard/reportes?from=${range.from}&to=${range.to}${branchParam}`));
     } catch (err) {
       setError(err.message || 'No se pudieron cargar los reportes.');
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [range, branchId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -154,7 +161,8 @@ export default function SalesReports() {
     setRange(prev => ({ ...prev, [key]: value }));
   };
 
-  const suffix = data ? `${data.range.from}_a_${data.range.to}` : '';
+  const branchSuffix = branchId ? `_${(branches.find(b => b.id === Number(branchId))?.name || branchId).replace(/\s+/g, '_')}` : '';
+  const suffix = data ? `${data.range.from}_a_${data.range.to}${branchSuffix}` : '';
   const products = data
     ? [...data.topProducts].sort((a, b) => (productSort === 'amount' ? b.amount - a.amount : b.quantity - a.quantity))
     : [];
@@ -209,6 +217,12 @@ export default function SalesReports() {
         <label className="flex items-center gap-1.5 text-xs text-slate-500">
           Hasta <input type="date" value={range.to} min={range.from} onChange={e => setDay('to', e.target.value)} className={inputClass} />
         </label>
+        {branches.length > 1 && (
+          <select value={branchId} onChange={e => setBranchId(e.target.value)} aria-label="Sucursal" className={inputClass}>
+            <option value="">Toda la empresa</option>
+            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        )}
         {loading && <i className="fa-solid fa-spinner fa-spin text-slate-400"></i>}
       </div>
 
