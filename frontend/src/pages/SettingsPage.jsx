@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
 import CashRegistersSettings from '../components/CashRegistersSettings.jsx';
+import BranchesSettings from '../components/BranchesSettings.jsx';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../constants/modules.js';
@@ -99,6 +100,8 @@ function Card({ icon, title, description, children }) {
 }
 
 export default function SettingsPage({ onSaved }) {
+  // Al crear o renombrar sucursales se recarga la lista de cajas (muestra su sucursal).
+  const [branchesVersion, setBranchesVersion] = useState(0);
   const [savedSettings, setSavedSettings] = useState(null);
   const [form, setForm] = useState(null);
   const [documentSeries, setDocumentSeries] = useState([]);
@@ -304,8 +307,12 @@ export default function SettingsPage({ onSaved }) {
           </div>
         </Card>
 
+        <Card icon="fa-store" title="Sucursales" description="Sucursales o almacenes con stock propio. Con una sola, el sistema no muestra nada de sucursales. Se guarda al momento.">
+          <BranchesSettings onChanged={() => setBranchesVersion(v => v + 1)} />
+        </Card>
+
         <Card icon="fa-cash-register" title="Cajas" description="Gavetas físicas. Varios cajeros pueden compartir el turno de una caja. Se guarda al momento.">
-          <CashRegistersSettings />
+          <CashRegistersSettings key={branchesVersion} />
         </Card>
 
         <Card

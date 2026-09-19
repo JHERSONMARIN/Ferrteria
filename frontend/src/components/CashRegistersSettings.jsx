@@ -4,7 +4,9 @@ import { api } from '../api.js';
 // Cajas físicas de la empresa. Los cambios se guardan al momento (no dependen del botón Guardar).
 export default function CashRegistersSettings() {
   const [registers, setRegisters] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [newName, setNewName] = useState('');
+  const [newBranchId, setNewBranchId] = useState('');
   const [editing, setEditing] = useState(null); // { id, name }
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
@@ -17,7 +19,13 @@ export default function CashRegistersSettings() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
+  }, []);
+
+  // Con una sola sucursal no se muestra nada de sucursales.
+  const multiBranch = branches.length > 1;
 
   const run = async (action, successText) => {
     try {
@@ -39,7 +47,8 @@ export default function CashRegistersSettings() {
     e.preventDefault();
     const name = newName.trim();
     if (!name) return;
-    if (await run(() => api.post('/caja/registros', { name }), `${name} creada.`)) setNewName('');
+    const payload = multiBranch && newBranchId ? { name, branchId: Number(newBranchId) } : { name };
+    if (await run(() => api.post('/caja/registros', payload), `${name} creada.`)) setNewName('');
   };
 
   const saveName = async () => {
@@ -75,6 +84,7 @@ export default function CashRegistersSettings() {
               <>
                 <span className={`flex-1 min-w-0 text-sm font-semibold ${r.active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>
                   <i className="fa-solid fa-cash-register mr-2 text-slate-400"></i>{r.name}
+                  {multiBranch && r.branch && <span className="ml-2 text-[11px] font-normal text-slate-500">· {r.branch.name}</span>}
                 </span>
                 {r.isOpen && <span className="text-[11px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Turno abierto</span>}
                 {!r.active && <span className="text-[11px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Inactiva</span>}
@@ -96,14 +106,25 @@ export default function CashRegistersSettings() {
         ))}
       </ul>
 
-      <form onSubmit={addRegister} className="flex gap-2">
+      <form onSubmit={addRegister} className="flex flex-wrap gap-2">
         <input
           value={newName}
           onChange={e => setNewName(e.target.value)}
           maxLength={40}
           placeholder="Nombre de la nueva caja (ej. Caja 2)"
-          className="flex-1 min-w-0 border border-gray-300 px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-orange-500"
+          className="flex-1 min-w-[12rem] border border-gray-300 px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-orange-500"
         />
+        {multiBranch && (
+          <select
+            value={newBranchId}
+            onChange={e => setNewBranchId(e.target.value)}
+            aria-label="Sucursal de la caja"
+            className="border border-gray-300 px-2 py-2 rounded-lg text-sm bg-white focus:outline-none focus:border-orange-500"
+          >
+            <option value="">Mi sucursal</option>
+            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        )}
         <button type="submit" disabled={busy || !newName.trim()} className="px-3 py-2 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg disabled:opacity-50">
           <i className="fa-solid fa-plus mr-1"></i> Agregar caja
         </button>

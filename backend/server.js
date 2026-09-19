@@ -20,6 +20,8 @@ import auditoriaRoutes from './src/routes/auditoria.js';
 import pedidosRoutes from './src/routes/pedidos.js';
 import { prisma } from './src/db.js';
 import { initializeDocumentSeries } from './src/services/documentSeries.js';
+import { ensureBranchStockRows } from './src/services/stock.js';
+import sucursalesRoutes from './src/routes/sucursales.js';
 import { expireOrders } from './src/services/saleOrders.js';
 import { authenticate, requirePasswordChanged } from './src/middleware/authenticate.js';
 import { allowModules } from './src/middleware/authorize.js';
@@ -64,6 +66,7 @@ const CATALOG_READERS = ['pos', 'cotizaciones', 'inventory', 'categories', 'kard
 
 app.use('/api/settings', allowModules({ GET: 'authenticated', default: 'admin' }), settingsRoutes);
 app.use('/api/auditoria', allowModules({ default: 'admin' }), auditoriaRoutes);
+app.use('/api/sucursales', allowModules({ GET: 'authenticated', default: 'admin' }), sucursalesRoutes);
 app.use('/api/personal', allowModules({ GET: ['personal', 'pos', 'deliveries'], default: ['personal'] }), personalRoutes);
 app.use('/api/clientes', allowModules({
   GET: ['pos', 'caja', 'cotizaciones', 'client-dir', 'customers', 'deliveries'],
@@ -102,6 +105,12 @@ try {
   await initializeDocumentSeries(prisma);
 } catch (error) {
   console.error('❌ No se pudieron inicializar las series de comprobantes:', error);
+}
+
+try {
+  await ensureBranchStockRows(prisma);
+} catch (error) {
+  console.error('❌ No se pudo verificar el stock por sucursal:', error);
 }
 
 // Pedidos sin cobrar que pasaron el cierre del día: se anulan y liberan su stock reservado.

@@ -104,6 +104,11 @@ model Usuario {
   entregasAsignadas Entrega[]      @relation("RepartidorEntregas")
   cajasChicas       CajaChica[]
   cashSessions      CashSessionMember[]
+
+  // Sucursal donde trabaja: sus ventas, pedidos, compras y ajustes mueven el stock de esa sucursal.
+  // 1 = "Principal", creada por la migración 11 (las sucursales no se borran, solo se desactivan).
+  branchId Int    @default(1)
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
   ventasCobradas    Venta[]        @relation("CobradorVentas")
   cotizaciones      Cotizacion[]   @relation("VendedorCotizaciones")
   movimientosKardex MovimientoKardex[] @relation("UsuarioKardex")
@@ -137,6 +142,7 @@ model Producto {
   detallesEntrega    DetalleEntrega[]
   detallesCompra     DetalleCompra[]
   detallesCotizacion DetalleCotizacion[]
+  branchStocks       BranchStock[]
 
   @@map("productos")
 }
@@ -213,6 +219,10 @@ model Venta {
   discountById Int?
   discountBy   Usuario? @relation("DescuentoVentas", fields: [discountById], references: [id], onDelete: SetNull)
 
+  // Sucursal de la que sale la mercadería (la de quien vende o registra el pedido).
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
   // Quién cobró: en una caja compartida varios cajeros cobran en el mismo turno (cajaId).
   paidById Int?
   paidBy   Usuario? @relation("CobradorVentas", fields: [paidById], references: [id], onDelete: SetNull)
@@ -255,6 +265,10 @@ model MovimientoKardex {
 
   usuarioId  Int?
   usuario    Usuario? @relation("UsuarioKardex", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  // stockAfter es el stock de esta sucursal después del movimiento.
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   @@map("movimientos_kardex")
 }
@@ -362,6 +376,10 @@ model CashRegister {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Solo los usuarios de esta sucursal abren o se suman a sus turnos.
+  branchId Int    @default(1)
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
   sessions CajaChica[]
 
   @@map("cash_registers")
@@ -404,6 +422,10 @@ model Compra {
 
   proveedorId Int
   proveedor   Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
+
+  // Sucursal que recibió la mercadería.
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   detalles DetalleCompra[]
 
@@ -514,4 +536,41 @@ model AuditLog {
   @@index([createdAt])
   @@index([action])
   @@map("audit_logs")
+}
+
+// Sucursal o almacén. Una empresa con una sola sucursal no ve nada de esto en pantalla.
+model Branch {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  address   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stocks        BranchStock[]
+  users         Usuario[]
+  cashRegisters CashRegister[]
+  ventas        Venta[]
+  compras       Compra[]
+  kardex        MovimientoKardex[]
+
+  @@map("branches")
+}
+
+// Stock de un producto en una sucursal. productos.stock/reserved son el total de la empresa y se
+// actualizan en la misma operación (services/stock.js): siempre igualan la suma de las sucursales.
+model BranchStock {
+  id       Int     @id @default(autoincrement())
+  stock    Decimal @default(0) @db.Decimal(12, 3)
+  reserved Decimal @default(0) @db.Decimal(12, 3)
+
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, productoId])
+  @@index([productoId])
+  @@map("branch_stock")
 }

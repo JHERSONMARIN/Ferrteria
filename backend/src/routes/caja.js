@@ -64,7 +64,7 @@ router.get('/registros', handle('listar las cajas', async (req, res) => {
 
 router.post('/registros', handle('crear la caja', async (req, res) => {
   requireAdmin(req);
-  res.status(201).json(await createRegister(prisma, req.body));
+  res.status(201).json(await createRegister(prisma, req.body, req.user));
 }));
 
 router.put('/registros/:id', handle('actualizar la caja', async (req, res) => {

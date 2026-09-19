@@ -98,6 +98,7 @@ export default function App() {
     });
   };
   const [settings, setSettings] = useState(null);
+  const [branchCount, setBranchCount] = useState(1);
   const [licensedModules, setLicensedModules] = useState(null);
   const [settingsStatus, setSettingsStatus] = useState('loading');
 
@@ -140,6 +141,8 @@ export default function App() {
   }, [effectiveModules, isAdmin, saleFlowMode]);
 
   const loadSettings = async () => {
+    // Las sucursales solo se muestran si hay más de una; un error aquí no bloquea la aplicación.
+    api.get('/sucursales').then(list => setBranchCount(list.length)).catch(() => setBranchCount(1));
     try {
       const res = await api.get('/settings');
       setSettings(res.settings);
@@ -414,6 +417,7 @@ export default function App() {
             <Header
               pageTitle={pageTitles[activeTab] || 'Punto de Venta'}
               user={currentUser}
+              showBranch={branchCount > 1}
               onResetDemo={demoMode ? handleResetDemo : undefined}
               onToggleSidebar={() => setSidebarOpen(o => !o)}
             />

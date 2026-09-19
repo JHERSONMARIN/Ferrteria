@@ -117,7 +117,7 @@ export async function getCashStatus(db, user) {
   }
 
   const registers = await db.cashRegister.findMany({
-    where: { active: true },
+    where: { active: true, branchId: user.branchId },
     orderBy: { id: 'asc' },
     include: {
       sessions: {
@@ -151,15 +151,16 @@ export async function openSession(db, { cashRegisterId, montoInicial }, user) {
   const amount = parseAmount(montoInicial, 'El monto inicial');
 
   return db.$transaction(async (tx) => {
-    // Con una sola caja activa no hace falta elegirla (compatibilidad con la pantalla anterior).
+    // Con una sola caja activa en la sucursal no hace falta elegirla.
     let registerId = cashRegisterId ? parseInt(cashRegisterId, 10) : null;
     if (!registerId) {
-      const active = await tx.cashRegister.findMany({ where: { active: true }, select: { id: true } });
-      if (active.length !== 1) throw new CashError('Elija la caja que va a abrir.');
+      const active = await tx.cashRegister.findMany({ where: { active: true, branchId: user.branchId }, select: { id: true } });
+      if (active.length !== 1) throw new CashError(active.length === 0 ? 'Su sucursal no tiene cajas activas.' : 'Elija la caja que va a abrir.');
       registerId = active[0].id;
     }
     const register = await tx.cashRegister.findUnique({ where: { id: registerId } });
     if (!register || !register.active) throw new CashError('La caja elegida no existe o está desactivada.', 404);
+    if (register.branchId !== user.branchId) throw new CashError('Esa caja es de otra sucursal.', 403);
 
     if (await findActiveMembership(tx, user.id)) throw new CashError('Ya está en un turno de caja abierto.', 409);
     const open = await tx.cajaChica.findFirst({ where: { cashRegisterId: registerId, estado: 'ABIERTA' }, select: { id: true } });
@@ -180,8 +181,11 @@ export async function openSession(db, { cashRegisterId, montoInicial }, user) {
 
 export async function joinSession(db, sessionId, user) {
   return db.$transaction(async (tx) => {
-    const session = await tx.cajaChica.findUnique({ where: { id: sessionId }, select: { estado: true } });
+    const session = await tx.cajaChica.findUnique({ where: { id: sessionId }, select: { estado: true, cashRegister: { select: { branchId: true } } } });
     if (!session || session.estado !== 'ABIERTA') throw new CashError('El turno no existe o ya se cerró.', 404);
+    if (session.cashRegister && session.cashRegister.branchId !== user.branchId) {
+      throw new CashError('Ese turno es de una caja de otra sucursal.', 403);
+    }
     if (await findActiveMembership(tx, user.id)) throw new CashError('Ya está en un turno de caja abierto.', 409);
     try {
       await tx.cashSessionMember.create({ data: { sessionId, userId: user.id } });
@@ -269,14 +273,28 @@ function parseRegisterName(value) {
 export async function listRegisters(db) {
   const registers = await db.cashRegister.findMany({
     orderBy: { id: 'asc' },
-    include: { sessions: { where: { estado: 'ABIERTA' }, select: { id: true } } },
+    include: {
+      sessions: { where: { estado: 'ABIERTA' }, select: { id: true } },
+      branch: { select: { id: true, name: true } },
+    },
   });
   return registers.map(({ sessions, ...r }) => ({ ...r, isOpen: sessions.length > 0 }));
 }
 
-export async function createRegister(db, input) {
+async function parseRegisterBranch(db, value) {
+  const branchId = parseInt(value, 10);
+  if (Number.isNaN(branchId)) throw new CashError('Sucursal no válida.');
+  const branch = await db.branch.findUnique({ where: { id: branchId }, select: { active: true } });
+  if (!branch || !branch.active) throw new CashError('La sucursal no existe o está desactivada.', 404);
+  return branchId;
+}
+
+export async function createRegister(db, input, user) {
+  const branchId = input.branchId === undefined || input.branchId === null || input.branchId === ''
+    ? user.branchId
+    : await parseRegisterBranch(db, input.branchId);
   try {
-    return await db.cashRegister.create({ data: { name: parseRegisterName(input.name) } });
+    return await db.cashRegister.create({ data: { name: parseRegisterName(input.name), branchId } });
   } catch (error) {
     if (isUniqueViolation(error)) throw new CashError('Ya existe una caja con ese nombre.', 409);
     throw error;
@@ -289,12 +307,18 @@ export async function updateRegister(db, id, input) {
 
   const data = {};
   if (input.name !== undefined) data.name = parseRegisterName(input.name);
+  if (input.branchId !== undefined) {
+    data.branchId = await parseRegisterBranch(db, input.branchId);
+    if (data.branchId !== register.branchId && register.sessions.length > 0) {
+      throw new CashError('No se puede mover de sucursal una caja con un turno abierto.', 409);
+    }
+  }
   if (input.active !== undefined) {
     if (typeof input.active !== 'boolean') throw new CashError('Estado no válido.');
     if (!input.active && register.sessions.length > 0) throw new CashError('No se puede desactivar una caja con un turno abierto.', 409);
     if (!input.active && register.active) {
-      const others = await db.cashRegister.count({ where: { active: true, id: { not: id } } });
-      if (others === 0) throw new CashError('Debe quedar al menos una caja activa.', 409);
+      const others = await db.cashRegister.count({ where: { active: true, id: { not: id }, branchId: register.branchId } });
+      if (others === 0) throw new CashError('Debe quedar al menos una caja activa en la sucursal.', 409);
     }
     data.active = input.active;
   }

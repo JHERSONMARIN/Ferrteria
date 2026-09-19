@@ -1,6 +1,8 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { quantityProblem, roundMoney } from '../utils/quantities.js';
+import { addStock } from '../services/stock.js';
+import { resolveBranchId, BranchError } from '../services/branches.js';
 
 const router = express.Router();
 
@@ -53,6 +55,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Proveedor, número de documento y al menos un producto requeridos.' });
     }
 
+    // La mercadería entra a la sucursal del usuario (o la que indique el administrador).
+    const branchId = await resolveBranchId(prisma, req.user, req.body.branchId);
     const result = await prisma.$transaction(async (tx) => {
       // Cada línea se valida contra su producto: enteros, o hasta 3 decimales si se vende fraccionado.
       const lines = [];
@@ -76,6 +80,7 @@ router.post('/', async (req, res) => {
           proveedorId: parseInt(proveedorId),
           numDoc: numDoc.trim(),
           total: totalCompra,
+          branchId,
         }
       });
 
@@ -91,10 +96,7 @@ router.post('/', async (req, res) => {
         });
 
         // Incrementar Stock en Almacén
-        const updatedProd = await tx.producto.update({
-          where: { id: prodId },
-          data: { stock: { increment: qtyNum } }
-        });
+        const stockAfter = await addStock(tx, prodId, qtyNum, branchId);
 
         // Registrar ENTRADA en Kardex
         await tx.movimientoKardex.create({
@@ -102,8 +104,10 @@ router.post('/', async (req, res) => {
             productoId: prodId,
             type: 'ENTRADA',
             qty: qtyNum,
-            stockAfter: updatedProd.stock,
+            stockAfter,
             ref: `Compra a Proveedor (Doc: ${numDoc.trim()})`,
+            usuarioId: req.user.id,
+            branchId,
           }
         });
       }
@@ -113,6 +117,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ success: true, compra: result });
   } catch (error) {
+    if (error instanceof BranchError) return res.status(error.status).json({ error: error.message });
     res.status(400).json({ error: error.message || 'Error al registrar compra.' });
   }
 });

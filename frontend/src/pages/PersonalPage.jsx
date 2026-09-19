@@ -17,6 +17,10 @@ export default function PersonalPage({ currentUser }) {
   const [pass, setPass] = useState('');
   const [modules, setModules] = useState(['pos']);
   const [active, setActive] = useState(true);
+  const [branchId, setBranchId] = useState('');
+  const [branches, setBranches] = useState([]);
+  // Con una sola sucursal no se muestra nada de sucursales.
+  const multiBranch = branches.length > 1;
   const [errors, setErrors] = useState({});
 
   const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
@@ -30,6 +34,7 @@ export default function PersonalPage({ currentUser }) {
 
   useEffect(() => {
     loadStaff();
+    api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
   }, []);
 
   const loadStaff = async () => {
@@ -52,6 +57,7 @@ export default function PersonalPage({ currentUser }) {
     setRole('VENDEDOR');
     setModules(['pos']);
     setActive(true);
+    setBranchId('');
     setErrors({});
     setShowModal(true);
   };
@@ -64,6 +70,7 @@ export default function PersonalPage({ currentUser }) {
     setRole(s.role || 'VENDEDOR');
     setModules(Array.isArray(s.modules) ? s.modules : []);
     setActive(s.active !== undefined ? s.active : true);
+    setBranchId(s.branchId ? String(s.branchId) : '');
     setErrors({});
     setShowModal(true);
   };
@@ -135,6 +142,7 @@ export default function PersonalPage({ currentUser }) {
           modules,
           active,
         };
+        if (multiBranch && branchId) payload.branchId = Number(branchId);
         if (pass.trim()) {
           payload.pass = pass.trim();
         }
@@ -149,6 +157,7 @@ export default function PersonalPage({ currentUser }) {
           role,
           modules,
           active: true,
+          ...(multiBranch && branchId ? { branchId: Number(branchId) } : {}),
         });
         alert('Personal registrado exitosamente.');
       }
@@ -234,6 +243,11 @@ export default function PersonalPage({ currentUser }) {
                         <i className="fa-solid fa-at text-[10px]"></i>
                         {s.user}
                       </div>
+                      {multiBranch && s.branch && (
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          <i className="fa-solid fa-store text-[10px] mr-1"></i>{s.branch.name}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${badgeColor}`}>
@@ -407,6 +421,21 @@ export default function PersonalPage({ currentUser }) {
                   <option value="ADMINISTRADOR">Administrador (Control Total)</option>
                 </select>
               </div>
+
+              {multiBranch && (
+                <div>
+                  <label className="text-xs font-bold text-slate-600 mb-1 block">Sucursal</label>
+                  <select
+                    value={branchId}
+                    onChange={e => setBranchId(e.target.value)}
+                    className="w-full border border-gray-300 p-2 rounded-lg outline-none focus:border-orange-500 bg-white text-sm font-medium cursor-pointer"
+                  >
+                    {!editingId && <option value="">La misma que la mía</option>}
+                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                  <p className="text-[11px] text-slate-400 mt-1">Sus ventas, cobros y ajustes de stock se hacen en esta sucursal.</p>
+                </div>
+              )}
 
               {/* Módulos de Acceso */}
               <div className={`p-3.5 rounded-xl border ${errors.modules ? 'border-red-400 bg-red-50/20' : 'border-slate-200 bg-slate-50/70'}`}>

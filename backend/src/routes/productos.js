@@ -2,6 +2,7 @@ import express from 'express';
 import { prisma } from '../db.js';
 import { quantityProblem } from '../utils/quantities.js';
 import { recordAudit, changedFields } from '../services/audit.js';
+import { resolveBranchId, BranchError } from '../services/branches.js';
 
 const router = express.Router();
 
@@ -10,6 +11,22 @@ function parseWholesalePrice(value) {
   if (value === undefined || value === null || value === '') return null;
   const price = Number(value);
   return Number.isFinite(price) && price > 0 ? price : false;
+}
+
+const BRANCH_STOCK_SELECT = { select: { branchId: true, stock: true, reserved: true } };
+
+// stock/reserved son los de la sucursal del usuario (lo que puede vender); totalStock/totalReserved,
+// los de toda la empresa, y branches el detalle por sucursal.
+function withBranchStock({ branchStocks, stock, reserved, ...product }, branchId) {
+  const own = branchStocks.find(b => b.branchId === branchId);
+  return {
+    ...product,
+    stock: own?.stock ?? 0,
+    reserved: own?.reserved ?? 0,
+    totalStock: stock,
+    totalReserved: reserved,
+    branches: branchStocks,
+  };
 }
 
 // GET /api/productos
@@ -29,10 +46,11 @@ router.get('/', async (req, res) => {
         minStock: true,
         price: true,
         category: true,
+        branchStocks: BRANCH_STOCK_SELECT,
       },
       orderBy: { name: 'asc' }
     });
-    res.json(products);
+    res.json(products.map(p => withBranchStock(p, req.user.branchId)));
   } catch (error) {
     res.status(500).json({ error: 'Error al listar productos.' });
   }
@@ -71,6 +89,8 @@ router.post('/', async (req, res) => {
   try {
     const { code, name, unit, stock, price, category, categoriaId, minStock } = req.body;
     const usuarioId = req.user.id;
+    // El stock inicial entra a la sucursal del usuario (o la que indique el administrador).
+    const branchId = await resolveBranchId(prisma, req.user, req.body.branchId);
     if (!code || !name || isNaN(stock) || isNaN(price)) {
       return res.status(400).json({ error: 'Completa todos los campos obligatorios.' });
     }
@@ -121,6 +141,8 @@ router.post('/', async (req, res) => {
         },
       });
 
+      await tx.branchStock.create({ data: { branchId, productoId: p.id, stock: stockNum } });
+
       if (stockNum > 0) {
         await tx.movimientoKardex.create({
           data: {
@@ -130,6 +152,7 @@ router.post('/', async (req, res) => {
             stockAfter: stockNum,
             ref: 'Stock Inicial al Registrar',
             usuarioId: usuarioId ? parseInt(usuarioId, 10) : null,
+            branchId,
           },
         });
       }
@@ -139,6 +162,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(product);
   } catch (error) {
+    if (error instanceof BranchError) return res.status(error.status).json({ error: error.message });
     if (error.code === 'P2002') {
       return res.status(400).json({ error: 'Ya existe un producto registrado con este código.' });
     }
@@ -180,12 +204,13 @@ router.put('/:id', async (req, res) => {
 
     const current = await prisma.producto.findUnique({
       where: { id },
-      select: { code: true, name: true, price: true, wholesalePrice: true, stock: true, reserved: true },
+      select: { code: true, name: true, price: true, wholesalePrice: true, branchStocks: BRANCH_STOCK_SELECT },
     });
     if (!current) return res.status(404).json({ error: 'Producto no encontrado.' });
 
-    // No se puede dejar de vender fraccionado si el stock actual tiene decimales.
-    if (allowsFractions === false && (!Number.isInteger(current.stock) || !Number.isInteger(current.reserved))) {
+    // No se puede dejar de vender fraccionado si el stock de alguna sucursal tiene decimales.
+    const hasDecimals = current.branchStocks.some(b => !Number.isInteger(b.stock) || !Number.isInteger(b.reserved));
+    if (allowsFractions === false && hasDecimals) {
       return res.status(400).json({ error: 'El stock actual tiene decimales: ajústelo en Kardex antes de venderlo solo por unidades.' });
     }
 
@@ -247,11 +272,14 @@ router.get('/barcode/:code', async (req, res) => {
     // 1. Buscar primero en base de datos local
     const local = await prisma.producto.findUnique({
       where: { code: barcode },
-      select: { id: true, code: true, name: true, unit: true, allowsFractions: true, stock: true, reserved: true, price: true, category: true }
+      select: {
+        id: true, code: true, name: true, unit: true, allowsFractions: true, stock: true, reserved: true, price: true, category: true,
+        branchStocks: BRANCH_STOCK_SELECT,
+      },
     });
 
     if (local) {
-      return res.json({ foundInDb: true, product: local });
+      return res.json({ foundInDb: true, product: withBranchStock(local, req.user.branchId) });
     }
 
     // 2. Si no está en DB local, buscar en API pública (OpenFoodFacts)

@@ -246,9 +246,9 @@ export async function recordCreditCharge(tx, { clienteId, total, numDoc, lineas 
   });
 }
 
-export async function writeKardexExit(tx, { productId, qty, stockAfter, ref, userId }) {
+export async function writeKardexExit(tx, { productId, qty, stockAfter, ref, userId, branchId }) {
   await tx.movimientoKardex.create({
-    data: { productoId: productId, type: 'SALIDA', qty, stockAfter, ref, usuarioId: userId },
+    data: { productoId: productId, type: 'SALIDA', qty, stockAfter, ref, usuarioId: userId, branchId },
   });
 }
 
@@ -288,6 +288,8 @@ async function ejecutarVenta(tx, datos) {
       vendedorId,
       cajaId: cajaAbierta.id,
       paidById: cajaUsuarioId,
+      // La mercadería sale de la sucursal de quien cobra en el POS.
+      branchId: user.branchId,
       cotizacionId,
       status: 'DISPATCHED',
       paidAt: now,
@@ -300,7 +302,7 @@ async function ejecutarVenta(tx, datos) {
   await auditDiscount(tx, { saleId: venta.id, reference: numDoc, subtotal, discount, total, request: discountRequest, user });
 
   for (const linea of lineas) {
-    const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty);
+    const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty, user.branchId);
     await tx.detalleVenta.create({
       data: { ventaId: venta.id, productoId: linea.id, quantity: linea.qty, unitPrice: linea.price, subtotal: linea.subtotal },
     });
@@ -310,6 +312,7 @@ async function ejecutarVenta(tx, datos) {
       stockAfter,
       ref: cotizacionId ? `Venta ${numDoc} (por cotización)` : `Venta ${numDoc}`,
       userId: vendedorId,
+      branchId: user.branchId,
     });
   }
 

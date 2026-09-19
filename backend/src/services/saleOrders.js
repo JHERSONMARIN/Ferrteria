@@ -29,6 +29,7 @@ const ORDER_INCLUDE = {
   vendedor: { select: { name: true } },
   detalles: { select: { productoId: true, quantity: true, unitPrice: true, subtotal: true, producto: { select: { name: true, code: true } } } },
   entrega: { select: { ref: true, address: true } },
+  branch: { select: { id: true, name: true } },
 };
 
 const linesOf = (order) => order.detalles.map(d => ({
@@ -55,6 +56,7 @@ export function formatOrder(order) {
     seller: order.vendedor ? order.vendedor.name : 'General',
     items: publicLines(linesOf(order)),
     delivery: order.entrega ? { ref: order.entrega.ref, address: order.entrega.address } : null,
+    branch: order.branch,
   };
 }
 
@@ -68,10 +70,19 @@ async function transition(tx, orderId, fromStatus, data, conflictMessage) {
   }
 }
 
+// El stock del pedido está reservado en su sucursal: solo ahí se cobra y se despacha.
+function assertSameBranch(order, user) {
+  if (order.branchId !== user.branchId) {
+    throw new VentaError(`Este pedido es de la sucursal ${order.branch?.name ?? order.branchId}: se atiende allí.`, 403);
+  }
+}
+
 async function dispatchLines(tx, order, numDoc, userId) {
   for (const line of linesOf(order)) {
-    const stockAfter = await consumeReservedStock(tx, line.id, line.qty);
-    await writeKardexExit(tx, { productId: line.id, qty: line.qty, stockAfter, ref: `Venta ${numDoc} (despacho)`, userId });
+    const stockAfter = await consumeReservedStock(tx, line.id, line.qty, order.branchId);
+    await writeKardexExit(tx, {
+      productId: line.id, qty: line.qty, stockAfter, ref: `Venta ${numDoc} (despacho)`, userId, branchId: order.branchId,
+    });
   }
 }
 
@@ -94,6 +105,7 @@ export async function createOrder(db, payload, user) {
     const order = await tx.venta.create({
       data: {
         status: 'PENDING_PAYMENT',
+        branchId: user.branchId,
         total,
         discount,
         discountById: discount > 0 ? user.id : null,
@@ -106,7 +118,7 @@ export async function createOrder(db, payload, user) {
     await auditDiscount(tx, { saleId: order.id, reference: `el pedido N° ${order.id}`, subtotal, discount, total, request: discountRequest, user });
 
     for (const line of lineas) {
-      await reserveStock(tx, line.id, line.qty);
+      await reserveStock(tx, line.id, line.qty, user.branchId);
       await tx.detalleVenta.create({
         data: { ventaId: order.id, productoId: line.id, quantity: line.qty, unitPrice: line.price, subtotal: line.subtotal },
       });
@@ -124,6 +136,7 @@ export async function payOrder(db, orderId, payload, cashier) {
     const order = await tx.venta.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE });
     if (!order) throw new VentaError('El pedido no existe.', 404);
     if (order.status !== 'PENDING_PAYMENT') throw new VentaError('Este pedido ya fue cobrado o anulado.', 409);
+    assertSameBranch(order, cashier);
     if (order.expiresAt && order.expiresAt < new Date()) {
       throw new VentaError('El pedido venció. Pida al vendedor que lo registre nuevamente.', 409);
     }
@@ -176,6 +189,7 @@ export async function dispatchOrder(db, orderId, user) {
   return db.$transaction(async (tx) => {
     const order = await tx.venta.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE });
     if (!order) throw new VentaError('El pedido no existe.', 404);
+    assertSameBranch(order, user);
 
     await transition(tx, orderId, 'PAID', { status: 'DISPATCHED', dispatchedAt: new Date(), dispatchedById: user.id },
       order.status === 'PENDING_PAYMENT' ? 'El pedido todavía no fue cobrado.' : 'Este pedido ya fue despachado o anulado.');
@@ -190,7 +204,7 @@ async function cancelInTransaction(tx, order, reason, user = null) {
   await transition(tx, order.id, 'PENDING_PAYMENT', { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: reason },
     'Solo se pueden anular pedidos pendientes de cobro.');
   for (const line of linesOf(order)) {
-    await releaseReservedStock(tx, line.id, line.qty);
+    await releaseReservedStock(tx, line.id, line.qty, order.branchId);
   }
   await recordAudit(tx, {
     action: 'SALE_CANCELLED',
@@ -212,6 +226,7 @@ export async function cancelOrder(db, orderId, user, reason) {
     if (!canCancelAny && order.vendedorId !== user.id) {
       throw new VentaError('Solo puede anular sus propios pedidos.', 403);
     }
+    if (user.role !== 'ADMINISTRADOR') assertSameBranch(order, user);
 
     await cancelInTransaction(tx, order, reason?.trim() || `Anulado por ${user.name}`, user);
     return formatOrder(await tx.venta.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE }));
@@ -238,10 +253,11 @@ export async function expireOrders(db) {
   return count;
 }
 
-export async function listOrders(db, status) {
+// Cada usuario ve la cola de su sucursal.
+export async function listOrders(db, status, user) {
   await expireOrders(db);
   const orders = await db.venta.findMany({
-    where: { status },
+    where: { status, branchId: user.branchId },
     include: ORDER_INCLUDE,
     orderBy: { createdAt: 'asc' },
   });
