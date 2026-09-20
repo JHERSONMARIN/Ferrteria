@@ -84,9 +84,10 @@ chmod 600 "$COMPANY_ENV"
 echo "▶ Levantando la instancia $PROJECT (la primera vez construye las imágenes)…"
 docker compose -p "$PROJECT" -f "$COMPANY_COMPOSE" --env-file "$COMPANY_ENV" up -d --build >/dev/null
 
+# Se consulta dentro del propio contenedor: así funciona igual desde el servidor o desde la consola.
 echo -n "▶ Esperando que responda"
 for _ in $(seq 1 90); do
-  if curl -sf "http://127.0.0.1:$WEB_PORT/api/health" >/dev/null; then READY=1; break; fi
+  if docker exec "$PROJECT-backend-1" wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1; then READY=1; break; fi
   echo -n "."; sleep 2
 done
 echo

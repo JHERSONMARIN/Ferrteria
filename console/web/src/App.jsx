@@ -51,7 +51,7 @@ export default function App() {
     return <div className="min-h-screen flex items-center justify-center text-slate-400"><i className="fa-solid fa-spinner fa-spin mr-2"></i>Cargando…</div>;
   }
   if (!user) return <LoginPage onLogin={setUser} />;
-  if (user.mustChangePassword) return <ChangePassword onDone={() => setUser({ ...user, mustChangePassword: false })} />;
+  if (user.mustChangePassword) return <ChangePassword user={user} onLogout={logout} onDone={() => setUser({ ...user, mustChangePassword: false })} />;
 
   const selectedCompany = companies.find(c => c.slug === selected) ?? null;
 

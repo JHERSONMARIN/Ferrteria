@@ -8,6 +8,17 @@ import { DEPLOY_DIR, readPlans, companySlugs, readCompanyEnv } from './companies
 
 const execFileAsync = promisify(execFile);
 
+// Entorno limpio para los scripts: las variables de la consola (su DATABASE_URL, su JWT_SECRET…) no
+// deben llegar a las empresas. Docker Compose da prioridad al entorno por encima del --env-file, así que
+// una variable heredada sobrescribiría la configuración de la empresa.
+const SCRIPT_ENV = {
+  PATH: process.env.PATH,
+  HOME: process.env.HOME || '/root',
+  TZ: process.env.TZ || 'America/Lima',
+  ...(process.env.DOCKER_HOST ? { DOCKER_HOST: process.env.DOCKER_HOST } : {}),
+  ...(process.env.DOCKER_CONFIG ? { DOCKER_CONFIG: process.env.DOCKER_CONFIG } : {}),
+};
+
 // Crear una empresa construye imágenes: puede tardar varios minutos.
 const TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_OUTPUT = 20000;
@@ -45,7 +56,7 @@ async function record({ action, slug, summary, details, ok, user }) {
 async function run({ script, args, action, slug, summary, user }) {
   const command = join(DEPLOY_DIR, script);
   try {
-    const { stdout, stderr } = await execFileAsync(command, args, { timeout: TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024 });
+    const { stdout, stderr } = await execFileAsync(command, args, { timeout: TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024, env: SCRIPT_ENV });
     const output = `${stdout}${stderr}`.slice(-MAX_OUTPUT);
     await record({ action, slug, summary, details: { args, output }, ok: true, user });
     return output;
@@ -137,7 +148,7 @@ async function compose({ slug, args, action, summary, user }) {
     ...args,
   ];
   try {
-    const { stdout, stderr } = await execFileAsync('docker', composeArgs, { timeout: TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024 });
+    const { stdout, stderr } = await execFileAsync('docker', composeArgs, { timeout: TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024, env: SCRIPT_ENV });
     const output = `${stdout}${stderr}`.slice(-MAX_OUTPUT);
     await record({ action, slug, summary, details: { args, output }, ok: true, user });
     return output;

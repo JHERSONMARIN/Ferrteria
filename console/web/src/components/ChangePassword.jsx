@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../api.js';
 
 // La primera clave es temporal: hay que cambiarla antes de usar la consola.
-export default function ChangePassword({ onDone }) {
+export default function ChangePassword({ user, onDone, onLogout }) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
@@ -29,7 +29,10 @@ export default function ChangePassword({ onDone }) {
     <div className="min-h-screen flex items-center justify-center p-4 bg-slate-900">
       <form onSubmit={submit} className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm flex flex-col gap-3">
         <h1 className="text-lg font-black text-slate-800">Cambie su contraseña</h1>
-        <p className="text-xs text-slate-500">Su clave actual es temporal.</p>
+        <p className="text-xs text-slate-500">
+          La clave de <strong>{user?.user}</strong> es temporal.
+          {onLogout && <> ¿No es su usuario? <button type="button" onClick={onLogout} className="text-orange-700 font-semibold hover:underline">Salir y entrar con otro</button>.</>}
+        </p>
         <input type="password" value={current} onChange={e => setCurrent(e.target.value)} placeholder="Contraseña actual" className={input} autoFocus />
         <input type="password" value={next} onChange={e => setNext(e.target.value)} placeholder="Nueva contraseña (mínimo 8)" className={input} />
         <input type="password" value={repeat} onChange={e => setRepeat(e.target.value)} placeholder="Repita la nueva" className={input} />
