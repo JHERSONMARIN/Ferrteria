@@ -592,17 +592,12 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
                     enabled
                       ? 'border-orange-300 bg-orange-50'
                       : 'border-slate-200 bg-white hover:bg-slate-50'
-                  } ${locked ? 'cursor-not-allowed' : ''} ${notLicensed ? 'opacity-60' : ''}`}
+                  } ${locked ? 'cursor-not-allowed' : ''}`}
                 >
                   <i className={`fa-solid ${mod.icon} w-5 text-center ${enabled ? 'text-orange-600' : 'text-slate-400'}`}></i>
                   <span className={`flex-1 text-sm font-semibold ${enabled ? 'text-slate-800' : 'text-slate-500'}`}>
                     {mod.label}
                     {alwaysOn && <span className="block text-[10px] font-normal text-slate-400">Siempre activo</span>}
-                    {notLicensed && (
-                      <span className="block text-[10px] font-normal text-slate-400">
-                        <i className="fa-solid fa-lock mr-1"></i>No incluido en su plan
-                      </span>
-                    )}
                   </span>
                   <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${enabled ? 'bg-orange-500' : 'bg-slate-300'}`}>
                     <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${enabled ? 'left-[18px]' : 'left-0.5'}`}></span>
