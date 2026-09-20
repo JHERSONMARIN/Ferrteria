@@ -40,15 +40,18 @@ export async function userFromToken(token) {
   return publicUser;
 }
 
+// Devuelve la sesión nueva: al cambiar la contraseña, la anterior deja de valer.
 export async function changePassword(userId, currentPassword, newPassword) {
   const account = await prisma.consoleUser.findUnique({ where: { id: userId } });
-  if (!account || !(await verifyPassword(String(currentPassword ?? ''), account.pass))) return false;
+  if (!account || !(await verifyPassword(String(currentPassword ?? ''), account.pass))) return null;
   validateNewPassword(newPassword);
-  await prisma.consoleUser.update({
+  if (newPassword === currentPassword) throw new PasswordPolicyError('La nueva contraseña debe ser distinta de la actual.');
+  const updated = await prisma.consoleUser.update({
     where: { id: userId },
     data: { pass: await hashPassword(newPassword), mustChangePassword: false },
   });
-  return true;
+  const { pass: _, ...publicUser } = updated;
+  return { user: publicUser, token: createSessionToken(updated) };
 }
 
 export const sessionCookie = (token) =>

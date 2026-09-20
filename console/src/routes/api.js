@@ -9,9 +9,9 @@ import { login, userFromToken, changePassword, sessionCookie, clearedCookie, rea
 
 const router = express.Router();
 
-const handle = (context, fn) => async (req, res) => {
+const handle = (context, fn) => async (req, res, next) => {
   try {
-    await fn(req, res);
+    await fn(req, res, next);
   } catch (error) {
     if (error instanceof CommandError) return res.status(error.status).json({ error: error.message, salida: error.output });
     if (error instanceof PasswordPolicyError) return res.status(400).json({ error: error.message });
@@ -48,9 +48,11 @@ router.use(handle('validar la sesión', async (req, res, next) => {
 router.get('/auth/me', (req, res) => res.json({ user: req.user }));
 
 router.post('/auth/change-password', handle('cambiar la contraseña', async (req, res) => {
-  const changed = await changePassword(req.user.id, req.body?.currentPassword, req.body?.newPassword);
-  if (!changed) return res.status(400).json({ error: 'La contraseña actual no es correcta.' });
-  res.json({ success: true });
+  const result = await changePassword(req.user.id, req.body?.currentPassword, req.body?.newPassword);
+  if (!result) return res.status(400).json({ error: 'La contraseña actual no es correcta.' });
+  // La huella de la contraseña cambió: se entrega una sesión nueva y las demás quedan inválidas.
+  res.setHeader('Set-Cookie', sessionCookie(result.token));
+  res.json({ success: true, user: result.user });
 }));
 
 // ---------- Planes ----------
