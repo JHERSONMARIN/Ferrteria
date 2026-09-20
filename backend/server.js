@@ -67,9 +67,19 @@ if (QUICK_LOGIN_USERS.length > 0) {
   console.warn(`[login] ${QUICK_LOGIN_USERS.length} acceso(s) rápido(s) de prueba visibles en la pantalla de inicio (QUICK_LOGIN). No usar en producción.`);
 }
 
-// Información pública para la pantalla de inicio de sesión
-app.get('/api/app-info', (req, res) => {
-  res.json({ demoMode: process.env.DEMO_MODE === 'true', quickLogin: QUICK_LOGIN_USERS });
+// Información pública para la pantalla de inicio de sesión (nombre y logo de la empresa).
+app.get('/api/app-info', async (req, res) => {
+  let business = { name: process.env.COMPANY_NAME || null, logo: null };
+  try {
+    const settings = await prisma.businessSettings.findUnique({
+      where: { id: 1 },
+      select: { legalName: true, tradeName: true, logo: true },
+    });
+    if (settings) business = { name: settings.tradeName || settings.legalName, logo: settings.logo };
+  } catch (error) {
+    console.error('[app-info] No se pudieron leer los datos de la empresa:', error);
+  }
+  res.json({ demoMode: process.env.DEMO_MODE === 'true', quickLogin: QUICK_LOGIN_USERS, business });
 });
 
 app.get('/api/health', (req, res) => {

@@ -499,6 +499,8 @@ model BusinessSettings {
   currencySymbol String   @default("S/")
   taxRate        Float    @default(18)
   ticketFooter   String?
+  // Logo de la empresa, guardado como data URL (se muestra en el inicio de sesión, el menú y el ticket).
+  logo           String?  @db.Text
   enabledModules Json
   // Descuento máximo (%) que puede aplicar quien no es administrador; 0 = no puede descontar.
   maxDiscountPercent Decimal @default(0) @db.Decimal(5, 2)

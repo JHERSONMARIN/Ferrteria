@@ -1,7 +1,7 @@
 import React from 'react';
 import { roleLabel } from '../constants/roles.js';
 
-export default function Sidebar({ activeTab, onSwitchTab, user, modules, businessName, open, onClose, onLogout, onChangePassword }) {
+export default function Sidebar({ activeTab, onSwitchTab, user, modules, businessName, businessLogo, open, onClose, onLogout, onChangePassword }) {
   const allowedModules = modules || [];
 
   const handleSwitchTab = (tabId) => {
@@ -52,15 +52,17 @@ export default function Sidebar({ activeTab, onSwitchTab, user, modules, busines
         } lg:translate-x-0`}
       >
       <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950 shrink-0">
-        <div className="flex items-center min-w-0">
-          <i className="fa-solid fa-screwdriver-wrench text-orange-500 text-xl mr-3 shrink-0"></i>
+        <div className="flex items-center min-w-0 gap-3">
+          {businessLogo
+            ? <img src={businessLogo} alt="" className="w-9 h-9 rounded-lg object-contain bg-white/90 p-0.5 shrink-0" />
+            : <i className="fa-solid fa-screwdriver-wrench text-orange-500 text-xl shrink-0"></i>}
           <div className="min-w-0">
-            <span className="block font-bold text-lg tracking-wide truncate leading-tight">
-              FerreSys <span className="text-xs text-orange-500 align-top">v4.8</span>
+            <span className="block font-bold text-base tracking-wide truncate leading-tight">
+              {businessName || 'FerreSys'}
             </span>
-            {businessName && (
-              <span className="block text-[11px] text-slate-400 truncate">{businessName}</span>
-            )}
+            <span className="block text-[11px] text-slate-400 truncate">
+              {businessName ? 'FerreSys v4.8' : 'v4.8'}
+            </span>
           </div>
         </div>
         <button

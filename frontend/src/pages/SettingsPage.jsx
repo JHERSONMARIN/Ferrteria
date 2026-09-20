@@ -16,7 +16,7 @@ const DOCUMENT_TYPE_LABELS = {
 
 const EDITABLE_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email',
-  'currencySymbol', 'taxRate', 'ticketFooter', 'enabledModules', 'maxDiscountPercent',
+  'currencySymbol', 'taxRate', 'ticketFooter', 'logo', 'enabledModules', 'maxDiscountPercent',
 ];
 
 const SALE_FLOW_OPTIONS = [
@@ -57,6 +57,7 @@ const toForm = (settings, licensedModules) => ({
   currencySymbol: settings.currencySymbol || 'S/',
   taxRate: String(settings.taxRate ?? 18),
   ticketFooter: settings.ticketFooter || '',
+  logo: settings.logo || null,
   enabledModules: (settings.enabledModules || []).filter(m => !licensedModules || licensedModules.includes(m)),
   maxDiscountPercent: String(settings.maxDiscountPercent ?? 0),
 });
@@ -145,15 +146,62 @@ function MiPlan({ license, licensedModules, licensedFeatures, enabledModules }) 
 
 function Card({ icon, title, description, children }) {
   return (
-    <section className="bg-white rounded-xl border border-gray-200 shadow-sm">
-      <div className="px-5 py-4 border-b border-gray-100">
-        <h3 className="font-bold text-slate-800 flex items-center gap-2">
-          <i className={`fa-solid ${icon} text-orange-500`}></i> {title}
-        </h3>
-        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+    <section className="bg-white rounded-2xl border border-slate-200/80">
+      <div className="px-6 pt-5 pb-4 flex items-start gap-3">
+        <span className="w-9 h-9 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+          <i className={`fa-solid ${icon} text-sm`}></i>
+        </span>
+        <div className="min-w-0">
+          <h3 className="font-semibold text-slate-900">{title}</h3>
+          {description && <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</p>}
+        </div>
       </div>
-      <div className="p-5">{children}</div>
+      <div className="px-6 pb-6">{children}</div>
     </section>
+  );
+}
+
+// Logo de la empresa: se guarda con el resto de la configuración y se ve en el inicio y en el menú.
+function LogoField({ logo, onChange }) {
+  const [mensaje, setMensaje] = useState('');
+
+  const elegir = (file) => {
+    if (!file) return;
+    if (!/^image\/(png|jpeg|jpg|webp|svg\+xml)$/.test(file.type)) return setMensaje('Use una imagen PNG, JPG, WEBP o SVG.');
+    if (file.size > 280 * 1024) return setMensaje('La imagen no puede superar 280 KB.');
+    const reader = new FileReader();
+    reader.onload = () => { setMensaje(''); onChange(reader.result); };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <div className="w-24 h-24 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+        {logo
+          ? <img src={logo} alt="Logo de la empresa" className="max-w-full max-h-full object-contain" />
+          : <i className="fa-solid fa-image text-2xl text-slate-300"></i>}
+      </div>
+      <div className="flex-1 min-w-[12rem]">
+        <div className="flex flex-wrap gap-2">
+          <label className="px-3 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 cursor-pointer">
+            <i className="fa-solid fa-upload mr-1.5 text-slate-400"></i>
+            {logo ? 'Cambiar logo' : 'Subir logo'}
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden"
+              onChange={e => elegir(e.target.files?.[0])} />
+          </label>
+          {logo && (
+            <button type="button" onClick={() => { setMensaje(''); onChange(null); }}
+              className="px-3 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:text-red-600">
+              Quitar
+            </button>
+          )}
+        </div>
+        <p className="text-[11px] text-slate-400 mt-1.5">
+          PNG, JPG, WEBP o SVG, hasta 280 KB. Se muestra en el inicio de sesión y en el menú lateral.
+        </p>
+        {mensaje && <p className="text-[11px] text-red-600 mt-1">{mensaje}</p>}
+      </div>
+    </div>
   );
 }
 
@@ -219,6 +267,8 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
   };
 
   const modeBranch = branches.find(b => b.id === modeBranchId) || branches[0] || null;
+  // Envíos a domicilio: hacen falta la función del plan y el módulo Entregas contratado.
+  const deliveriesAvailable = hasFeature('deliveries') && isLicensed('deliveries');
 
   const chooseDispatchRole = async (roleId) => {
     if (!modeBranch || roleId === effectiveDispatchRole(modeBranch)) return;
@@ -348,14 +398,22 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
           />
         </Card>
 
-        <Card icon="fa-building" title="Datos de la empresa" description="Se imprimen en la cabecera de tickets y comprobantes.">
+        <Card icon="fa-palette" title="Identidad" description="El nombre y el logo con los que sus empleados ven el sistema.">
+          <div className="flex flex-col gap-4">
+            <LogoField logo={form.logo} onChange={value => setField('logo', value)} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Nombre comercial" error={errors.tradeName} hint="Es el que se muestra en el sistema.">
+                {input('tradeName', { maxLength: 100, placeholder: 'Ferretería Los Andes' })}
+              </Field>
+              <Field label="Razón social" error={errors.legalName} hint="Para los comprobantes.">
+                {input('legalName', { maxLength: 150 })}
+              </Field>
+            </div>
+          </div>
+        </Card>
+
+        <Card icon="fa-building" title="Datos de la empresa" description="RUC, dirección y contacto: se imprimen en los comprobantes.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Razón social *" error={errors.legalName}>
-              {input('legalName', { maxLength: 150, placeholder: 'Ej. Ferretería El Tornillo S.A.C.' })}
-            </Field>
-            <Field label="Nombre comercial" error={errors.tradeName} hint="Si se completa, es el nombre destacado en el ticket.">
-              {input('tradeName', { maxLength: 100, placeholder: 'Ej. El Tornillo' })}
-            </Field>
             <Field label="RUC" error={errors.taxId}>
               {input('taxId', {
                 maxLength: 11,
@@ -507,7 +565,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
               );
             })}
           </div>
-          {modeBranch && (
+          {modeBranch && deliveriesAvailable && (
             <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${savedSettings.enabledModules.includes('deliveries') ? 'border-slate-200 cursor-pointer hover:bg-slate-50' : 'border-slate-200 opacity-60'}`}>
               <input
                 type="checkbox"
@@ -529,7 +587,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
               </span>
             </label>
           )}
-          {modeBranch && (modeBranch.saleFlowMode === 'STAGED' || modeBranch.deliveriesEnabled) && (
+          {modeBranch && (modeBranch.saleFlowMode === 'STAGED' || (deliveriesAvailable && modeBranch.deliveriesEnabled)) && (
             <div className="mt-4 rounded-xl border border-slate-200 p-4">
               <p className="font-bold text-slate-800 text-sm">
                 <i className="fa-solid fa-dolly mr-1.5 text-slate-400"></i>

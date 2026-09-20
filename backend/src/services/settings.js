@@ -58,6 +58,23 @@ function normalizeModules(modules) {
   return AVAILABLE_MODULES.filter(m => enabled.has(m));
 }
 
+// Logo: data URL de imagen, hasta 300 KB. Vacío o null lo quita.
+const MAX_LOGO_BYTES = 300 * 1024;
+const LOGO_PATTERN = /^data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+
+function parseLogo(value) {
+  if (value === undefined) return undefined; // no se toca
+  if (value === null || value === '') return null;
+  const logo = String(value).trim();
+  if (!LOGO_PATTERN.test(logo)) {
+    throw new SettingsValidationError('El logo debe ser una imagen PNG, JPG, WEBP o SVG.');
+  }
+  if (Buffer.byteLength(logo, 'utf8') > MAX_LOGO_BYTES) {
+    throw new SettingsValidationError('El logo no puede superar 300 KB. Use una imagen más liviana.');
+  }
+  return logo;
+}
+
 export function validateSettingsInput(input) {
   const legalName = String(input?.legalName ?? '').trim();
   if (legalName.length < 2 || legalName.length > 150) {
@@ -107,6 +124,7 @@ export function validateSettingsInput(input) {
     currencySymbol,
     taxRate,
     ticketFooter: optionalText(input.ticketFooter, 300, 'El pie del ticket'),
+    logo: parseLogo(input.logo),
     enabledModules,
     maxDiscountPercent,
   };
@@ -116,6 +134,9 @@ const AUDITED_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email', 'currencySymbol', 'taxRate',
   'ticketFooter', 'enabledModules', 'maxDiscountPercent',
 ];
+
+// El logo se audita por su cambio, no por su contenido (es una imagen larga).
+const LOGO_FIELD = 'logo';
 
 export async function updateSettings(db, input, user = null) {
   const data = validateSettingsInput(input);
@@ -137,8 +158,11 @@ export async function updateSettings(db, input, user = null) {
       update: data,
       create: { ...data, id: SETTINGS_ID },
     });
-    const changes = changedFields(current, saved, AUDITED_FIELDS);
-    if (changes) {
+    const changes = changedFields(current, saved, AUDITED_FIELDS) ?? {};
+    if (current[LOGO_FIELD] !== saved[LOGO_FIELD]) {
+      changes[LOGO_FIELD] = { before: current.logo ? 'imagen anterior' : null, after: saved.logo ? 'imagen nueva' : null };
+    }
+    if (Object.keys(changes).length > 0) {
       await recordAudit(tx, {
         action: 'SETTINGS_CHANGED',
         entity: 'Configuracion',

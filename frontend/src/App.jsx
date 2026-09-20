@@ -83,6 +83,8 @@ export default function App() {
   const [demoMode, setDemoMode] = useState(false);
   // Accesos rápidos de prueba definidos en el .env de la empresa (QUICK_LOGIN).
   const [quickUsers, setQuickUsers] = useState([]);
+  // Marca de la empresa en la pantalla de inicio (viene sin sesión iniciada).
+  const [loginBrand, setLoginBrand] = useState(null);
   const [loginError, setLoginError] = useState('');
   const [loginFieldErrors, setLoginFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -112,7 +114,7 @@ export default function App() {
   // Los usuarios de prueba solo se ofrecen en la instancia de demostración.
   useEffect(() => {
     api.get('/app-info')
-      .then(info => { setDemoMode(Boolean(info?.demoMode)); setQuickUsers(info?.quickLogin || []); })
+      .then(info => { setDemoMode(Boolean(info?.demoMode)); setQuickUsers(info?.quickLogin || []); setLoginBrand(info?.business || null); })
       .catch(() => setDemoMode(false));
   }, []);
 
@@ -340,9 +342,11 @@ export default function App() {
         <div id="login-screen" className="fixed inset-0 bg-slate-900 z-[100] flex items-center justify-center p-4 transition-all overflow-y-auto">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col my-auto border border-slate-700/50">
             <div className="p-5 bg-slate-950 text-white text-center border-b border-orange-500">
-              <i className="fa-solid fa-screwdriver-wrench text-orange-500 text-3xl mb-2"></i>
+              {loginBrand?.logo
+                ? <img src={loginBrand.logo} alt="" className="h-14 mx-auto mb-2 object-contain" />
+                : <i className="fa-solid fa-screwdriver-wrench text-orange-500 text-3xl mb-2"></i>}
               <h2 className="text-xl font-bold tracking-wide">
-                FerreSys <span className="text-xs text-orange-500 align-top">v4.8</span>
+                {loginBrand?.name || <>FerreSys <span className="text-xs text-orange-500 align-top">v4.8</span></>}
               </h2>
               <p className="text-slate-400 text-xs mt-0.5">Inicio de Sesión</p>
             </div>
@@ -443,6 +447,7 @@ export default function App() {
             user={currentUser}
             modules={navigableTabs}
             businessName={settings?.tradeName || settings?.legalName}
+            businessLogo={settings?.logo || null}
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             onLogout={handleLogout}
