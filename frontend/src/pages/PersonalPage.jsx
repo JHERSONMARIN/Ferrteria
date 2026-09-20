@@ -4,7 +4,7 @@ import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS as moduleOptions } from '../constants/modules.js';
 import { effectiveDispatchRole } from '../constants/dispatch.js';
-import { ROLE_OPTIONS, roleLabel, presetModules, describeDuties } from '../constants/roles.js';
+import { ROLE_OPTIONS, rolesForModules, roleLabel, presetModules, describeDuties } from '../constants/roles.js';
 
 export default function PersonalPage({ currentUser }) {
   const [staff, setStaff] = useState([]);
@@ -31,7 +31,11 @@ export default function PersonalPage({ currentUser }) {
   const dispatchUnused = formBranch && dispatchRole !== 'WAREHOUSE';
   // Módulo Entregas de la empresa: sin él no hay envíos a domicilio en ninguna sucursal.
   const [companyDeliveries, setCompanyDeliveries] = useState(true);
-  const allModules = moduleOptions.map(m => m.value);
+  // Módulos que la empresa puede usar: contratados en su plan y activos en su configuración.
+  const [availableModules, setAvailableModules] = useState(moduleOptions.map(m => m.value));
+  const isAvailable = (moduleId) => availableModules.includes(moduleId);
+  // Cargos que tienen sentido con esos módulos (sin envíos no se ofrece Repartidor, por ejemplo).
+  const roleOptions = rolesForModules(availableModules);
   const ownBranch = () => branches.find(b => b.id === currentUser?.branchId) || null;
   const [errors, setErrors] = useState({});
 
@@ -41,7 +45,12 @@ export default function PersonalPage({ currentUser }) {
   useEffect(() => {
     loadStaff();
     api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
-    api.get('/settings').then(res => setCompanyDeliveries(res.settings.enabledModules.includes('deliveries'))).catch(() => {});
+    api.get('/settings').then(res => {
+      const enabled = res.settings.enabledModules || [];
+      const licensed = res.licensedModules || null;
+      setAvailableModules(enabled.filter(m => !licensed || licensed.includes(m)));
+      setCompanyDeliveries(enabled.includes('deliveries') && (!licensed || licensed.includes('deliveries')));
+    }).catch(() => {});
   }, []);
 
   const loadStaff = async () => {
@@ -62,7 +71,7 @@ export default function PersonalPage({ currentUser }) {
     setUser('');
     setPass('');
     setRole('VENDEDOR');
-    setModules(presetModules('VENDEDOR', ownBranch(), allModules));
+    setModules(presetModules('VENDEDOR', ownBranch(), availableModules));
     setActive(true);
     setBranchId('');
     setErrors({});
@@ -90,7 +99,7 @@ export default function PersonalPage({ currentUser }) {
   };
 
   const handleSelectAllModules = () => {
-    setModules(moduleOptions.map(m => m.value));
+    setModules([...availableModules]);
     clearError('modules');
   };
 
@@ -101,7 +110,7 @@ export default function PersonalPage({ currentUser }) {
   // El rol sugiere los módulos según el modo de la sucursal; después se pueden ajustar a mano.
   const handleRoleChangeWithPreset = (newRole) => {
     setRole(newRole);
-    setModules(presetModules(newRole, formBranch, allModules));
+    setModules(presetModules(newRole, formBranch, availableModules));
     clearError('modules');
   };
 
@@ -110,7 +119,7 @@ export default function PersonalPage({ currentUser }) {
     setBranchId(value);
     if (!editingId) {
       const branch = branches.find(b => b.id === Number(value)) || ownBranch();
-      setModules(presetModules(role, branch, allModules));
+      setModules(presetModules(role, branch, availableModules));
     }
   };
 
@@ -424,7 +433,7 @@ export default function PersonalPage({ currentUser }) {
                   onChange={e => handleRoleChangeWithPreset(e.target.value)}
                   className="w-full border border-gray-300 p-2 rounded-lg outline-none focus:border-orange-500 bg-white text-sm font-medium cursor-pointer"
                 >
-                  {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label} ({r.hint})</option>)}
+                  {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label} ({r.hint})</option>)}
                 </select>
               </div>
 
@@ -448,7 +457,7 @@ export default function PersonalPage({ currentUser }) {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <i className="fa-solid fa-shield-halved text-orange-500 text-xs"></i>
-                    Módulos Permitidos ({modules.length}/{moduleOptions.length})
+                    Módulos Permitidos ({modules.length}/{availableModules.length})
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -470,12 +479,14 @@ export default function PersonalPage({ currentUser }) {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  {moduleOptions.map(opt => {
+                  {moduleOptions.filter(opt => isAvailable(opt.value) || modules.includes(opt.value)).map(opt => {
                     const isChecked = modules.includes(opt.value);
+                    const disponible = isAvailable(opt.value);
                     return (
                       <label
                         key={opt.value}
-                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
+                        title={disponible ? undefined : 'No incluido en el plan de la empresa'}
+                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs font-medium transition-all ${disponible ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'} ${
                           isChecked
                             ? 'bg-white border-orange-400 text-slate-800 shadow-xs'
                             : 'bg-white/60 border-slate-200 text-slate-500 hover:border-slate-300'
@@ -484,6 +495,7 @@ export default function PersonalPage({ currentUser }) {
                         <input
                           type="checkbox"
                           checked={isChecked}
+                          disabled={!disponible}
                           onChange={() => handleToggleModule(opt.value)}
                           className="accent-orange-600 rounded"
                         />

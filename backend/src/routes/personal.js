@@ -2,7 +2,20 @@ import express from 'express';
 import { prisma } from '../db.js';
 import { hashPassword, validateNewPassword, PasswordPolicyError } from '../services/passwords.js';
 import { recordAudit, changedFields } from '../services/audit.js';
-import { requireWithinLimit, respondIfLicenseError } from '../services/license.js';
+import { requireWithinLimit, respondIfLicenseError, getActiveModules } from '../services/license.js';
+import { getSettings } from '../services/settings.js';
+
+// Solo se pueden asignar módulos que la empresa tenga contratados y activos.
+async function assertModulesAllowed(modules) {
+  if (!Array.isArray(modules) || modules.length === 0) return;
+  const allowed = getActiveModules(await getSettings(prisma));
+  const fuera = modules.filter(m => !allowed.includes(m));
+  if (fuera.length > 0) {
+    const error = new Error(`Estos módulos no están disponibles en el plan de la empresa: ${fuera.join(', ')}.`);
+    error.status = 400;
+    throw error;
+  }
+}
 
 // Sucursal asignada: debe existir y estar activa. Sin valor, se usa la del administrador que crea.
 async function parseBranch(value, fallback) {
@@ -56,6 +69,8 @@ router.post('/', async (req, res) => {
     // El plan limita cuántos usuarios activos puede tener la empresa.
     requireWithinLimit('maxUsers', await prisma.usuario.count({ where: { active: true } }), 'usuario(s)');
 
+    await assertModulesAllowed(modules);
+
     const branchId = await parseBranch(req.body.branchId, req.user.branchId);
     if (branchId === null) return res.status(400).json({ error: 'La sucursal elegida no existe o está desactivada.' });
 
@@ -97,6 +112,7 @@ router.post('/', async (req, res) => {
     res.status(201).json(created);
   } catch (error) {
     if (respondIfLicenseError(res, error)) return;
+    if (error.status === 400) return res.status(400).json({ error: error.message });
     if (error instanceof PasswordPolicyError) {
       return res.status(400).json({ error: error.message });
     }
@@ -134,6 +150,8 @@ router.put('/:id', async (req, res) => {
         return res.status(400).json({ error: 'El nombre de usuario ya está siendo usado por otro empleado.' });
       }
     }
+
+    if (Array.isArray(modules)) await assertModulesAllowed(modules);
 
     const updateData = {
       name: name.trim(),
@@ -206,6 +224,8 @@ router.put('/:id', async (req, res) => {
 
     res.json(updated);
   } catch (error) {
+    if (respondIfLicenseError(res, error)) return;
+    if (error.status === 400) return res.status(400).json({ error: error.message });
     console.error('Error al actualizar usuario:', error);
     res.status(500).json({ error: 'Error al actualizar usuario en la base de datos.' });
   }
