@@ -82,6 +82,8 @@ function Aplicacion() {
   const [showChangePassword, setShowChangePassword] = useState(false);
   // Buscador general (Ctrl+K) y texto con el que se abre una pantalla desde él.
   const [buscadorAbierto, setBuscadorAbierto] = useState(false);
+  // Modo enfoque: al vender, el menú se oculta y el catálogo gana el ancho de la pantalla.
+  const [foco, setFoco] = useState(false);
   const [busquedaInicial, setBusquedaInicial] = useState('');
 
   const handlePasswordChanged = () => {
@@ -496,6 +498,7 @@ function Aplicacion() {
             onLogout={handleLogout}
             onChangePassword={() => setShowChangePassword(true)}
             counts={counts}
+            oculto={foco && activeTab === 'pos'}
           />
 
           <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
@@ -507,6 +510,8 @@ function Aplicacion() {
               onResetDemo={demoMode ? handleResetDemo : undefined}
               onToggleSidebar={() => setSidebarOpen(o => !o)}
               onBuscar={() => setBuscadorAbierto(true)}
+              foco={foco && activeTab === 'pos'}
+              onToggleFoco={activeTab === 'pos' ? () => setFoco(f => !f) : undefined}
             />
 
             {license?.expiresAt && (license.expired || license.daysLeft <= 15) && (

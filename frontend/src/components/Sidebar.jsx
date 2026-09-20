@@ -62,7 +62,7 @@ function NavButton({ item, active, compact, count, sub = false, onClick }) {
 
 export default function Sidebar({
   activeTab, onSwitchTab, user, modules, businessName, businessLogo, open, onClose, onLogout,
-  onChangePassword, counts = {},
+  onChangePassword, counts = {}, oculto = false,
 }) {
   const allowedModules = modules || [];
   // El modo compacto es una preferencia de quien usa el sistema: se recuerda en este navegador.
@@ -79,12 +79,13 @@ export default function Sidebar({
   return (
     <>
       {/* Fondo oscuro al abrir el menú en móvil/tablet */}
-      {open && <div onClick={onClose} className="fixed inset-0 bg-nav-strong/60 z-30 lg:hidden" />}
+      {open && <div onClick={onClose} className={`fixed inset-0 bg-nav-strong/60 z-30 ${oculto ? '' : 'lg:hidden'}`} />}
 
       <aside
-        className={`fixed lg:static inset-y-0 left-0 bg-nav text-nav-ink flex flex-col z-40 shrink-0 h-screen
+        className={`fixed inset-y-0 left-0 bg-nav text-nav-ink flex flex-col z-40 shrink-0 h-screen
           transition-transform duration-200 ${compact ? 'w-64 lg:w-[4.5rem]' : 'w-64'}
-          ${open ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
+          ${oculto ? '' : 'lg:static lg:translate-x-0'}
+          ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         {/* Marca de la empresa */}
         <div className={`h-16 flex items-center justify-between border-b border-white/10 bg-nav-strong shrink-0

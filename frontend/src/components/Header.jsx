@@ -3,13 +3,16 @@ import Badge from './ui/Badge.jsx';
 
 // Barra superior: el nombre de la pantalla se escribe aquí y en ningún otro lado, para no repetirlo
 // dentro de la página. A la derecha queda el contexto (la sucursal en la que se está trabajando).
-export default function Header({ pageTitle, pageHint, user, showBranch = false, onResetDemo, onToggleSidebar, onBuscar }) {
+export default function Header({
+  pageTitle, pageHint, user, showBranch = false, onResetDemo, onToggleSidebar, onBuscar,
+  foco = false, onToggleFoco,
+}) {
   return (
     <header className="h-16 bg-surface border-b border-line flex items-center justify-between px-3 sm:px-5 gap-3 shrink-0 z-10">
       <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onToggleSidebar}
-          className="text-muted hover:text-ink lg:hidden shrink-0 p-2 -ml-1 rounded-lg hover:bg-surface-muted"
+          className={`text-muted hover:text-ink shrink-0 p-2 -ml-1 rounded-lg hover:bg-surface-muted ${foco ? '' : 'lg:hidden'}`}
           title="Menú"
         >
           <i className="fa-solid fa-bars text-lg"></i>
@@ -35,6 +38,16 @@ export default function Header({ pageTitle, pageHint, user, showBranch = false, 
         )}
         {user && showBranch && user.branch && (
           <Badge tone="brand" icon="fa-store">{user.branch.name}</Badge>
+        )}
+        {/* Modo enfoque: oculta el menú para tener toda la pantalla al vender. */}
+        {onToggleFoco && (
+          <button
+            onClick={onToggleFoco}
+            className="text-muted hover:text-ink p-2 rounded-lg hover:bg-surface-muted hidden lg:block"
+            title={foco ? 'Mostrar el menú' : 'Modo enfoque: ocultar el menú para vender'}
+          >
+            <i className={`fa-solid ${foco ? 'fa-compress' : 'fa-expand'}`}></i>
+          </button>
         )}
         {onResetDemo && (
           <button
