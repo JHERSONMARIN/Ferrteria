@@ -136,15 +136,15 @@ export default function ClientesPage() {
 
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col min-h-full">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+      <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
+        <div className="p-4 border-b border-line flex justify-between items-center bg-surface-muted">
           <div>
-            <h3 className="font-bold text-slate-800 text-lg">Directorio de Clientes</h3>
-            <p className="text-xs text-slate-500">Gestión de clientes y control de asignación de límites de crédito (Fiado).</p>
+            <h3 className="font-bold text-ink text-lg">Directorio de Clientes</h3>
+            <p className="text-xs text-muted">Gestión de clientes y control de asignación de límites de crédito (Fiado).</p>
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg shadow text-sm transition-colors"
+            className="bg-brand hover:bg-brand-strong text-brand-contrast font-bold py-2 px-4 rounded-lg shadow text-sm transition-colors"
           >
             <i className="fa-solid fa-user-plus mr-2"></i>Nuevo Cliente
           </button>
@@ -152,7 +152,7 @@ export default function ClientesPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-100 text-slate-500 text-xs uppercase shadow-sm">
+            <thead className="bg-surface-muted text-muted text-xs uppercase shadow-sm">
               <tr>
                 <th className="px-4 py-3">Tipo</th>
                 <th className="px-4 py-3">DNI / RUC</th>
@@ -165,37 +165,37 @@ export default function ClientesPage() {
                 <th className="px-4 py-3 text-center">Acción</th>
               </tr>
             </thead>
-            <tbody className="text-sm divide-y divide-gray-100">
+            <tbody className="text-sm divide-y divide-line">
               {clients.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50 border-b border-gray-100">
+                <tr key={c.id} className="hover:bg-surface-muted border-b border-line">
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.type === 'EMPRESA' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.type === 'EMPRESA' ? 'bg-info-soft text-info' : 'bg-info-soft text-info'}`}>
                       {c.type}
                     </span>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs font-bold">{c.doc}</td>
-                  <td className="px-4 py-3 font-bold text-slate-800">{c.name}</td>
+                  <td className="px-4 py-3 font-bold text-ink">{c.name}</td>
                   <td className="px-4 py-3 text-xs">{c.phone || '-'}</td>
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => togglePriceList(c)}
                       className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
                         c.priceList === 'WHOLESALE'
-                          ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
-                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                          ? 'bg-info-soft text-info border-info/30'
+                          : 'bg-surface-muted text-ink-soft border-line'
                       }`}
                       title="Cambiar lista de precios"
                     >
                       {c.priceList === 'WHOLESALE' ? 'Mayorista' : 'Minorista'}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-right font-bold text-red-600">S/ {c.currentDebt.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-slate-700">S/ {c.maxCredit.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right font-black text-emerald-600">S/ {c.availableCredit.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-danger">S/ {c.currentDebt.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-ink-soft">S/ {c.maxCredit.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-black text-success">S/ {c.availableCredit.toFixed(2)}</td>
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => handleEditMaxCredit(c)}
-                      className="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-2.5 py-1 rounded shadow-sm"
+                      className="text-xs bg-surface-muted hover:bg-line text-ink-soft font-bold px-2.5 py-1 rounded shadow-sm"
                       title="Editar Límite de Crédito"
                     >
                       <i className="fa-solid fa-pen-to-square mr-1"></i> Crédito
@@ -210,29 +210,29 @@ export default function ClientesPage() {
 
       {/* Modal Nuevo Cliente */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+        <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+          <div className="bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-4 bg-nav text-white flex justify-between items-center">
               <h3 className="font-bold text-lg"><i className="fa-solid fa-user-plus mr-2"></i> Registrar Cliente</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-300 hover:text-white">
+              <button onClick={() => setShowModal(false)} className="text-muted hover:text-white">
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
             <div className="p-6 flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Tipo Cliente</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Tipo Cliente</label>
                   <select
                     value={cliType}
                     onChange={e => { setCliType(e.target.value); clearError('doc'); }}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 bg-white text-sm"
+                    className="w-full border border-line p-2 rounded outline-none focus:border-brand bg-surface text-sm"
                   >
                     <option value="Natural">Persona Natural</option>
                     <option value="Empresa">Empresa (RUC)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">DNI / RUC</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">DNI / RUC</label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -245,7 +245,7 @@ export default function ClientesPage() {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Nombre / Razón Social</label>
+                <label className="text-xs font-bold text-muted mb-1 block">Nombre / Razón Social</label>
                 <input
                   type="text"
                   maxLength={120}
@@ -257,7 +257,7 @@ export default function ClientesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Teléfono</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Teléfono</label>
                   <input
                     type="text"
                     inputMode="tel"
@@ -269,7 +269,7 @@ export default function ClientesPage() {
                   <FieldError msg={errors.phone} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Límite de Crédito (S/)</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Límite de Crédito (S/)</label>
                   <input
                     type="number"
                     min="0"
@@ -281,11 +281,11 @@ export default function ClientesPage() {
                   <FieldError msg={errors.maxCredit} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Lista de precios</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Lista de precios</label>
                   <select
                     value={priceList}
                     onChange={e => setPriceList(e.target.value)}
-                    className="w-full border border-gray-300 p-2 rounded outline-none text-sm bg-white"
+                    className="w-full border border-line p-2 rounded outline-none text-sm bg-surface"
                   >
                     <option value="RETAIL">Minorista</option>
                     <option value="WHOLESALE">Mayorista</option>
@@ -293,19 +293,19 @@ export default function ClientesPage() {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Dirección</label>
+                <label className="text-xs font-bold text-muted mb-1 block">Dirección</label>
                 <input
                   type="text"
                   maxLength={200}
                   value={cliAddress}
                   onChange={e => setCliAddress(e.target.value)}
-                  className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 text-sm"
+                  className="w-full border border-line p-2 rounded outline-none focus:border-brand text-sm"
                 />
               </div>
             </div>
-            <div className="p-4 bg-slate-50 border-t flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 font-bold text-slate-600 bg-slate-200 rounded-lg text-sm">Cancelar</button>
-              <button onClick={handleSaveClient} disabled={loading} className="px-4 py-2 font-bold text-white bg-orange-600 rounded-lg text-sm">Guardar Cliente</button>
+            <div className="p-4 bg-surface-muted border-t flex justify-end gap-3">
+              <button onClick={() => setShowModal(false)} className="px-4 py-2 font-bold text-ink-soft bg-surface-muted rounded-lg text-sm">Cancelar</button>
+              <button onClick={handleSaveClient} disabled={loading} className="px-4 py-2 font-bold text-brand-contrast bg-brand rounded-lg text-sm">Guardar Cliente</button>
             </div>
           </div>
         </div>

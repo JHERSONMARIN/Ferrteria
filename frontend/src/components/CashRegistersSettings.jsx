@@ -62,7 +62,7 @@ export default function CashRegistersSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <ul className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
+      <ul className="divide-y divide-line border border-line rounded-lg">
         {registers.map(r => (
           <li key={r.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
             {editing?.id === r.id ? (
@@ -73,22 +73,22 @@ export default function CashRegistersSettings() {
                   maxLength={40}
                   autoFocus
                   aria-label="Nombre de la caja"
-                  className="flex-1 min-w-0 border border-gray-300 px-2 py-1 rounded-md text-sm focus:outline-none focus:border-orange-500"
+                  className="flex-1 min-w-0 border border-line px-2 py-1 rounded-md text-sm focus:outline-none focus:border-brand"
                 />
-                <button type="button" onClick={saveName} disabled={busy} className="text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 rounded-md px-2.5 py-1.5 disabled:opacity-50">
+                <button type="button" onClick={saveName} disabled={busy} className="text-xs font-bold text-brand-contrast bg-brand hover:bg-brand-strong rounded-md px-2.5 py-1.5 disabled:opacity-50">
                   Guardar
                 </button>
-                <button type="button" onClick={() => setEditing(null)} className="text-xs font-semibold text-slate-500 px-2 py-1.5">Cancelar</button>
+                <button type="button" onClick={() => setEditing(null)} className="text-xs font-semibold text-muted px-2 py-1.5">Cancelar</button>
               </>
             ) : (
               <>
-                <span className={`flex-1 min-w-0 text-sm font-semibold ${r.active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>
-                  <i className="fa-solid fa-cash-register mr-2 text-slate-400"></i>{r.name}
-                  {multiBranch && r.branch && <span className="ml-2 text-[11px] font-normal text-slate-500">· {r.branch.name}</span>}
+                <span className={`flex-1 min-w-0 text-sm font-semibold ${r.active ? 'text-ink' : 'text-muted line-through'}`}>
+                  <i className="fa-solid fa-cash-register mr-2 text-muted"></i>{r.name}
+                  {multiBranch && r.branch && <span className="ml-2 text-[11px] font-normal text-muted">· {r.branch.name}</span>}
                 </span>
-                {r.isOpen && <span className="text-[11px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Turno abierto</span>}
-                {!r.active && <span className="text-[11px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Inactiva</span>}
-                <button type="button" onClick={() => setEditing({ id: r.id, name: r.name })} className="text-xs font-semibold text-slate-600 hover:text-orange-700 px-2 py-1">
+                {r.isOpen && <span className="text-[11px] font-bold bg-success-soft text-success px-2 py-0.5 rounded-full">Turno abierto</span>}
+                {!r.active && <span className="text-[11px] font-bold bg-surface-muted text-muted px-2 py-0.5 rounded-full">Inactiva</span>}
+                <button type="button" onClick={() => setEditing({ id: r.id, name: r.name })} className="text-xs font-semibold text-ink-soft hover:text-brand-text px-2 py-1">
                   <i className="fa-solid fa-pen mr-1"></i> Renombrar
                 </button>
                 <button
@@ -96,7 +96,7 @@ export default function CashRegistersSettings() {
                   onClick={() => toggleActive(r)}
                   disabled={busy || (r.active && r.isOpen)}
                   title={r.active && r.isOpen ? 'Cierre el turno antes de desactivarla' : undefined}
-                  className="text-xs font-semibold text-slate-600 hover:text-orange-700 px-2 py-1 disabled:opacity-40"
+                  className="text-xs font-semibold text-ink-soft hover:text-brand-text px-2 py-1 disabled:opacity-40"
                 >
                   {r.active ? 'Desactivar' : 'Activar'}
                 </button>
@@ -112,26 +112,26 @@ export default function CashRegistersSettings() {
           onChange={e => setNewName(e.target.value)}
           maxLength={40}
           placeholder="Nombre de la nueva caja (ej. Caja 2)"
-          className="flex-1 min-w-[12rem] border border-gray-300 px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-orange-500"
+          className="flex-1 min-w-[12rem] border border-line px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-brand"
         />
         {multiBranch && (
           <select
             value={newBranchId}
             onChange={e => setNewBranchId(e.target.value)}
             aria-label="Sucursal de la caja"
-            className="border border-gray-300 px-2 py-2 rounded-lg text-sm bg-white focus:outline-none focus:border-orange-500"
+            className="border border-line px-2 py-2 rounded-lg text-sm bg-surface focus:outline-none focus:border-brand"
           >
             <option value="">Mi sucursal</option>
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         )}
-        <button type="submit" disabled={busy || !newName.trim()} className="px-3 py-2 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg disabled:opacity-50">
+        <button type="submit" disabled={busy || !newName.trim()} className="px-3 py-2 text-sm font-bold text-white bg-nav hover:bg-nav-strong rounded-lg disabled:opacity-50">
           <i className="fa-solid fa-plus mr-1"></i> Agregar caja
         </button>
       </form>
 
       {message && (
-        <p className={`text-xs ${message.type === 'error' ? 'text-red-600' : 'text-emerald-700'}`}>{message.text}</p>
+        <p className={`text-xs ${message.type === 'error' ? 'text-danger' : 'text-success'}`}>{message.text}</p>
       )}
     </div>
   );

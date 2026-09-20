@@ -82,9 +82,9 @@ function validateForm(form) {
 function Field({ label, error, hint, children }) {
   return (
     <div>
-      <label className="text-xs font-bold text-slate-600 mb-1 block">{label}</label>
+      <label className="text-xs font-bold text-ink-soft mb-1 block">{label}</label>
       {children}
-      {error ? <FieldError msg={error} /> : hint && <p className="text-[11px] text-slate-400 mt-1">{hint}</p>}
+      {error ? <FieldError msg={error} /> : hint && <p className="text-[11px] text-muted mt-1">{hint}</p>}
     </div>
   );
 }
@@ -103,11 +103,11 @@ function MiPlan({ license, licensedModules, licensedFeatures, enabledModules }) 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="bg-slate-800 text-white text-xs font-bold px-2.5 py-1 rounded-lg">
+        <span className="bg-nav text-white text-xs font-bold px-2.5 py-1 rounded-lg">
           Plan {license?.plan ? license.plan.toUpperCase() : 'sin restricciones'}
         </span>
         {license?.expiresAt && (
-          <span className={`text-xs ${license.expired ? 'text-red-600 font-bold' : 'text-slate-500'}`}>
+          <span className={`text-xs ${license.expired ? 'text-danger font-bold' : 'text-muted'}`}>
             {license.expired ? `Venció el ${license.expiresAt}` : `Vigente hasta el ${license.expiresAt}`}
           </span>
         )}
@@ -115,30 +115,30 @@ function MiPlan({ license, licensedModules, licensedFeatures, enabledModules }) 
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <p className="text-xs font-bold text-slate-600 mb-1">Incluye</p>
-          <ul className="text-xs text-slate-600 flex flex-col gap-0.5">
+          <p className="text-xs font-bold text-ink-soft mb-1">Incluye</p>
+          <ul className="text-xs text-ink-soft flex flex-col gap-0.5">
             {incluidos.map(value => (
               <li key={value}>
-                <i className="fa-solid fa-check text-emerald-600 mr-1.5"></i>
+                <i className="fa-solid fa-check text-success mr-1.5"></i>
                 {moduloLabel(value)}
                 {!enabledModules.includes(value) && !ALWAYS_ENABLED_MODULES.includes(value) && (
-                  <span className="text-slate-400"> (desactivado por usted)</span>
+                  <span className="text-muted"> (desactivado por usted)</span>
                 )}
               </li>
             ))}
             {funcionesIncluidas.map(f => (
-              <li key={f}><i className="fa-solid fa-check text-emerald-600 mr-1.5"></i>{FEATURE_LABELS[f]}</li>
+              <li key={f}><i className="fa-solid fa-check text-success mr-1.5"></i>{FEATURE_LABELS[f]}</li>
             ))}
           </ul>
         </div>
 
         {faltantes.length > 0 && (
           <div>
-            <p className="text-xs font-bold text-slate-600 mb-1">Puede sumar a su plan</p>
-            <ul className="text-xs text-slate-500 flex flex-col gap-0.5">
-              {faltantes.map(label => <li key={label}><i className="fa-solid fa-plus text-slate-400 mr-1.5"></i>{label}</li>)}
+            <p className="text-xs font-bold text-ink-soft mb-1">Puede sumar a su plan</p>
+            <ul className="text-xs text-muted flex flex-col gap-0.5">
+              {faltantes.map(label => <li key={label}><i className="fa-solid fa-plus text-muted mr-1.5"></i>{label}</li>)}
             </ul>
-            <p className="text-[11px] text-slate-400 mt-1.5">Consulte con VALETEC para ampliar su plan.</p>
+            <p className="text-[11px] text-muted mt-1.5">Consulte con VALETEC para ampliar su plan.</p>
           </div>
         )}
       </div>
@@ -148,14 +148,14 @@ function MiPlan({ license, licensedModules, licensedFeatures, enabledModules }) 
 
 function Card({ icon, title, description, children }) {
   return (
-    <section className="bg-white rounded-2xl border border-slate-200/80">
+    <section className="bg-surface rounded-2xl border border-line/80">
       <div className="px-6 pt-5 pb-4 flex items-start gap-3">
-        <span className="w-9 h-9 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+        <span className="w-9 h-9 rounded-xl bg-surface-muted text-muted flex items-center justify-center shrink-0">
           <i className={`fa-solid ${icon} text-sm`}></i>
         </span>
         <div className="min-w-0">
-          <h3 className="font-semibold text-slate-900">{title}</h3>
-          {description && <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</p>}
+          <h3 className="font-semibold text-ink">{title}</h3>
+          {description && <p className="text-xs text-muted mt-0.5 leading-relaxed">{description}</p>}
         </div>
       </div>
       <div className="px-6 pb-6">{children}</div>
@@ -178,30 +178,30 @@ function LogoField({ logo, onChange }) {
 
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <div className="w-24 h-24 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+      <div className="w-24 h-24 rounded-xl border border-dashed border-line bg-surface-muted flex items-center justify-center overflow-hidden shrink-0">
         {logo
           ? <img src={logo} alt="Logo de la empresa" className="max-w-full max-h-full object-contain" />
-          : <i className="fa-solid fa-image text-2xl text-slate-300"></i>}
+          : <i className="fa-solid fa-image text-2xl text-muted"></i>}
       </div>
       <div className="flex-1 min-w-[12rem]">
         <div className="flex flex-wrap gap-2">
-          <label className="px-3 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 cursor-pointer">
-            <i className="fa-solid fa-upload mr-1.5 text-slate-400"></i>
+          <label className="px-3 py-2 rounded-lg border border-line text-sm font-semibold text-ink-soft bg-surface hover:bg-surface-muted cursor-pointer">
+            <i className="fa-solid fa-upload mr-1.5 text-muted"></i>
             {logo ? 'Cambiar logo' : 'Subir logo'}
             <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden"
               onChange={e => elegir(e.target.files?.[0])} />
           </label>
           {logo && (
             <button type="button" onClick={() => { setMensaje(''); onChange(null); }}
-              className="px-3 py-2 rounded-lg text-sm font-semibold text-slate-500 hover:text-red-600">
+              className="px-3 py-2 rounded-lg text-sm font-semibold text-muted hover:text-danger">
               Quitar
             </button>
           )}
         </div>
-        <p className="text-[11px] text-slate-400 mt-1.5">
+        <p className="text-[11px] text-muted mt-1.5">
           PNG, JPG, WEBP o SVG, hasta 280 KB. Se muestra en el inicio de sesión y en el menú lateral.
         </p>
-        {mensaje && <p className="text-[11px] text-red-600 mt-1">{mensaje}</p>}
+        {mensaje && <p className="text-[11px] text-danger mt-1">{mensaje}</p>}
       </div>
     </div>
   );
@@ -229,23 +229,23 @@ function ColorField({ color, onChange }) {
             {actual.toLowerCase() === preset.hex && <i className="fa-solid fa-check text-white text-xs"></i>}
           </button>
         ))}
-        <label className="flex items-center gap-2 ml-1 text-xs font-semibold text-slate-600 cursor-pointer">
+        <label className="flex items-center gap-2 ml-1 text-xs font-semibold text-ink-soft cursor-pointer">
           <input
             type="color"
             value={actual}
             onChange={e => onChange(e.target.value.toLowerCase())}
-            className="w-8 h-8 rounded-lg border border-slate-300 bg-white p-0.5 cursor-pointer"
+            className="w-8 h-8 rounded-lg border border-line bg-surface p-0.5 cursor-pointer"
           />
           Otro color
         </label>
         {color && (
           <button type="button" onClick={() => onChange('')}
-            className="px-2 py-1 text-xs font-semibold text-slate-500 hover:text-red-600">
+            className="px-2 py-1 text-xs font-semibold text-muted hover:text-danger">
             Usar el color por defecto
           </button>
         )}
       </div>
-      <p className="text-[11px] text-slate-400">
+      <p className="text-[11px] text-muted">
         Se usa en los botones principales y en lo que el sistema resalta. El resto queda en gris a propósito:
         así se distingue de un vistazo qué es lo importante de cada pantalla.
       </p>
@@ -408,16 +408,16 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
   if (loadError) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-center p-6">
-        <i className="fa-solid fa-triangle-exclamation text-3xl text-red-400 mb-3"></i>
-        <p className="text-sm text-slate-600 mb-3">{loadError}</p>
-        <button onClick={loadSettings} className="text-sm font-bold text-orange-600 hover:underline">Reintentar</button>
+        <i className="fa-solid fa-triangle-exclamation text-3xl text-danger mb-3"></i>
+        <p className="text-sm text-ink-soft mb-3">{loadError}</p>
+        <button onClick={loadSettings} className="text-sm font-bold text-brand hover:underline">Reintentar</button>
       </div>
     );
   }
 
   if (!form) {
     return (
-      <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+      <div className="h-full flex items-center justify-center text-muted text-sm">
         <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando configuración…
       </div>
     );
@@ -427,7 +427,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
     <input
       value={form[field]}
       onChange={e => setField(field, e.target.value)}
-      className={`w-full border px-3 py-2 rounded-lg outline-none text-sm focus:border-orange-500 ${borderClass(errors[field])}`}
+      className={`w-full border px-3 py-2 rounded-lg outline-none text-sm focus:border-brand ${borderClass(errors[field])}`}
       {...props}
     />
   );
@@ -502,29 +502,29 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
                   maxLength={300}
                   rows={2}
                   placeholder="Ej. No se aceptan devoluciones después de 7 días."
-                  className="w-full border border-gray-300 px-3 py-2 rounded-lg outline-none text-sm focus:border-orange-500 resize-none"
+                  className="w-full border border-line px-3 py-2 rounded-lg outline-none text-sm focus:border-brand resize-none"
                 />
               </Field>
             </div>
           </div>
 
           <div className="mt-5">
-            <p className="text-xs font-bold text-slate-600 mb-2">Series de comprobantes</p>
+            <p className="text-xs font-bold text-ink-soft mb-2">Series de comprobantes</p>
             {documentSeries.length === 0 ? (
-              <p className="text-xs text-slate-400">Las series se crean automáticamente al iniciar el servidor.</p>
+              <p className="text-xs text-muted">Las series se crean automáticamente al iniciar el servidor.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {documentSeries.map(s => (
-                  <div key={s.id} className="border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
+                  <div key={s.id} className="border border-line rounded-lg px-3 py-2 bg-surface-muted">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-slate-500">{DOCUMENT_TYPE_LABELS[s.documentType] || s.documentType}</span>
-                      {!s.isActive && <span className="text-[10px] font-bold text-slate-400">INACTIVA</span>}
+                      <span className="text-xs text-muted">{DOCUMENT_TYPE_LABELS[s.documentType] || s.documentType}</span>
+                      {!s.isActive && <span className="text-[10px] font-bold text-muted">INACTIVA</span>}
                     </div>
-                    <p className="font-mono font-bold text-slate-800">{s.series}</p>
+                    <p className="font-mono font-bold text-ink">{s.series}</p>
                     {new Set(documentSeries.map(x => x.branchId)).size > 1 && s.branch && (
-                      <p className="text-[11px] text-slate-500"><i className="fa-solid fa-store mr-1"></i>{s.branch.name}</p>
+                      <p className="text-[11px] text-muted"><i className="fa-solid fa-store mr-1"></i>{s.branch.name}</p>
                     )}
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-muted">
                       Último emitido: <span className="font-mono">{String(s.lastNumber).padStart(6, '0')}</span>
                     </p>
                   </div>
@@ -539,7 +539,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
             <Field label="Descuento máximo (%)" error={errors.maxDiscountPercent} hint="0 = solo el administrador descuenta.">
               {input('maxDiscountPercent', { type: 'number', min: 0, max: 100, step: '0.01' })}
             </Field>
-            <p className="sm:col-span-3 text-xs text-slate-500 leading-relaxed sm:pt-6">
+            <p className="sm:col-span-3 text-xs text-muted leading-relaxed sm:pt-6">
               Vendedores y cajeros pueden rebajar el total de una venta o pedido hasta este porcentaje.
               El administrador no tiene tope. Cada venta guarda el monto descontado y quién lo aplicó.
             </p>
@@ -565,13 +565,13 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
         >
           {branches.length > 1 && (
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-xs font-bold text-slate-600">Sucursal:</span>
+              <span className="text-xs font-bold text-ink-soft">Sucursal:</span>
               {branches.map(b => (
                 <button
                   key={b.id}
                   type="button"
                   onClick={() => { setModeBranchId(b.id); setModeMessage(null); }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${modeBranch?.id === b.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${modeBranch?.id === b.id ? 'bg-nav text-white border-white/10' : 'bg-surface text-ink-soft border-line hover:bg-surface-muted'}`}
                 >
                   {b.name}
                   <span className="ml-1.5 font-normal opacity-75">· {SALE_FLOW_OPTIONS.find(o => o.id === b.saleFlowMode)?.title}</span>
@@ -590,26 +590,26 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
                   onClick={() => selectSaleFlow(option)}
                   disabled={missing.length > 0 || savingMode || (option.id !== 'DIRECT' && !hasFeature('split_flow'))}
                   className={`text-left rounded-xl border p-4 transition-colors flex flex-col gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    selected ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200 hover:bg-slate-50'
+                    selected ? 'border-brand bg-brand-soft ring-1 ring-brand' : 'border-line hover:bg-surface-muted'
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <i className={`fa-solid ${option.icon} ${selected ? 'text-orange-600' : 'text-slate-400'}`}></i>
-                    <span className="font-bold text-slate-800">{option.title}</span>
-                    {selected && <i className="fa-solid fa-circle-check text-orange-600 ml-auto"></i>}
+                    <i className={`fa-solid ${option.icon} ${selected ? 'text-brand' : 'text-muted'}`}></i>
+                    <span className="font-bold text-ink">{option.title}</span>
+                    {selected && <i className="fa-solid fa-circle-check text-brand ml-auto"></i>}
                   </div>
-                  <p className="text-xs text-slate-500">{option.description}</p>
-                  <ol className="text-[11px] text-slate-600 flex flex-col gap-0.5 mt-1">
+                  <p className="text-xs text-muted">{option.description}</p>
+                  <ol className="text-[11px] text-ink-soft flex flex-col gap-0.5 mt-1">
                     {option.steps.map((step, i) => (
-                      <li key={step}><span className="font-bold text-orange-600">{i + 1}.</span> {step}</li>
+                      <li key={step}><span className="font-bold text-brand">{i + 1}.</span> {step}</li>
                     ))}
                   </ol>
                   {missing.length > 0 ? (
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-muted">
                       <i className="fa-solid fa-lock mr-1"></i>Requiere un módulo no incluido en su plan
                     </span>
                   ) : option.id !== 'DIRECT' && !hasFeature('split_flow') && (
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-muted">
                       <i className="fa-solid fa-lock mr-1"></i>No incluido en su plan
                     </span>
                   )}
@@ -618,7 +618,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
             })}
           </div>
           {modeBranch && deliveriesAvailable && (
-            <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${savedSettings.enabledModules.includes('deliveries') ? 'border-slate-200 cursor-pointer hover:bg-slate-50' : 'border-slate-200 opacity-60'}`}>
+            <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${savedSettings.enabledModules.includes('deliveries') ? 'border-line cursor-pointer hover:bg-surface-muted' : 'border-line opacity-60'}`}>
               <input
                 type="checkbox"
                 checked={modeBranch.deliveriesEnabled}
@@ -627,11 +627,11 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
                 className="mt-0.5 accent-orange-600"
               />
               <span>
-                <span className="font-bold text-slate-800 text-sm">
-                  <i className="fa-solid fa-truck-fast mr-1.5 text-slate-400"></i>
+                <span className="font-bold text-ink text-sm">
+                  <i className="fa-solid fa-truck-fast mr-1.5 text-muted"></i>
                   Envíos a domicilio{branches.length > 1 ? ` en ${modeBranch.name}` : ''}
                 </span>
-                <span className="block text-xs text-slate-500 mt-0.5">
+                <span className="block text-xs text-muted mt-0.5">
                   {savedSettings.enabledModules.includes('deliveries')
                     ? 'Al cobrar se ofrece "Envío a domicilio" y el repartidor lo ve en Entregas. Funciona con cualquier modo de trabajo.'
                     : 'Active primero el módulo Entregas en "Módulos activos".'}
@@ -640,12 +640,12 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
             </label>
           )}
           {modeBranch && (modeBranch.saleFlowMode === 'STAGED' || (deliveriesAvailable && modeBranch.deliveriesEnabled)) && (
-            <div className="mt-4 rounded-xl border border-slate-200 p-4">
-              <p className="font-bold text-slate-800 text-sm">
-                <i className="fa-solid fa-dolly mr-1.5 text-slate-400"></i>
+            <div className="mt-4 rounded-xl border border-line p-4">
+              <p className="font-bold text-ink text-sm">
+                <i className="fa-solid fa-dolly mr-1.5 text-muted"></i>
                 ¿Quién despacha{branches.length > 1 ? ` en ${modeBranch.name}` : ''}?
               </p>
-              <p className="text-xs text-slate-500 mt-0.5 mb-3">
+              <p className="text-xs text-muted mt-0.5 mb-3">
                 Atiende "Por despachar": {modeBranch.saleFlowMode === 'STAGED' ? 'todo lo cobrado' : 'las ventas con envío a domicilio'}.
                 Ve los productos a preparar y marca cuándo los entrega{modeBranch.saleFlowMode === 'STAGED' ? '' : ' al repartidor'}.
                 El administrador también puede despachar.
@@ -660,13 +660,13 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
                       type="button"
                       onClick={() => chooseDispatchRole(option.id)}
                       disabled={savingMode || locked}
-                      className={`text-left rounded-lg border px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed ${selected ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200 hover:bg-slate-50'}`}
+                      className={`text-left rounded-lg border px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed ${selected ? 'border-brand bg-brand-soft ring-1 ring-brand' : 'border-line hover:bg-surface-muted'}`}
                     >
-                      <span className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+                      <span className="font-bold text-sm text-ink flex items-center gap-1.5">
                         {option.title}
-                        {selected && <i className="fa-solid fa-circle-check text-orange-600 ml-auto"></i>}
+                        {selected && <i className="fa-solid fa-circle-check text-brand ml-auto"></i>}
                       </span>
-                      <span className="block text-[11px] text-slate-500">
+                      <span className="block text-[11px] text-muted">
                         {locked ? 'Active primero el módulo Despacho.' : option.description}
                       </span>
                     </button>
@@ -676,7 +676,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
             </div>
           )}
           {modeMessage && (
-            <p className={`mt-3 text-xs rounded-lg px-3 py-2 border ${modeMessage.type === 'error' ? 'text-red-700 bg-red-50 border-red-200' : 'text-emerald-700 bg-emerald-50 border-emerald-200'}`}>
+            <p className={`mt-3 text-xs rounded-lg px-3 py-2 border ${modeMessage.type === 'error' ? 'text-danger bg-danger-soft border-danger/30' : 'text-success bg-success-soft border-success/30'}`}>
               {modeMessage.text}
             </p>
           )}
@@ -700,17 +700,17 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
                   disabled={locked}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors ${
                     enabled
-                      ? 'border-orange-300 bg-orange-50'
-                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                      ? 'border-brand/40 bg-brand-soft'
+                      : 'border-line bg-surface hover:bg-surface-muted'
                   } ${locked ? 'cursor-not-allowed' : ''}`}
                 >
-                  <i className={`fa-solid ${mod.icon} w-5 text-center ${enabled ? 'text-orange-600' : 'text-slate-400'}`}></i>
-                  <span className={`flex-1 text-sm font-semibold ${enabled ? 'text-slate-800' : 'text-slate-500'}`}>
+                  <i className={`fa-solid ${mod.icon} w-5 text-center ${enabled ? 'text-brand' : 'text-muted'}`}></i>
+                  <span className={`flex-1 text-sm font-semibold ${enabled ? 'text-ink' : 'text-muted'}`}>
                     {mod.label}
-                    {alwaysOn && <span className="block text-[10px] font-normal text-slate-400">Siempre activo</span>}
+                    {alwaysOn && <span className="block text-[10px] font-normal text-muted">Siempre activo</span>}
                   </span>
-                  <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${enabled ? 'bg-orange-500' : 'bg-slate-300'}`}>
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${enabled ? 'left-[18px]' : 'left-0.5'}`}></span>
+                  <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${enabled ? 'bg-brand' : 'bg-line'}`}>
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-surface shadow transition-all ${enabled ? 'left-[18px]' : 'left-0.5'}`}></span>
                   </span>
                 </button>
               );
@@ -720,10 +720,10 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
       </div>
 
       {/* Barra fija para guardar: visible siempre para dar feedback del estado */}
-      <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-gray-200 px-4 py-3">
+      <div className="sticky bottom-0 bg-surface/95 backdrop-blur border-t border-line px-4 py-3">
         <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <p className={`text-sm font-semibold ${
-            saveMessage?.type === 'error' ? 'text-red-600' : saveMessage?.type === 'success' ? 'text-emerald-600' : 'text-slate-500'
+            saveMessage?.type === 'error' ? 'text-danger' : saveMessage?.type === 'success' ? 'text-success' : 'text-muted'
           }`}>
             {saveMessage?.text || (hasChanges ? 'Hay cambios sin guardar.' : 'Sin cambios.')}
           </p>
@@ -731,14 +731,14 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
             <button
               onClick={() => { setForm(toForm(savedSettings, licensedModules)); setErrors({}); setSaveMessage(null); }}
               disabled={!hasChanges || saving}
-              className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-40"
+              className="px-4 py-2 rounded-lg text-sm font-bold text-ink-soft bg-surface-muted hover:bg-surface-muted disabled:opacity-40"
             >
               Descartar
             </button>
             <button
               onClick={handleSave}
               disabled={!hasChanges || saving}
-              className="px-5 py-2 rounded-lg text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-sm disabled:opacity-40 flex items-center gap-2"
+              className="px-5 py-2 rounded-lg text-sm font-bold text-brand-contrast bg-brand hover:bg-brand-strong shadow-sm disabled:opacity-40 flex items-center gap-2"
             >
               {saving ? <><i className="fa-solid fa-spinner fa-spin"></i> Guardando…</> : <><i className="fa-solid fa-check"></i> Guardar cambios</>}
             </button>
