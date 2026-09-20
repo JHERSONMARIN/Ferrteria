@@ -3,8 +3,10 @@ import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { quantityProblem, roundQuantity } from '../utils/quantities.js';
+import { useToast } from '../components/ui/index.js';
 
 export default function ComprasPage() {
+  const aviso = useToast();
   const [compras, setCompras] = useState([]);
   const [proveedores, setProveedores] = useState([]);
   const [productos, setProductos] = useState([]);
@@ -86,7 +88,7 @@ export default function ComprasPage() {
       setProveedores(provsData);
       setProductos(prodsData);
     } catch (err) {
-      alert('Error cargando datos de compras: ' + err.message);
+      aviso.error('Error cargando datos de compras: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -111,9 +113,9 @@ export default function ComprasPage() {
       setProvPhone('');
       setProvAddress('');
       await loadInitialData();
-      alert('Proveedor guardado con éxito.');
+      aviso.exito('Proveedor guardado con éxito.');
     } catch (err) {
-      alert('Error guardando proveedor: ' + err.message);
+      aviso.error('Error guardando proveedor: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -187,9 +189,9 @@ export default function ComprasPage() {
 
       setShowCompraModal(false);
       await loadInitialData();
-      alert('¡Compra registrada exitosamente! El stock del inventario y el Kardex han sido actualizados.');
+      aviso.exito('¡Compra registrada exitosamente! El stock del inventario y el Kardex han sido actualizados.');
     } catch (err) {
-      alert('Error registrando compra: ' + err.message);
+      aviso.error('Error registrando compra: ' + err.message);
     } finally {
       setLoading(false);
     }

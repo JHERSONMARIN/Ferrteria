@@ -8,6 +8,7 @@ import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../constants/modules.js';
 import { applyTheme, BRAND_PRESETS } from '../utils/theme.js';
+import { useConfirm } from '../components/ui/index.js';
 
 const DOCUMENT_TYPE_LABELS = {
   NOTA_VENTA: 'Nota de venta',
@@ -254,6 +255,7 @@ function ColorField({ color, onChange }) {
 }
 
 export default function SettingsPage({ currentUser, onSaved, hasFeature = () => true, licensedFeatures = null, license = null }) {
+  const confirmar = useConfirm();
   // Al crear o renombrar sucursales se recarga la lista de cajas (muestra su sucursal).
   const [branchesVersion, setBranchesVersion] = useState(0);
   const [savedSettings, setSavedSettings] = useState(null);
@@ -360,7 +362,12 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
   const selectSaleFlow = async (option) => {
     if (!modeBranch || option.id === modeBranch.saleFlowMode || option.requires.some(m => !isLicensed(m))) return;
     const label = branches.length > 1 ? `${modeBranch.name}` : 'la empresa';
-    if (!window.confirm(`¿Cambiar el modo de trabajo de ${label} a "${option.title}"?`)) return;
+    const seguro = await confirmar({
+      title: 'Cambiar el modo de trabajo',
+      description: `${label === 'la empresa' ? 'La empresa' : label} pasará a trabajar en modo "${option.title}".`,
+      confirmText: 'Cambiar',
+    });
+    if (!seguro) return;
     try {
       setSavingMode(true);
       setModeMessage(null);

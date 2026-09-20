@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
+import { useToast, useConfirm } from '../components/ui/index.js';
 
 export default function CreditosPage() {
+  const aviso = useToast();
+  const confirmar = useConfirm();
   const [creditos, setCreditos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCredito, setSelectedCredito] = useState(null);
@@ -20,7 +23,7 @@ export default function CreditosPage() {
       const data = await api.get('/creditos');
       setCreditos(data);
     } catch (err) {
-      alert('Error cargando créditos: ' + err.message);
+      aviso.error('Error cargando créditos: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -51,18 +54,24 @@ export default function CreditosPage() {
         amount: val
       });
 
-      alert('Abono registrado correctamente.');
+      aviso.exito('Abono registrado correctamente.');
       setSelectedCredito(null);
       await loadCreditos();
     } catch (err) {
-      alert('Error al registrar abono: ' + err.message);
+      aviso.error('Error al registrar abono: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSaldarTodo = () => {
-    if (selectedCredito && window.confirm(`¿Saldar la deuda total de S/ ${selectedCredito.debt.toFixed(2)}?`)) {
+  const handleSaldarTodo = async () => {
+    if (!selectedCredito) return;
+    const seguro = await confirmar({
+      title: 'Saldar la deuda',
+      description: `Se registrará el pago total de S/ ${selectedCredito.debt.toFixed(2)}.`,
+      confirmText: 'Saldar',
+    });
+    if (seguro) {
       handleRegisterAbono(selectedCredito.debt);
     }
   };

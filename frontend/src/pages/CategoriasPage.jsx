@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
+import { useToast } from '../components/ui/index.js';
 
 // Paleta de colores temáticos para categorías
 const COLOR_CLASSES = {
@@ -30,6 +31,7 @@ const AVAILABLE_COLORS = [
 ];
 
 export default function CategoriasPage({ onSelectCategory, onNavigateToProducts }) {
+  const aviso = useToast();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,7 +61,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
       setCategories(data || []);
     } catch (err) {
       console.error('Error cargando categorías desde API:', err);
-      alert('Error cargando categorías: ' + err.message);
+      aviso.error('Error cargando categorías: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -147,7 +149,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
       }
       closeCategoryModal();
       await loadCategories();
-      alert(editingCategory ? 'Categoría actualizada exitosamente.' : 'Categoría creada exitosamente.');
+      aviso.exito(editingCategory ? 'Categoría actualizada exitosamente.' : 'Categoría creada exitosamente.');
     } catch (err) {
       setCategoryError(err.message || 'Error al guardar la categoría.');
     }
@@ -173,7 +175,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
       let queryParam = '';
       if (deleteCategoryTarget.productCount > 0) {
         if (!reassignCategoryId) {
-          alert('Debe seleccionar una categoría de destino para reasignar los productos.');
+          aviso.exito('Debe seleccionar una categoría de destino para reasignar los productos.');
           return;
         }
         queryParam = `?targetCategoryId=${reassignCategoryId}`;
@@ -182,9 +184,9 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
       await api.delete(`/categorias/${deleteCategoryTarget.id}${queryParam}`);
       closeDeleteModal();
       await loadCategories();
-      alert('Categoría eliminada exitosamente.');
+      aviso.exito('Categoría eliminada exitosamente.');
     } catch (err) {
-      alert('Error al eliminar categoría: ' + err.message);
+      aviso.error('Error al eliminar categoría: ' + err.message);
     } finally {
       setDeletingCategory(false);
     }

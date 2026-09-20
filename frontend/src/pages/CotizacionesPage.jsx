@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
+import { useToast } from '../components/ui/index.js';
 
 const STATUS_STYLE = {
   PENDIENTE: { label: 'Pendiente', badge: 'bg-warning-soft text-warning border-warning/30' },
@@ -16,6 +17,7 @@ const FILTER_TABS = [
 ];
 
 export default function CotizacionesPage() {
+  const aviso = useToast();
   const [cotizaciones, setCotizaciones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,7 +39,7 @@ export default function CotizacionesPage() {
       setCotizaciones(data || []);
     } catch (err) {
       console.error('Error cargando cotizaciones desde API:', err);
-      alert('Error cargando cotizaciones: ' + err.message);
+      aviso.error('Error cargando cotizaciones: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -84,9 +86,9 @@ export default function CotizacionesPage() {
       await api.delete(`/cotizaciones/${deleteTarget.id}`);
       closeDeleteModal();
       await loadCotizaciones();
-      alert('Cotización eliminada exitosamente.');
+      aviso.exito('Cotización eliminada exitosamente.');
     } catch (err) {
-      alert('Error al eliminar cotización: ' + err.message);
+      aviso.error('Error al eliminar cotización: ' + err.message);
     } finally {
       setDeleting(false);
     }

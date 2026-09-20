@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { formatSoles } from '../utils/currency.js';
+import { useConfirm } from '../components/ui/index.js';
 
 const REFRESH_MS = 5000;
 
@@ -234,6 +235,7 @@ function ScheduleDeliveryModal({ onClose, onScheduled }) {
 }
 
 export default function EntregasPage({ currentUser }) {
+  const confirmar = useConfirm();
   const isCourier = currentUser?.role === 'REPARTIDOR';
   const [view, setView] = useState('activas');
   const [onlyMine, setOnlyMine] = useState(isCourier);
@@ -300,8 +302,13 @@ export default function EntregasPage({ currentUser }) {
     couriers,
     onAssign: (d, courierId) => run(d, () => api.patch(`/entregas/${d.id}/repartidor`, { repartidorId: courierId })),
     onDepart: (d) => run(d, () => api.post(`/entregas/${d.id}/salir`, {}), `${d.ref} en camino.`),
-    onDeliver: (d) => {
-      if (window.confirm(`¿Confirmar que ${d.ref} fue entregado a ${d.contactName}?`)) {
+    onDeliver: async (d) => {
+      const seguro = await confirmar({
+        title: 'Marcar como entregado',
+        description: `${d.ref} fue entregado a ${d.contactName}.`,
+        confirmText: 'Sí, se entregó',
+      });
+      if (seguro) {
         run(d, () => api.post(`/entregas/${d.id}/entregar`, {}), `${d.ref} entregado.`);
       }
     },

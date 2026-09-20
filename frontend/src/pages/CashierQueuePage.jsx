@@ -5,6 +5,7 @@ import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
 import { formatSoles } from '../utils/currency.js';
 import { customerOptionLabel } from '../utils/customers.js';
 import { buildSaleTicket } from '../utils/tickets.js';
+import { useConfirm } from '../components/ui/index.js';
 
 const REFRESH_MS = 5000;
 
@@ -17,6 +18,7 @@ function minutesAgo(date) {
 
 // Cola de pedidos que los vendedores enviaron a caja.
 export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlowMode, deliveriesEnabled = false }) {
+  const confirmar = useConfirm();
   const [orders, setOrders] = useState([]);
   const [clients, setClients] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -130,7 +132,14 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
   };
 
   const cancelSelected = async () => {
-    if (!selected || !window.confirm(`¿Anular el pedido N° ${selected.id}? Sus productos vuelven a estar disponibles.`)) return;
+    if (!selected) return;
+    const seguro = await confirmar({
+      title: `Anular el pedido N° ${selected.id}`,
+      description: 'Sus productos vuelven a estar disponibles para vender.',
+      confirmText: 'Anular pedido',
+      tone: 'danger',
+    });
+    if (!seguro) return;
     try {
       setCancelling(true);
       await api.post(`/pedidos/${selected.id}/anular`, { reason: `Anulado en caja por ${currentUser?.name}` });

@@ -4,6 +4,7 @@ import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { quantityProblem, roundQuantity, formatQuantity } from '../utils/quantities.js';
+import { useToast } from '../components/ui/index.js';
 
 const COMMON_REASONS = {
   ENTRADA: [
@@ -23,6 +24,7 @@ const COMMON_REASONS = {
 };
 
 export default function KardexPage({ currentUser }) {
+  const aviso = useToast();
   const [kardexRecords, setKardexRecords] = useState([]);
   const [summary, setSummary] = useState({
     totalIn: 0,
@@ -95,7 +97,7 @@ export default function KardexPage({ currentUser }) {
       }
     } catch (err) {
       console.error('Error cargando Kardex:', err);
-      alert('Error cargando movimientos de Kardex: ' + err.message);
+      aviso.error('Error cargando movimientos de Kardex: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -158,9 +160,9 @@ export default function KardexPage({ currentUser }) {
       setShowModal(false);
       await loadKardex();
       await loadProducts();
-      alert('Movimiento registrado correctamente.');
+      aviso.exito('Movimiento registrado correctamente.');
     } catch (err) {
-      alert('Error al registrar movimiento: ' + err.message);
+      aviso.error('Error al registrar movimiento: ' + err.message);
     } finally {
       setLoading(false);
     }

@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
+import { useToast, useConfirm } from '../components/ui/index.js';
 
 export default function ClientesPage() {
+  const aviso = useToast();
+  const confirmar = useConfirm();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -60,7 +63,7 @@ export default function ClientesPage() {
       const data = await api.get('/clientes');
       setClients(data);
     } catch (err) {
-      alert('Error cargando clientes: ' + err.message);
+      aviso.error('Error cargando clientes: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -93,9 +96,9 @@ export default function ClientesPage() {
       setPriceList('RETAIL');
 
       await loadClients();
-      alert('Cliente guardado con éxito.');
+      aviso.exito('Cliente guardado con éxito.');
     } catch (err) {
-      alert('Error al guardar cliente: ' + err.message);
+      aviso.error('Error al guardar cliente: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -105,15 +108,15 @@ export default function ClientesPage() {
     const val = prompt(`Ingrese el nuevo Límite de Crédito para ${client.name} (S/):`, client.maxCredit);
     if (val === null) return;
     const parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed < 0) return alert('Monto no válido.');
+    if (isNaN(parsed) || parsed < 0) return aviso.exito('Monto no válido.');
 
     try {
       setLoading(true);
       await api.put(`/clientes/${client.id}/max-credit`, { maxCredit: parsed });
       await loadClients();
-      alert('Límite de crédito actualizado.');
+      aviso.exito('Límite de crédito actualizado.');
     } catch (err) {
-      alert('Error al actualizar límite: ' + err.message);
+      aviso.error('Error al actualizar límite: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -122,13 +125,18 @@ export default function ClientesPage() {
   const togglePriceList = async (client) => {
     const next = client.priceList === 'WHOLESALE' ? 'RETAIL' : 'WHOLESALE';
     const label = next === 'WHOLESALE' ? 'mayorista' : 'minorista';
-    if (!window.confirm(`¿Cambiar a ${client.name} a la lista ${label}?`)) return;
+    const seguro = await confirmar({
+      title: 'Cambiar la lista de precios',
+      description: `${client.name} pasará a la lista ${label}.`,
+      confirmText: 'Cambiar',
+    });
+    if (!seguro) return;
     try {
       setLoading(true);
       await api.put(`/clientes/${client.id}/price-list`, { priceList: next });
       await loadClients();
     } catch (err) {
-      alert('Error al cambiar la lista de precios: ' + err.message);
+      aviso.error('Error al cambiar la lista de precios: ' + err.message);
     } finally {
       setLoading(false);
     }

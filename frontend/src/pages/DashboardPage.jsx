@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { roleLabel } from '../constants/roles.js';
 import { api } from '../api.js';
 import SalesReports from '../components/SalesReports.jsx';
+import { useToast } from '../components/ui/index.js';
 
 export default function DashboardPage({ periodReports = true }) {
+  const aviso = useToast();
   const [stats, setStats] = useState({
     ingresosCaja: 0,
     deudaCreditos: 0,
@@ -27,7 +29,7 @@ export default function DashboardPage({ periodReports = true }) {
       const data = await api.get('/dashboard/stats');
       setStats(data);
     } catch (err) {
-      alert('Error cargando estadísticas del Dashboard: ' + err.message);
+      aviso.error('Error cargando estadísticas del Dashboard: ' + err.message);
     } finally {
       setLoading(false);
     }

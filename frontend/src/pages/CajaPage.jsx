@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import ContadorEfectivo, { calcularTotalConteo } from '../components/ContadorEfectivo.jsx';
+import { useToast, useConfirm } from '../components/ui/index.js';
 
 function SelectorModo({ modo, onChange }) {
   const opciones = [
@@ -88,6 +89,8 @@ function RegisterList({ registers, selectedId, onSelect, onJoin, loading }) {
 }
 
 export default function CajaPage({ currentUser }) {
+  const aviso = useToast();
+  const confirmar = useConfirm();
   const [estadoCaja, setEstadoCaja] = useState({ abierta: false, caja: null, registers: [] });
   const [selectedRegisterId, setSelectedRegisterId] = useState(null);
   const [montoInicial, setMontoInicial] = useState('');
@@ -166,25 +169,30 @@ export default function CajaPage({ currentUser }) {
         montoInicial: m,
       });
 
-      alert(`¡${registerToOpen.name} abierta con S/ ${m.toFixed(2)}!`);
+      aviso.exito(`¡${registerToOpen.name} abierta con S/ ${m.toFixed(2)}!`);
       setMontoInicial('');
       setConteoApertura({});
       await loadEstadoCaja();
     } catch (err) {
-      alert('Error al abrir caja: ' + err.message);
+      aviso.error('Error al abrir caja: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleUnirse = async (register) => {
-    if (!window.confirm(`¿Unirse al turno de ${register.name}? Lo que cobre quedará registrado a su nombre en ese turno.`)) return;
+    const seguro = await confirmar({
+      title: `Unirse al turno de ${register.name}`,
+      description: 'Lo que cobre quedará registrado a su nombre en ese turno.',
+      confirmText: 'Unirme',
+    });
+    if (!seguro) return;
     try {
       setLoading(true);
       await api.post(`/caja/turnos/${register.session.id}/unirse`, {});
       await loadEstadoCaja();
     } catch (err) {
-      alert('No se pudo unir al turno: ' + err.message);
+      aviso.error('No se pudo unir al turno: ' + err.message);
       await loadEstadoCaja();
     } finally {
       setLoading(false);
@@ -192,13 +200,18 @@ export default function CajaPage({ currentUser }) {
   };
 
   const handleSalir = async () => {
-    if (!window.confirm('¿Salir del turno sin cerrarlo? Lo que cobró queda en el turno y lo cierran los demás cajeros.')) return;
+    const seguro = await confirmar({
+      title: 'Salir del turno sin cerrarlo',
+      description: 'Lo que cobró queda en el turno y lo cierran los demás cajeros.',
+      confirmText: 'Salir del turno',
+    });
+    if (!seguro) return;
     try {
       setLoading(true);
       await api.post(`/caja/turnos/${estadoCaja.caja.id}/salir`, {});
       await loadEstadoCaja();
     } catch (err) {
-      alert(err.message);
+      aviso.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -209,8 +222,13 @@ export default function CajaPage({ currentUser }) {
     const conteo = totalCierre;
 
     const otros = estadoCaja.caja.members.filter(m => m.id !== currentUser.id).length;
-    const aviso = otros > 0 ? `\n\nSe cerrará el turno para los ${otros + 1} cajeros.` : '';
-    if (!window.confirm(`¿Confirmar el cierre de caja con un conteo físico de S/ ${conteo.toFixed(2)}?${aviso}`)) return;
+    const seguro = await confirmar({
+      title: 'Cerrar la caja',
+      description: `Se cierra con un conteo físico de S/ ${conteo.toFixed(2)}.`
+        + (otros > 0 ? ` El turno se cierra para los ${otros + 1} cajeros.` : ''),
+      confirmText: 'Cerrar caja',
+    });
+    if (!seguro) return;
 
     try {
       setLoading(true);
@@ -227,13 +245,13 @@ export default function CajaPage({ currentUser }) {
           ? `Cierre registrado. Sobrante en caja: +S/ ${dif.toFixed(2)}`
           : `Cierre registrado. Faltante en caja: -S/ ${Math.abs(dif).toFixed(2)}`;
 
-        alert(msg);
+        aviso.exito(msg);
         setMontoConteo('');
         setConteoCierre({});
         await loadEstadoCaja();
       }
     } catch (err) {
-      alert('Error al cerrar caja: ' + err.message);
+      aviso.error('Error al cerrar caja: ' + err.message);
     } finally {
       setLoading(false);
     }

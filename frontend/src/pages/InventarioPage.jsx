@@ -4,8 +4,10 @@ import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quantities.js';
+import { useToast } from '../components/ui/index.js';
 
 export default function InventarioPage({ initialCategory = 'Todas', onNavigateToCategories, currentUser }) {
+  const aviso = useToast();
   const [products, setProducts] = useState([]);
   const [branches, setBranches] = useState([]);
   // Con una sola sucursal no se muestra nada de sucursales.
@@ -54,7 +56,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
       setProducts(data || []);
     } catch (err) {
       console.error('Error cargando productos:', err);
-      alert('Error cargando inventario: ' + err.message);
+      aviso.error('Error cargando inventario: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -202,9 +204,9 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
       closeModal();
       await loadProducts();
       await loadCategories();
-      alert(editingProductId ? 'Producto actualizado correctamente.' : 'Producto registrado exitosamente.');
+      aviso.exito(editingProductId ? 'Producto actualizado correctamente.' : 'Producto registrado exitosamente.');
     } catch (err) {
-      alert('Error guardando producto: ' + err.message);
+      aviso.error('Error guardando producto: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -216,7 +218,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
       setSearchingBarcode(true);
       const res = await api.get(`/productos/barcode/${code.trim()}`);
       if (res.foundInDb) {
-        alert('Este producto ya existe en el inventario.');
+        aviso.exito('Este producto ya existe en el inventario.');
         setName(res.product.name);
         setUnit(res.product.unit);
         setPrice(res.product.price);
@@ -225,7 +227,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
         setName(res.name);
       }
     } catch (err) {
-      alert('No se encontró el nombre del producto de forma automática. Ingrese el nombre manualmente.');
+      aviso.error('No se encontró el nombre del producto de forma automática. Ingrese el nombre manualmente.');
     } finally {
       setSearchingBarcode(false);
     }

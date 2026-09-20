@@ -7,6 +7,7 @@ import { formatSoles } from '../utils/currency.js';
 import { findCustomerByInput } from '../utils/customers.js';
 import { buildSaleTicket, buildOrderTicket } from '../utils/tickets.js';
 import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../utils/quantities.js';
+import { useToast, useConfirm } from '../components/ui/index.js';
 
 // Stock que se puede vender: lo reservado por pedidos sin despachar ya tiene dueño.
 const availableStock = (product) => roundQuantity(product.stock - (product.reserved || 0));
@@ -42,9 +43,9 @@ function CartQtyInput({ item, onCommit }) {
   );
 }
 
-const TOAST_COLORS = { error: 'bg-danger', exito: 'bg-success', info: 'bg-nav' };
-
 export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'DIRECT', deliveriesEnabled = false, maxDiscountPercent = 0 }) {
+  const aviso = useToast();
+  const confirmar = useConfirm();
   const isDirect = saleFlowMode === 'DIRECT';
 
   const [products, setProducts] = useState([]);
@@ -71,19 +72,15 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const [showQuotesModal, setShowQuotesModal] = useState(false);
   const [quotes, setQuotes] = useState([]);
 
-  const [toast, setToast] = useState(null);
-  const toastTimer = useRef(null);
   const searchRef = useRef(null);
   const customerPanelRef = useRef(null);
   const cartRef = useRef(null);
 
   const showToast = (message, type = 'info') => {
-    clearTimeout(toastTimer.current);
-    setToast({ message, type });
-    toastTimer.current = setTimeout(() => setToast(null), 3000);
+    if (type === 'error') aviso.error(message);
+    else if (type === 'exito') aviso.exito(message);
+    else aviso.info(message);
   };
-
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   useEffect(() => {
     loadInitialData();
@@ -220,9 +217,15 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
   const removeFromCart = (id) => setCart(prev => prev.filter(item => item.id !== id));
 
-  const clearCart = () => {
+  const clearCart = async () => {
     if (cart.length === 0) return;
-    if (window.confirm('¿Vaciar la venta actual?')) setCart([]);
+    const seguro = await confirmar({
+      title: 'Vaciar la venta',
+      description: 'Se quitarán todos los productos del carrito.',
+      confirmText: 'Vaciar',
+      tone: 'danger',
+    });
+    if (seguro) setCart([]);
   };
 
   const clearDiscount = () => {
@@ -441,8 +444,15 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     }
   };
 
-  const loadQuote = (quote) => {
-    if (cart.length > 0 && !window.confirm('Se reemplazarán los productos de la venta actual. ¿Continuar?')) return;
+  const loadQuote = async (quote) => {
+    if (cart.length > 0) {
+      const seguro = await confirmar({
+        title: 'Cargar la cotización',
+        description: 'Se reemplazarán los productos de la venta actual.',
+        confirmText: 'Cargar',
+      });
+      if (!seguro) return;
+    }
 
     setCart(quote.detalles.map(d => ({
       id: d.producto.id,
@@ -890,14 +900,6 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         </div>
       )}
 
-      {toast && (
-        <div className="fixed z-[60] bottom-24 xl:bottom-6 left-1/2 -translate-x-1/2 xl:left-auto xl:right-6 xl:translate-x-0 max-w-[90vw]">
-          <div className={`${TOAST_COLORS[toast.type] || TOAST_COLORS.info} text-white text-sm font-semibold px-4 py-3 rounded-lg shadow-lg flex items-center gap-2`}>
-            <i className={`fa-solid ${toast.type === 'error' ? 'fa-circle-exclamation' : toast.type === 'exito' ? 'fa-circle-check' : 'fa-circle-info'}`}></i>
-            {toast.message}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

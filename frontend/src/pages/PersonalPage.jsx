@@ -5,8 +5,11 @@ import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS as moduleOptions } from '../constants/modules.js';
 import { effectiveDispatchRole } from '../constants/dispatch.js';
 import { ROLE_OPTIONS, rolesForModules, roleLabel, presetModules, describeDuties } from '../constants/roles.js';
+import { useToast, useConfirm } from '../components/ui/index.js';
 
 export default function PersonalPage({ currentUser }) {
+  const aviso = useToast();
+  const confirmar = useConfirm();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -59,7 +62,7 @@ export default function PersonalPage({ currentUser }) {
       const data = await api.get('/personal');
       setStaff(data);
     } catch (err) {
-      alert('Error cargando personal: ' + err.message);
+      aviso.error('Error cargando personal: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -166,7 +169,7 @@ export default function PersonalPage({ currentUser }) {
         }
 
         await api.put(`/personal/${editingId}`, payload);
-        alert('Personal modificado exitosamente.');
+        aviso.exito('Personal modificado exitosamente.');
       } else {
         await api.post('/personal', {
           name: name.trim(),
@@ -177,14 +180,14 @@ export default function PersonalPage({ currentUser }) {
           active: true,
           ...(multiBranch && branchId ? { branchId: Number(branchId) } : {}),
         });
-        alert('Personal registrado exitosamente.');
+        aviso.exito('Personal registrado exitosamente.');
       }
 
       setShowModal(false);
       setEditingId(null);
       await loadStaff();
     } catch (err) {
-      alert('Error al guardar personal: ' + err.message);
+      aviso.error('Error al guardar personal: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -192,22 +195,28 @@ export default function PersonalPage({ currentUser }) {
 
   const handleDeleteStaff = async (id, userName) => {
     if (id === 1) {
-      alert('El Administrador principal no puede ser eliminado.');
+      aviso.error('El Administrador principal no puede ser eliminado.');
       return;
     }
     if (currentUser && currentUser.id === id) {
-      alert('No puedes eliminar tu propia cuenta en sesión.');
+      aviso.error('No puedes eliminar tu propia cuenta en sesión.');
       return;
     }
 
-    if (window.confirm(`¿Estás seguro de eliminar al usuario "${userName}"? Esta acción no se puede deshacer.`)) {
+    const seguro = await confirmar({
+      title: 'Eliminar usuario',
+      description: `Se eliminará a "${userName}". Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      tone: 'danger',
+    });
+    if (seguro) {
       try {
         setLoading(true);
         await api.delete(`/personal/${id}`);
         await loadStaff();
-        alert('Usuario eliminado correctamente.');
+        aviso.exito('Usuario eliminado correctamente.');
       } catch (err) {
-        alert(err.message || 'Error eliminando personal.');
+        aviso.error(err.message || 'Error eliminando personal.');
       } finally {
         setLoading(false);
       }
