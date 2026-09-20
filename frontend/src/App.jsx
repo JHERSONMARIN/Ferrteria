@@ -81,6 +81,8 @@ export default function App() {
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [demoMode, setDemoMode] = useState(false);
+  // Accesos rápidos de prueba definidos en el .env de la empresa (QUICK_LOGIN).
+  const [quickUsers, setQuickUsers] = useState([]);
   const [loginError, setLoginError] = useState('');
   const [loginFieldErrors, setLoginFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -110,7 +112,7 @@ export default function App() {
   // Los usuarios de prueba solo se ofrecen en la instancia de demostración.
   useEffect(() => {
     api.get('/app-info')
-      .then(info => setDemoMode(Boolean(info?.demoMode)))
+      .then(info => { setDemoMode(Boolean(info?.demoMode)); setQuickUsers(info?.quickLogin || []); })
       .catch(() => setDemoMode(false));
   }, []);
 
@@ -380,7 +382,7 @@ export default function App() {
             </form>
 
             {/* Panel de Usuarios de Prueba (Demo Rápido) */}
-            {demoMode && (
+            {(demoMode || quickUsers.length > 0) && (
             <div className="bg-slate-50 border-t border-slate-200 p-4">
               <div className="flex items-center justify-between mb-2.5">
                 <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
@@ -389,7 +391,10 @@ export default function App() {
                 <span className="text-[10px] text-slate-500 font-medium">Click para entrar directo</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {DEMO_TEST_USERS.map((demo) => (
+                {(quickUsers.length > 0 ? quickUsers.map(u => ({
+                  user: u.user, pass: u.pass, label: u.label, role: u.label, name: u.user,
+                  icon: 'fa-user', color: 'text-slate-600', bg: 'bg-white hover:bg-slate-100 border-slate-200', tag: 'Prueba',
+                })) : DEMO_TEST_USERS).map((demo) => (
                   <button
                     key={demo.user}
                     type="button"

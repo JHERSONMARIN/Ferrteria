@@ -51,9 +51,25 @@ app.use((req, res, next) => {
 // ---------- Rutas públicas ----------
 app.use('/api/auth', authRoutes);
 
+// Accesos rápidos para probar: QUICK_LOGIN="usuario:clave:Etiqueta,usuario2:clave2".
+// Se muestran en la pantalla de inicio, así que SOLO deben definirse en entornos de prueba.
+function quickLoginUsers() {
+  const raw = process.env.QUICK_LOGIN?.trim();
+  if (!raw) return [];
+  return raw.split(',').map(entry => {
+    const [user, pass, label] = entry.split(':').map(part => part?.trim());
+    return user && pass ? { user, pass, label: label || user } : null;
+  }).filter(Boolean);
+}
+
+const QUICK_LOGIN_USERS = quickLoginUsers();
+if (QUICK_LOGIN_USERS.length > 0) {
+  console.warn(`[login] ${QUICK_LOGIN_USERS.length} acceso(s) rápido(s) de prueba visibles en la pantalla de inicio (QUICK_LOGIN). No usar en producción.`);
+}
+
 // Información pública para la pantalla de inicio de sesión
 app.get('/api/app-info', (req, res) => {
-  res.json({ demoMode: process.env.DEMO_MODE === 'true' });
+  res.json({ demoMode: process.env.DEMO_MODE === 'true', quickLogin: QUICK_LOGIN_USERS });
 });
 
 app.get('/api/health', (req, res) => {
