@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { roleLabel } from '../constants/roles.js';
 
 // El menú está ordenado por frecuencia de uso: arriba lo de todos los días, al final lo que se
@@ -13,10 +13,8 @@ const NAV_GROUPS = [
     { id: 'deliveries', label: 'Entregas', icon: 'fa-truck-fast' },
   ]},
   { section: 'Almacén', items: [
-    { id: 'inventory', label: 'Productos', icon: 'fa-boxes-stacked', subItems: [
-      { id: 'inventory', label: 'Productos', icon: 'fa-box' },
-      { id: 'categories', label: 'Categorías', icon: 'fa-tags' },
-    ]},
+    { id: 'inventory', label: 'Productos', icon: 'fa-box' },
+    { id: 'categories', label: 'Categorías', icon: 'fa-tags' },
     { id: 'kardex', label: 'Movimientos', icon: 'fa-receipt' },
     { id: 'compras', label: 'Compras', icon: 'fa-cart-flatbed' },
     { id: 'transfers', label: 'Transferencias', icon: 'fa-right-left' },
@@ -30,7 +28,7 @@ const NAV_GROUPS = [
   ]},
 ];
 
-// Configuración va aparte, al pie: no es trabajo diario.
+// Configuración no es trabajo diario: se abre desde el menú del usuario, al pie.
 const SETTINGS_ITEM = { id: 'settings', label: 'Configuración', icon: 'fa-gear' };
 
 const CLAVE_COMPACTO = 'ferre_menu_compacto';
@@ -60,6 +58,20 @@ function NavButton({ item, active, compact, count, sub = false, onClick }) {
   );
 }
 
+// Una opción del menú del usuario. Va sobre fondo claro, no sobre el menú oscuro.
+function OpcionUsuario({ icon, label, onClick, peligro = false }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-left transition-colors
+        ${peligro ? 'text-danger hover:bg-danger-soft' : 'text-ink-soft hover:bg-surface-muted'}`}
+    >
+      <i className={`fa-solid ${icon} w-5 text-center`}></i>
+      {label}
+    </button>
+  );
+}
+
 export default function Sidebar({
   activeTab, onSwitchTab, user, modules, businessName, businessLogo, open, onClose, onLogout,
   onChangePassword, counts = {}, oculto = false,
@@ -68,6 +80,18 @@ export default function Sidebar({
   // El modo compacto es una preferencia de quien usa el sistema: se recuerda en este navegador.
   const [compact, setCompact] = useState(() => localStorage.getItem(CLAVE_COMPACTO) === '1');
   useEffect(() => { localStorage.setItem(CLAVE_COMPACTO, compact ? '1' : '0'); }, [compact]);
+
+  // Menú del usuario: se cierra al tocar fuera o con Escape.
+  const [menuUsuario, setMenuUsuario] = useState(false);
+  const menuUsuarioRef = useRef(null);
+  useEffect(() => {
+    if (!menuUsuario) return;
+    const fuera = (e) => { if (!menuUsuarioRef.current?.contains(e.target)) setMenuUsuario(false); };
+    const escape = (e) => { if (e.key === 'Escape') setMenuUsuario(false); };
+    document.addEventListener('mousedown', fuera);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', escape); };
+  }, [menuUsuario]);
 
   const handleSwitchTab = (tabId) => {
     onSwitchTab(tabId);
@@ -155,42 +179,50 @@ export default function Sidebar({
           })}
         </nav>
 
-        {/* Pie: configuración, usuario y sesión */}
+        {/* Pie: el usuario, y al tocarlo su menú (configuración, contraseña y salir) */}
         <div className={`border-t border-white/10 py-2 shrink-0 flex flex-col gap-0.5 ${compact ? 'lg:px-2 px-3' : 'px-3'}`}>
-          {puedeVer(SETTINGS_ITEM.id) && (
-            <NavButton
-              item={SETTINGS_ITEM}
-              active={activeTab === SETTINGS_ITEM.id}
-              compact={compact}
-              onClick={() => handleSwitchTab(SETTINGS_ITEM.id)}
-            />
-          )}
-
           {user && (
-            <>
-              <div className={`flex items-center gap-3 px-3 py-2 text-nav-ink min-w-0 ${compact ? 'lg:hidden' : ''}`}>
-                <i className="fa-solid fa-circle-user text-nav-muted text-lg shrink-0"></i>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold truncate">{user.name}</p>
-                  <p className="text-[10px] text-nav-muted uppercase truncate">{roleLabel(user.role)}</p>
+            <div className="relative" ref={menuUsuarioRef}>
+              {menuUsuario && (
+                <div className={`absolute bottom-full mb-2 z-50 bg-surface rounded-xl shadow-float border border-line
+                  overflow-hidden py-1 ${compact ? 'left-0 w-56' : 'left-0 right-0'}`}>
+                  {puedeVer(SETTINGS_ITEM.id) && (
+                    <OpcionUsuario
+                      icon={SETTINGS_ITEM.icon}
+                      label={SETTINGS_ITEM.label}
+                      onClick={() => { setMenuUsuario(false); handleSwitchTab(SETTINGS_ITEM.id); }}
+                    />
+                  )}
+                  <OpcionUsuario
+                    icon="fa-key"
+                    label="Cambiar contraseña"
+                    onClick={() => { setMenuUsuario(false); onChangePassword(); if (onClose) onClose(); }}
+                  />
+                  <div className="h-px bg-line my-1" />
+                  <OpcionUsuario icon="fa-right-from-bracket" label="Cerrar sesión" peligro onClick={onLogout} />
                 </div>
-              </div>
-              <NavButton
-                item={{ label: 'Cambiar contraseña', icon: 'fa-key' }}
-                compact={compact}
-                onClick={() => { onChangePassword(); if (onClose) onClose(); }}
-              />
+              )}
+
               <button
-                onClick={onLogout}
-                title={compact ? 'Cerrar sesión' : undefined}
-                className={`w-full flex items-center gap-3 rounded-xl text-left text-sm font-semibold
-                  text-danger hover:bg-danger/15 transition-colors
+                onClick={() => setMenuUsuario(abierto => !abierto)}
+                title={compact ? user.name : undefined}
+                className={`w-full flex items-center gap-3 rounded-xl text-left transition-colors
+                  hover:bg-white/10 ${menuUsuario ? 'bg-white/10' : ''}
                   ${compact ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}`}
               >
-                <i className="fa-solid fa-right-from-bracket w-5 text-center shrink-0"></i>
-                {!compact && 'Cerrar sesión'}
+                <i className="fa-solid fa-circle-user text-nav-muted text-lg shrink-0"></i>
+                {!compact && (
+                  <>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-bold text-nav-ink truncate">{user.name}</span>
+                      <span className="block text-[10px] text-nav-muted uppercase truncate">{roleLabel(user.role)}</span>
+                    </span>
+                    <i className={`fa-solid fa-chevron-up text-nav-muted text-xs transition-transform
+                      ${menuUsuario ? '' : 'rotate-180'}`}></i>
+                  </>
+                )}
               </button>
-            </>
+            </div>
           )}
 
           {/* Ancho del menú: solo tiene sentido en pantallas grandes */}
