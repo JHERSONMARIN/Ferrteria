@@ -24,6 +24,8 @@ import FieldError from './components/FieldError.jsx';
 import ChangePasswordForm from './components/ChangePasswordForm.jsx';
 import { api } from './api.js';
 import { MODULE_OPTIONS } from './constants/modules.js';
+import { applyTheme } from './utils/theme.js';
+import { ToastProvider, ConfirmProvider } from './components/ui/index.js';
 
 const DEMO_TEST_USERS = [
   {
@@ -72,7 +74,18 @@ const DEMO_TEST_USERS = [
   },
 ];
 
+// Los avisos flotantes y las confirmaciones están disponibles en todo el sistema (adiós a alert y confirm).
 export default function App() {
+  return (
+    <ToastProvider>
+      <ConfirmProvider>
+        <Aplicacion />
+      </ConfirmProvider>
+    </ToastProvider>
+  );
+}
+
+function Aplicacion() {
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('ferre_user');
     return saved ? JSON.parse(saved) : null;
@@ -117,6 +130,11 @@ export default function App() {
       .then(info => { setDemoMode(Boolean(info?.demoMode)); setQuickUsers(info?.quickLogin || []); setLoginBrand(info?.business || null); })
       .catch(() => setDemoMode(false));
   }, []);
+
+  // Color de la empresa: en el inicio de sesión viene de /app-info y, ya dentro, de la configuración.
+  useEffect(() => {
+    applyTheme(settings?.primaryColor ?? loginBrand?.primaryColor);
+  }, [settings?.primaryColor, loginBrand?.primaryColor]);
 
   // Módulos visibles: los asignados al usuario que además estén activos en la empresa.
   // Mientras carga no se muestra ninguno (evita enseñar módulos desactivados); si la carga
