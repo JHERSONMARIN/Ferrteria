@@ -110,12 +110,7 @@ export default function AuditPage() {
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
         <div className="p-4 border-b border-line bg-surface-muted flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <span className="bg-nav text-white px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
-              <i className="fa-solid fa-shield-halved"></i> Administración
-            </span>
-            <h3 className="font-bold text-ink text-lg">Auditoría {data && <span className="text-muted font-normal text-sm">({data.total} registros)</span>}</h3>
-          </div>
+          {data && <p className="text-sm font-bold text-ink">{data.total} registro{data.total === 1 ? '' : 's'}</p>}
           <p className="text-xs text-muted">
             Anulaciones, descuentos, cambios de precio, cierres de caja, ajustes de stock y cambios de configuración o de personal.
           </p>

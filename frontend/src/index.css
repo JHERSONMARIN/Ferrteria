@@ -14,6 +14,13 @@ body {
   padding: 0;
 }
 
+/* Los números alineados a la derecha se leen mejor con cifras del mismo ancho: así las cantidades
+   quedan una debajo de otra y se comparan de un vistazo. */
+td.text-right,
+th.text-right {
+  font-variant-numeric: tabular-nums;
+}
+
 .tab-content {
   display: none;
 }

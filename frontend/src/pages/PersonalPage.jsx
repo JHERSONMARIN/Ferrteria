@@ -229,19 +229,12 @@ export default function PersonalPage({ currentUser }) {
         {/* Header */}
         <div className="p-4 border-b border-line flex flex-wrap gap-3 justify-between items-center bg-surface-muted/80">
           <div>
-            <h3 className="font-bold text-ink text-lg flex items-center gap-2">
-              <i className="fa-solid fa-id-badge text-brand"></i> Módulo de Personal y Permisos
-            </h3>
-            <p className="text-xs text-muted mt-0.5">
-              Administra colaboradores, roles asignados, contraseñas y módulos a los que tienen acceso.
+            <p className="text-xs text-muted">
+              Quién entra al sistema, con qué rol y a qué pantallas tiene acceso.
             </p>
           </div>
-          <button
-            onClick={handleOpenCreate}
-            className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2.5 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2"
-          >
-            <i className="fa-solid fa-user-plus"></i>
-            <span>Nuevo Personal</span>
+          <button onClick={handleOpenCreate} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2">
+            <i className="fa-solid fa-user-plus"></i> Nuevo usuario
           </button>
         </div>
 

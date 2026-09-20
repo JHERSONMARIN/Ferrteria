@@ -198,14 +198,9 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
         {/* Encabezado Principal */}
         <div className="p-4 border-b border-line flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-muted">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="bg-brand-soft text-brand-text px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                <i className="fa-solid fa-tags"></i> Almacén
-              </span>
-              <h3 className="font-bold text-ink text-lg">Categorías ({categories.length})</h3>
-            </div>
+            <p className="text-sm font-bold text-ink">{categories.length} categoría{categories.length === 1 ? '' : 's'}</p>
             <p className="text-xs text-muted">
-              Organización centralizada de productos por categorías, valorización de capital y control de rotación.
+              Cómo se agrupan los productos, con su capital invertido y su rotación.
             </p>
           </div>
 

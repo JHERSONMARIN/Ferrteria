@@ -101,10 +101,7 @@ export default function CotizacionesPage() {
         <div className="p-4 border-b border-line flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-muted">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="bg-brand-soft text-brand-text px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                <i className="fa-solid fa-file-invoice"></i> Ventas
-              </span>
-              <h3 className="font-bold text-ink text-lg">Cotizaciones ({cotizaciones.length})</h3>
+              <p className="text-sm font-bold text-ink">{cotizaciones.length} cotización{cotizaciones.length === 1 ? '' : 'es'}</p>
               {pendingCount > 0 && (
                 <span className="bg-warning-soft text-warning px-2 py-0.5 rounded-full text-[11px] font-bold border border-warning/30">
                   {pendingCount} pendiente{pendingCount === 1 ? '' : 's'}
@@ -112,7 +109,7 @@ export default function CotizacionesPage() {
               )}
             </div>
             <p className="text-xs text-muted">
-              Historial de proformas / cotizaciones generadas desde el Punto de Venta.
+              Proformas generadas al vender. Se cargan de vuelta desde el Punto de Venta.
             </p>
           </div>
         </div>

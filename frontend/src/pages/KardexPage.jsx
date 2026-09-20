@@ -194,30 +194,24 @@ export default function KardexPage({ currentUser }) {
         {/* Encabezado Principal */}
         <div className="p-4 border-b border-line flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-muted">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="bg-brand-soft text-brand-text px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                <i className="fa-solid fa-receipt"></i> Almacén
-              </span>
-              <h3 className="font-bold text-ink text-lg">Kardex de Inventario</h3>
-            </div>
             <p className="text-xs text-muted">
-              Trazabilidad física de entradas, salidas por ventas, compras y ajustes de existencias.
+              Entradas, salidas por ventas, compras y ajustes de existencias, producto por producto.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2 w-full md:w-auto justify-end items-center">
             <button
               onClick={handleExportExcel}
-              className="bg-success hover:brightness-95 text-white px-3 py-2 rounded-lg text-sm font-bold shadow transition-colors flex items-center gap-2"
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-file-excel"></i> Exportar Excel
+              <i className="fa-solid fa-file-excel"></i> Exportar
             </button>
 
             <button
               onClick={handleOpenManualModal}
-              className="bg-nav hover:bg-nav-strong text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2"
+              className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-plus"></i> Registrar Movimiento
+              <i className="fa-solid fa-plus"></i> Registrar movimiento
             </button>
           </div>
         </div>

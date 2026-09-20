@@ -254,14 +254,9 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
         {/* Header de la Página */}
         <div className="p-4 border-b border-line flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-muted">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="bg-brand-soft text-brand-text px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                <i className="fa-solid fa-box"></i> Almacén
-              </span>
-              <h3 className="font-bold text-ink text-lg">Catálogo de Productos ({products.length})</h3>
-            </div>
+            <p className="text-sm font-bold text-ink">{products.length} producto{products.length === 1 ? '' : 's'} en el catálogo</p>
             <p className="text-xs text-muted">
-              Control de existencias físicas, alertas de reposición de stock mínimo y exportación valorizada.
+              Existencias, alertas de stock mínimo y valorización del almacén.
             </p>
           </div>
 
@@ -269,22 +264,22 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
             {onNavigateToCategories && (
               <button
                 onClick={onNavigateToCategories}
-                className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+                className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
               >
-                <i className="fa-solid fa-tags text-brand"></i> Gestionar Categorías
+                <i className="fa-solid fa-tags"></i> Categorías
               </button>
             )}
             <button
               onClick={handleExportExcel}
-              className="bg-success hover:brightness-95 text-white px-4 py-2 rounded-lg text-sm font-bold shadow transition-colors flex items-center gap-2"
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-file-excel"></i> Exportar Excel
+              <i className="fa-solid fa-file-excel"></i> Exportar
             </button>
             <button
               onClick={openCreateModal}
-              className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2"
+              className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-plus"></i> Agregar Producto
+              <i className="fa-solid fa-plus"></i> Agregar producto
             </button>
           </div>
         </div>
@@ -388,7 +383,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                         )}
                       </td>
                       <td className="px-4 py-3 text-right text-xs text-muted">{formatQuantity(p.minStock ?? 10)}</td>
-                      <td className="px-4 py-3 text-right font-bold text-brand">
+                      <td className="px-4 py-3 text-right font-bold text-ink tabular-nums">
                         S/ {parseFloat(p.price).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-center">

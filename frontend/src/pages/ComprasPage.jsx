@@ -256,21 +256,14 @@ export default function ComprasPage() {
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-ink">Módulo de Compras a Proveedores</h2>
-          <p className="text-xs text-muted">Ingreso de facturas/guías de proveedores, control de stock e histórico de variación de precios de compra.</p>
+          <p className="text-xs text-muted">Facturas y guías de proveedores: ingresan stock y actualizan el costo de cada producto.</p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={() => setShowProveedorModal(true)}
-            className="bg-info hover:brightness-95 text-white font-bold py-2 px-4 rounded-lg shadow text-sm transition-colors"
-          >
-            <i className="fa-solid fa-truck-field mr-2"></i>Nuevo Proveedor
+          <button onClick={() => setShowProveedorModal(true)} className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2">
+            <i className="fa-solid fa-truck-field"></i> Nuevo proveedor
           </button>
-          <button
-            onClick={handleOpenCompraModal}
-            className="bg-brand hover:bg-brand-strong text-brand-contrast font-bold py-2 px-4 rounded-lg shadow text-sm transition-colors"
-          >
-            <i className="fa-solid fa-cart-flatbed mr-2"></i>Registrar Compra
+          <button onClick={handleOpenCompraModal} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2">
+            <i className="fa-solid fa-cart-flatbed"></i> Registrar compra
           </button>
         </div>
       </div>

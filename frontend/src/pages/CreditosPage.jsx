@@ -81,8 +81,7 @@ export default function CreditosPage() {
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
         <div className="p-4 border-b border-line flex justify-between items-center bg-surface-muted">
           <div>
-            <h3 className="font-bold text-ink text-lg">Módulo de Créditos (Cuentas por Cobrar)</h3>
-            <p className="text-xs text-muted">Control de deudas de clientes con verificación de límite de crédito de fiado.</p>
+            <p className="text-xs text-muted">Deudas de clientes, abonos y control del límite de fiado.</p>
           </div>
         </div>
 

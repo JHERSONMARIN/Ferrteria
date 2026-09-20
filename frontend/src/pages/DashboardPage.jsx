@@ -39,9 +39,8 @@ export default function DashboardPage({ periodReports = true }) {
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-ink">Panel de Control y Finanzas</h2>
-          <p className="text-xs text-muted mt-0.5">
-            Visión estratégica de ingresos en caja, cuentas por cobrar, capital de inventario y rotación comercial.
+          <p className="text-xs text-muted">
+            Ingresos en caja, cuentas por cobrar, capital en inventario y rotación del negocio.
           </p>
         </div>
         {view === 'summary' && <button

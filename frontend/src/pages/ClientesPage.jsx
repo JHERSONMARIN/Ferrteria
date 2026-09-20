@@ -147,14 +147,11 @@ export default function ClientesPage() {
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
         <div className="p-4 border-b border-line flex justify-between items-center bg-surface-muted">
           <div>
-            <h3 className="font-bold text-ink text-lg">Directorio de Clientes</h3>
-            <p className="text-xs text-muted">Gestión de clientes y control de asignación de límites de crédito (Fiado).</p>
+            <p className="text-sm font-bold text-ink">{clients.length} cliente{clients.length === 1 ? '' : 's'}</p>
+            <p className="text-xs text-muted">Datos del cliente y su límite de crédito (fiado).</p>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-brand hover:bg-brand-strong text-brand-contrast font-bold py-2 px-4 rounded-lg shadow text-sm transition-colors"
-          >
-            <i className="fa-solid fa-user-plus mr-2"></i>Nuevo Cliente
+          <button onClick={() => setShowModal(true)} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2">
+            <i className="fa-solid fa-user-plus"></i> Nuevo cliente
           </button>
         </div>
 
