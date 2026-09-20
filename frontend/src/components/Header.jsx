@@ -1,39 +1,38 @@
 import React from 'react';
-import { roleLabel } from '../constants/roles.js';
+import Badge from './ui/Badge.jsx';
 
-export default function Header({ pageTitle, user, showBranch = false, onResetDemo, onToggleSidebar }) {
+// Barra superior: el nombre de la pantalla se escribe aquí y en ningún otro lado, para no repetirlo
+// dentro de la página. A la derecha queda el contexto (la sucursal en la que se está trabajando).
+export default function Header({ pageTitle, pageHint, user, showBranch = false, onResetDemo, onToggleSidebar }) {
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-3 sm:px-6 gap-2 shadow-sm z-10 shrink-0">
-      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+    <header className="h-16 bg-surface border-b border-line flex items-center justify-between px-3 sm:px-5 gap-3 shrink-0 z-10">
+      <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onToggleSidebar}
-          className="text-slate-500 hover:text-orange-600 lg:hidden shrink-0 p-1"
+          className="text-muted hover:text-ink lg:hidden shrink-0 p-2 -ml-1 rounded-lg hover:bg-surface-muted"
+          title="Menú"
         >
           <i className="fa-solid fa-bars text-lg"></i>
         </button>
-        <h2 className="text-base sm:text-xl font-bold text-slate-800 flex items-center flex-wrap gap-2 min-w-0">
-          <span className="truncate">{pageTitle}</span>
-          {user && (
-            <span className="hidden sm:flex text-xs bg-slate-200 px-3 py-1 rounded-full text-slate-600 font-normal items-center gap-1">
-              <i className="fa-solid fa-user text-slate-500"></i> {user.name} ({roleLabel(user.role)})
-            </span>
-          )}
-          {user && showBranch && user.branch && (
-            <span className="flex text-xs bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full text-orange-700 font-semibold items-center gap-1">
-              <i className="fa-solid fa-store"></i> {user.branch.name}
-            </span>
-          )}
-        </h2>
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-lg font-bold text-ink truncate leading-tight">{pageTitle}</h1>
+          {pageHint && <p className="text-xs text-muted truncate hidden sm:block">{pageHint}</p>}
+        </div>
       </div>
 
-      {onResetDemo && (
-        <button
-          onClick={onResetDemo}
-          className="text-xs text-red-500 hover:text-red-700 bg-red-50 px-2 py-1 rounded font-bold border border-red-200 shrink-0 hidden sm:block"
-        >
-          Reset Demo
-        </button>
-      )}
+      <div className="flex items-center gap-2 shrink-0">
+        {user && showBranch && user.branch && (
+          <Badge tone="brand" icon="fa-store">{user.branch.name}</Badge>
+        )}
+        {onResetDemo && (
+          <button
+            onClick={onResetDemo}
+            className="text-xs font-semibold text-danger hover:bg-danger-soft px-2.5 py-1.5 rounded-lg hidden sm:block"
+          >
+            Reiniciar demo
+          </button>
+        )}
+      </div>
     </header>
   );
 }

@@ -25,7 +25,7 @@ import ChangePasswordForm from './components/ChangePasswordForm.jsx';
 import { api } from './api.js';
 import { MODULE_OPTIONS } from './constants/modules.js';
 import { applyTheme } from './utils/theme.js';
-import { ToastProvider, ConfirmProvider } from './components/ui/index.js';
+import { ToastProvider, ConfirmProvider, useToast, useConfirm } from './components/ui/index.js';
 
 const DEMO_TEST_USERS = [
   {
@@ -86,6 +86,9 @@ export default function App() {
 }
 
 function Aplicacion() {
+  const aviso = useToast();
+  const confirmar = useConfirm();
+
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('ferre_user');
     return saved ? JSON.parse(saved) : null;
@@ -182,6 +185,30 @@ function Aplicacion() {
     return tabs;
   }, [effectiveModules, isAdmin, saleFlowMode, branchCount, licensedFeatures, dispatchNeeded, canDispatchHere]);
 
+  // Pendientes que se muestran en el menú: así se sabe si hay trabajo sin entrar a la pantalla.
+  const [counts, setCounts] = useState({});
+  const verCobros = navigableTabs.includes('cobros');
+  const verDespacho = navigableTabs.includes('despacho');
+
+  useEffect(() => {
+    if (!currentUser?.id || (!verCobros && !verDespacho)) return setCounts({});
+    let vigente = true;
+    const contar = async () => {
+      const [cobros, despacho] = await Promise.all([
+        verCobros ? api.get('/pedidos?status=PENDING_PAYMENT').catch(() => null) : null,
+        verDespacho ? api.get('/pedidos?status=PAID').catch(() => null) : null,
+      ]);
+      if (!vigente) return;
+      setCounts(prev => ({
+        cobros: cobros ? cobros.length : prev.cobros,
+        despacho: despacho ? despacho.length : prev.despacho,
+      }));
+    };
+    contar();
+    const reloj = setInterval(contar, 20000);
+    return () => { vigente = false; clearInterval(reloj); };
+  }, [currentUser?.id, verCobros, verDespacho]);
+
   const loadSettings = async () => {
     // Las sucursales solo se muestran si hay más de una; un error aquí no bloquea la aplicación.
     api.get('/sucursales').then(list => setBranchCount(list.length)).catch(() => setBranchCount(1));
@@ -246,7 +273,7 @@ function Aplicacion() {
     const onSessionExpired = () => {
       if (localStorage.getItem('ferre_user')) {
         localStorage.removeItem('ferre_user');
-        alert('Su sesión terminó o su usuario fue modificado. Inicie sesión nuevamente.');
+        aviso.aviso('Su sesión terminó o su usuario fue modificado. Inicie sesión nuevamente.', 8000);
       }
       setCurrentUser(null);
     };
@@ -317,10 +344,13 @@ function Aplicacion() {
     setLoginPass('');
   };
 
-  const handleResetDemo = () => {
-    if (window.confirm('¿Desea reiniciar la sesión y limpiar datos locales del cliente?')) {
-      handleLogout();
-    }
+  const handleResetDemo = async () => {
+    const seguro = await confirmar({
+      title: 'Reiniciar la demostración',
+      description: 'Se cerrará la sesión y se limpiarán los datos guardados en este navegador.',
+      confirmText: 'Reiniciar',
+    });
+    if (seguro) handleLogout();
   };
 
   const handleSwitchTab = (tabId) => {
@@ -330,25 +360,27 @@ function Aplicacion() {
     setActiveTab(tabId);
   };
 
+  // Los títulos son los mismos nombres del menú: la pantalla no vuelve a escribirlos adentro.
   const pageTitles = {
-    'pos': 'Punto de Venta',
-    'caja': 'Arqueo y Control de Caja Chica',
-    'inventory': 'Almacén - Productos',
-    'categories': 'Almacén - Categorías de Productos',
-    'cotizaciones': 'Cotizaciones / Proformas',
-    'kardex': 'Kardex / Movimientos de Almacén',
-    'compras': 'Compras a Proveedores',
-    'deliveries': 'Entregas',
-    'client-dir': 'Directorio de Clientes',
-    'customers': 'Módulo de Créditos',
-    'personal': 'Módulo de Personal',
-    'dashboard': 'Finanzas / Reportes',
-    'settings': 'Configuración de la Empresa',
-    'audit': 'Auditoría',
-    'transfers': 'Transferencias entre Sucursales',
-    'cobros': 'Pedidos por Cobrar',
-    'despacho': 'Pedidos por Despachar',
+    'pos': ['Vender', 'Arme la venta, cobre e imprima el comprobante.'],
+    'caja': ['Caja', 'Apertura, movimientos y arqueo del turno.'],
+    'inventory': ['Productos', 'Stock, precios y datos de cada producto.'],
+    'categories': ['Categorías', 'Cómo se agrupan los productos en el catálogo.'],
+    'cotizaciones': ['Cotizaciones', 'Proformas enviadas y su seguimiento.'],
+    'kardex': ['Movimientos', 'Entradas y salidas de almacén, producto por producto.'],
+    'compras': ['Compras', 'Órdenes a proveedores e ingreso de mercadería.'],
+    'deliveries': ['Entregas', 'Pedidos con envío a domicilio.'],
+    'client-dir': ['Clientes', 'Directorio de clientes del negocio.'],
+    'customers': ['Créditos', 'Deudas, pagos y clientes con fiado.'],
+    'personal': ['Personal', 'Usuarios, accesos y permisos.'],
+    'dashboard': ['Reportes', 'Ventas, ganancias y estado del negocio.'],
+    'settings': ['Configuración', 'Datos de la empresa, módulos y sucursales.'],
+    'audit': ['Auditoría', 'Quién hizo cada cambio y cuándo.'],
+    'transfers': ['Transferencias', 'Envío de mercadería entre sucursales.'],
+    'cobros': ['Por cobrar', 'Pedidos esperando pago en caja.'],
+    'despacho': ['Por despachar', 'Pedidos pagados listos para entregar.'],
   };
+  const [pageTitle, pageHint] = pageTitles[activeTab] || pageTitles['pos'];
 
   return (
     <>
@@ -454,7 +486,7 @@ function Aplicacion() {
           {showChangePassword && (
             <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
               <ChangePasswordForm
-                onDone={() => { handlePasswordChanged(); alert('Contraseña actualizada.'); }}
+                onDone={() => { handlePasswordChanged(); aviso.exito('Contraseña actualizada.'); }}
                 onCancel={() => setShowChangePassword(false)}
               />
             </div>
@@ -470,11 +502,13 @@ function Aplicacion() {
             onClose={() => setSidebarOpen(false)}
             onLogout={handleLogout}
             onChangePassword={() => setShowChangePassword(true)}
+            counts={counts}
           />
 
           <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
             <Header
-              pageTitle={pageTitles[activeTab] || 'Punto de Venta'}
+              pageTitle={pageTitle}
+              pageHint={pageHint}
               user={currentUser}
               showBranch={branchCount > 1}
               onResetDemo={demoMode ? handleResetDemo : undefined}

@@ -435,13 +435,6 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
   return (
     <div className="tab-content active h-full overflow-auto">
       <div className="max-w-4xl mx-auto p-4 pb-28 flex flex-col gap-5">
-        <div>
-          <h2 className="text-lg font-bold text-slate-800">Configuración de la empresa</h2>
-          <p className="text-xs text-slate-500">
-            Estos datos aparecen en los comprobantes y definen qué módulos usa el negocio.
-          </p>
-        </div>
-
         <Card icon="fa-id-card" title="Mi plan" description="Qué incluye el sistema contratado con VALETEC.">
           <MiPlan
             license={license}
