@@ -1,0 +1,57 @@
+// Base de la consola de VALETEC (ferresys_control). No guarda datos de las ferreterías: solo quién
+// administra la plataforma, qué empresas existen y el historial de cambios de plan.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Personal de VALETEC que entra a la consola.
+model ConsoleUser {
+  id                 Int      @id @default(autoincrement())
+  name               String
+  user               String   @unique
+  pass               String
+  active             Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("console_users")
+}
+
+// Empresas conocidas por la consola. La verdad operativa sigue en deploy/companies/<slug>/.env;
+// aquí se guardan los datos comerciales y de contacto que no viven en el .env.
+model ManagedCompany {
+  id         Int       @id @default(autoincrement())
+  slug       String    @unique
+  name       String
+  contact    String?
+  phone      String?
+  email      String?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  removedAt  DateTime?
+
+  @@map("managed_companies")
+}
+
+// Qué hizo VALETEC y cuándo: crear empresa, cambiar plan, suspender, actualizar, dar de baja.
+model ConsoleAudit {
+  id        Int      @id @default(autoincrement())
+  action    String
+  slug      String?
+  summary   String
+  details   Json?
+  ok        Boolean  @default(true)
+  userId    Int?
+  userName  String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("console_audit")
+}
