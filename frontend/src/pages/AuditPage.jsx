@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../api.js';
+import { SkeletonTable } from '../components/ui/index.js';
 
 // Color por tipo de acción: rojo para anulaciones/bajas, ámbar para dinero y precios.
 const ACTION_STYLE = {
@@ -145,7 +146,7 @@ export default function AuditPage() {
 
         <div className="flex-1 p-4">
           {error && <p className="text-sm text-danger mb-3">{error}</p>}
-          {loading && !data && <p className="text-sm text-muted"><i className="fa-solid fa-spinner fa-spin mr-2"></i>Cargando…</p>}
+          {loading && !data && <SkeletonTable rows={6} columns={5} />}
           {data && data.items.length === 0 && (
             <div className="text-center py-16 text-muted">
               <i className="fa-solid fa-clipboard-check text-4xl mb-3"></i>

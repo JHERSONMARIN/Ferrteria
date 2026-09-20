@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
-import { useToast } from '../components/ui/index.js';
+import { useToast, EmptyState, SkeletonCards } from '../components/ui/index.js';
 
 // Paleta de colores temáticos para categorías
 const COLOR_CLASSES = {
@@ -256,13 +256,16 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
           {/* Grid de Tarjetas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {loading && categories.length === 0 ? (
-              <div className="col-span-full text-center py-12 text-muted">
-                <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando Categorías...
-              </div>
+              <div className="col-span-full"><SkeletonCards count={8} /></div>
             ) : filteredCategories.length === 0 ? (
-              <div className="col-span-full text-center py-12 bg-surface rounded-xl border border-line text-muted">
-                <i className="fa-solid fa-tags text-4xl mb-2 text-muted"></i>
-                <p>No se encontraron categorías con el término ingresado.</p>
+              <div className="col-span-full bg-surface rounded-2xl border border-line">
+                <EmptyState
+                  icon="fa-tags"
+                  title={categories.length === 0 ? 'Todavía no hay categorías' : 'Ninguna categoría coincide'}
+                  description={categories.length === 0
+                    ? 'Agrupe sus productos por categoría para encontrarlos más rápido al vender.'
+                    : 'Pruebe con otro texto.'}
+                />
               </div>
             ) : (
               filteredCategories.map(cat => {

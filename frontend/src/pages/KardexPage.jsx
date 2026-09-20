@@ -4,7 +4,7 @@ import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { quantityProblem, roundQuantity, formatQuantity } from '../utils/quantities.js';
-import { useToast } from '../components/ui/index.js';
+import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
 
 const COMMON_REASONS = {
   ENTRADA: [
@@ -398,14 +398,16 @@ export default function KardexPage({ currentUser }) {
             <tbody className="text-sm divide-y divide-line">
               {loading && kardexRecords.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-8 text-center text-muted">
-                    <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando movimientos de Kardex...
-                  </td>
+                  <td colSpan="8" className="p-0"><SkeletonTable rows={8} columns={5} /></td>
                 </tr>
               ) : kardexRecords.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-8 text-center text-muted">
-                    No se encontraron movimientos registrados en este periodo o filtro.
+                  <td colSpan="8" className="p-0">
+                    <EmptyState
+                      icon="fa-receipt"
+                      title="Sin movimientos en este período"
+                      description="Cambie las fechas o el filtro para ver otras entradas y salidas."
+                    />
                   </td>
                 </tr>
               ) : (

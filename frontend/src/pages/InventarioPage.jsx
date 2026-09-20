@@ -4,7 +4,7 @@ import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quantities.js';
-import { useToast } from '../components/ui/index.js';
+import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
 
 export default function InventarioPage({ initialCategory = 'Todas', onNavigateToCategories, currentUser }) {
   const aviso = useToast();
@@ -348,14 +348,25 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
             <tbody className="text-sm divide-y divide-line">
               {loading && products.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="text-center py-8 text-muted">
-                    <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando catálogo...
-                  </td>
+                  <td colSpan="9" className="p-0"><SkeletonTable rows={8} columns={5} /></td>
                 </tr>
               ) : filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="text-center py-8 text-muted">
-                    No se encontraron productos en esta categoría o búsqueda.
+                  <td colSpan="9" className="p-0">
+                    {products.length === 0 ? (
+                      <EmptyState
+                        icon="fa-box"
+                        title="Todavía no hay productos"
+                        description="Cargue su catálogo para empezar a vender y a controlar el stock."
+                        action={<button onClick={openCreateModal} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold">Agregar el primero</button>}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon="fa-magnifying-glass"
+                        title="Ningún producto coincide"
+                        description="Pruebe con otro texto o quite el filtro de categoría."
+                      />
+                    )}
                   </td>
                 </tr>
               ) : (

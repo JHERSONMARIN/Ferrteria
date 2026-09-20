@@ -7,7 +7,7 @@ import { formatSoles } from '../utils/currency.js';
 import { findCustomerByInput } from '../utils/customers.js';
 import { buildSaleTicket, buildOrderTicket } from '../utils/tickets.js';
 import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../utils/quantities.js';
-import { useToast, useConfirm } from '../components/ui/index.js';
+import { useToast, useConfirm, SkeletonCards } from '../components/ui/index.js';
 
 // Stock que se puede vender: lo reservado por pedidos sin despachar ya tiene dueño.
 const availableStock = (product) => roundQuantity(product.stock - (product.reserved || 0));
@@ -560,9 +560,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             </p>
 
             {loading && products.length === 0 ? (
-              <div className="text-center py-16 text-muted text-sm">
-                <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando productos…
-              </div>
+              <SkeletonCards count={8} />
             ) : filteredProducts.length === 0 ? (
               <div className="text-center py-16 text-muted">
                 <i className="fa-solid fa-magnifying-glass text-3xl mb-3 text-muted"></i>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
-import { useToast } from '../components/ui/index.js';
+import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
 
 const STATUS_STYLE = {
   PENDIENTE: { label: 'Pendiente', badge: 'bg-warning-soft text-warning border-warning/30' },
@@ -171,15 +171,18 @@ export default function CotizacionesPage() {
               <tbody>
                 {loading && cotizaciones.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-muted">
-                      <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando cotizaciones...
-                    </td>
+                    <td colSpan={7} className="p-0"><SkeletonTable rows={6} columns={5} /></td>
                   </tr>
                 ) : filteredCotizaciones.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-muted">
-                      <i className="fa-solid fa-file-invoice text-4xl mb-2 text-muted block"></i>
-                      No se encontraron cotizaciones con los filtros aplicados.
+                    <td colSpan={7} className="p-0">
+                      <EmptyState
+                        icon="fa-file-invoice"
+                        title={cotizaciones.length === 0 ? 'Todavía no hay cotizaciones' : 'Ninguna cotización coincide'}
+                        description={cotizaciones.length === 0
+                          ? 'Las proformas que guarde desde el Punto de Venta aparecen aquí.'
+                          : 'Pruebe con otro texto o cambie los filtros.'}
+                      />
                     </td>
                   </tr>
                 ) : (
