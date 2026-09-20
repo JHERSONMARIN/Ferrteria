@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import CashRegistersSettings from '../components/CashRegistersSettings.jsx';
 import BranchesSettings from '../components/BranchesSettings.jsx';
 import { DISPATCH_ROLE_OPTIONS, effectiveDispatchRole } from '../constants/dispatch.js';
+import { FEATURE_LABELS, FEATURE_ORDER } from '../constants/features.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../constants/modules.js';
@@ -85,13 +86,60 @@ function Field({ label, error, hint, children }) {
   );
 }
 
-// Lo que el plan de la empresa no incluye se muestra, pero bloqueado: así se ve qué se gana al ampliarlo.
-function NoIncluido({ texto }) {
+// Resumen del plan: lo que la empresa tiene y lo que podría sumar. Es el único lugar donde se nombra
+// lo no contratado; en el resto de las pantallas simplemente no aparece.
+function MiPlan({ license, licensedModules, licensedFeatures, enabledModules }) {
+  const incluidos = (licensedModules ?? MODULE_OPTIONS.map(m => m.value));
+  const funcionesIncluidas = licensedFeatures ?? FEATURE_ORDER;
+  const moduloLabel = (value) => MODULE_OPTIONS.find(m => m.value === value)?.label ?? value;
+  const faltantes = [
+    ...MODULE_OPTIONS.filter(m => !incluidos.includes(m.value)).map(m => m.label),
+    ...FEATURE_ORDER.filter(f => !funcionesIncluidas.includes(f)).map(f => FEATURE_LABELS[f]),
+  ];
+
   return (
-    <p className="text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg px-3 py-3">
-      <i className="fa-solid fa-lock mr-1.5 text-slate-400"></i>
-      <strong>No incluido en su plan.</strong> {texto} Consulte con VALETEC para ampliarlo.
-    </p>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="bg-slate-800 text-white text-xs font-bold px-2.5 py-1 rounded-lg">
+          Plan {license?.plan ? license.plan.toUpperCase() : 'sin restricciones'}
+        </span>
+        {license?.expiresAt && (
+          <span className={`text-xs ${license.expired ? 'text-red-600 font-bold' : 'text-slate-500'}`}>
+            {license.expired ? `Venció el ${license.expiresAt}` : `Vigente hasta el ${license.expiresAt}`}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs font-bold text-slate-600 mb-1">Incluye</p>
+          <ul className="text-xs text-slate-600 flex flex-col gap-0.5">
+            {incluidos.map(value => (
+              <li key={value}>
+                <i className="fa-solid fa-check text-emerald-600 mr-1.5"></i>
+                {moduloLabel(value)}
+                {!enabledModules.includes(value) && !ALWAYS_ENABLED_MODULES.includes(value) && (
+                  <span className="text-slate-400"> (desactivado por usted)</span>
+                )}
+              </li>
+            ))}
+            {funcionesIncluidas.map(f => (
+              <li key={f}><i className="fa-solid fa-check text-emerald-600 mr-1.5"></i>{FEATURE_LABELS[f]}</li>
+            ))}
+          </ul>
+        </div>
+
+        {faltantes.length > 0 && (
+          <div>
+            <p className="text-xs font-bold text-slate-600 mb-1">Puede sumar a su plan</p>
+            <ul className="text-xs text-slate-500 flex flex-col gap-0.5">
+              {faltantes.map(label => <li key={label}><i className="fa-solid fa-plus text-slate-400 mr-1.5"></i>{label}</li>)}
+            </ul>
+            <p className="text-[11px] text-slate-400 mt-1.5">Consulte con VALETEC para ampliar su plan.</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -109,7 +157,7 @@ function Card({ icon, title, description, children }) {
   );
 }
 
-export default function SettingsPage({ currentUser, onSaved, hasFeature = () => true }) {
+export default function SettingsPage({ currentUser, onSaved, hasFeature = () => true, licensedFeatures = null, license = null }) {
   // Al crear o renombrar sucursales se recarga la lista de cajas (muestra su sucursal).
   const [branchesVersion, setBranchesVersion] = useState(0);
   const [savedSettings, setSavedSettings] = useState(null);
@@ -291,6 +339,15 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
           </p>
         </div>
 
+        <Card icon="fa-id-card" title="Mi plan" description="Qué incluye el sistema contratado con VALETEC.">
+          <MiPlan
+            license={license}
+            licensedModules={licensedModules}
+            licensedFeatures={licensedFeatures}
+            enabledModules={form.enabledModules}
+          />
+        </Card>
+
         <Card icon="fa-building" title="Datos de la empresa" description="Se imprimen en la cabecera de tickets y comprobantes.">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Razón social *" error={errors.legalName}>
@@ -367,30 +424,29 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
           </div>
         </Card>
 
-        <Card icon="fa-percent" title="Descuentos" description="Cuánto puede descontar el personal en el Punto de Venta.">
+        {hasFeature('discounts') && <Card icon="fa-percent" title="Descuentos" description="Cuánto puede descontar el personal en el Punto de Venta.">
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-start">
             <Field label="Descuento máximo (%)" error={errors.maxDiscountPercent} hint="0 = solo el administrador descuenta.">
               {input('maxDiscountPercent', { type: 'number', min: 0, max: 100, step: '0.01' })}
             </Field>
-            {!hasFeature('discounts') && <p className="sm:col-span-4"><NoIncluido texto="Los descuentos son parte del plan Profesional." /></p>}
             <p className="sm:col-span-3 text-xs text-slate-500 leading-relaxed sm:pt-6">
               Vendedores y cajeros pueden rebajar el total de una venta o pedido hasta este porcentaje.
               El administrador no tiene tope. Cada venta guarda el monto descontado y quién lo aplicó.
             </p>
           </div>
-        </Card>
+        </Card>}
 
-        <Card icon="fa-store" title="Sucursales" description="Sucursales o almacenes con stock propio. Con una sola, el sistema no muestra nada de sucursales. Se guarda al momento.">
-          {hasFeature('branches')
-            ? <BranchesSettings onChanged={() => setBranchesVersion(v => v + 1)} />
-            : <NoIncluido texto="Varias sucursales, con su stock y sus transferencias, son parte del plan Empresa." />}
-        </Card>
+        {hasFeature('branches') && (
+          <Card icon="fa-store" title="Sucursales" description="Sucursales o almacenes con stock propio. Con una sola, el sistema no muestra nada de sucursales. Se guarda al momento.">
+            <BranchesSettings onChanged={() => setBranchesVersion(v => v + 1)} />
+          </Card>
+        )}
 
-        <Card icon="fa-cash-register" title="Cajas" description="Gavetas físicas. Varios cajeros pueden compartir el turno de una caja. Se guarda al momento.">
-          {hasFeature('shared_cash')
-            ? <CashRegistersSettings key={branchesVersion} />
-            : <NoIncluido texto="Varias cajas y los turnos compartidos entre cajeros son parte del plan Profesional." />}
-        </Card>
+        {hasFeature('shared_cash') && (
+          <Card icon="fa-cash-register" title="Cajas" description="Gavetas físicas. Varios cajeros pueden compartir el turno de una caja. Se guarda al momento.">
+            <CashRegistersSettings key={branchesVersion} />
+          </Card>
+        )}
 
         <Card
           icon="fa-route"
@@ -414,7 +470,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {SALE_FLOW_OPTIONS.map(option => {
+            {SALE_FLOW_OPTIONS.filter(option => option.id === 'DIRECT' || hasFeature('split_flow')).map(option => {
               const selected = modeBranch?.saleFlowMode === option.id;
               const missing = option.requires.filter(m => !isLicensed(m));
               return (
@@ -521,18 +577,11 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
           title="Módulos activos"
           description="Los módulos desactivados se ocultan para todos los usuarios, aunque los tengan asignados."
         >
-          {licensedModules && licensedModules.length < MODULE_OPTIONS.length && (
-            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-3">
-              <i className="fa-solid fa-lock mr-1.5 text-slate-400"></i>
-              Los módulos bloqueados no están incluidos en su plan. Para habilitarlos, comuníquese con su proveedor.
-            </p>
-          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {MODULE_OPTIONS.map(mod => {
+            {MODULE_OPTIONS.filter(mod => isLicensed(mod.value)).map(mod => {
               const alwaysOn = ALWAYS_ENABLED_MODULES.includes(mod.value);
-              const notLicensed = !isLicensed(mod.value);
-              const locked = alwaysOn || notLicensed;
-              const enabled = alwaysOn || (!notLicensed && form.enabledModules.includes(mod.value));
+              const locked = alwaysOn;
+              const enabled = alwaysOn || form.enabledModules.includes(mod.value);
               return (
                 <button
                   key={mod.value}

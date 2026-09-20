@@ -507,7 +507,7 @@ export default function App() {
               {activeTab === 'customers' && <CreditosPage />}
               {activeTab === 'personal' && <PersonalPage currentUser={currentUser} />}
               {activeTab === 'dashboard' && <DashboardPage periodReports={hasFeature('period_reports')} />}
-              {activeTab === 'settings' && isAdmin && <SettingsPage currentUser={currentUser} onSaved={setSettings} hasFeature={hasFeature} />}
+              {activeTab === 'settings' && isAdmin && <SettingsPage currentUser={currentUser} onSaved={setSettings} hasFeature={hasFeature} licensedFeatures={licensedFeatures} license={license} />}
               {activeTab === 'audit' && isAdmin && <AuditPage />}
               {activeTab === 'transfers' && <TransfersPage currentUser={currentUser} />}
               {activeTab === 'cobros' && (
