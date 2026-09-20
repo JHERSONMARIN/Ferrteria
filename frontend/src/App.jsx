@@ -17,6 +17,7 @@ import ComprasPage from './pages/ComprasPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import AuditPage from './pages/AuditPage.jsx';
 import TransfersPage from './pages/TransfersPage.jsx';
+import { dispatchRoleModule } from './constants/dispatch.js';
 import CashierQueuePage from './pages/CashierQueuePage.jsx';
 import DispatchQueuePage from './pages/DispatchQueuePage.jsx';
 import FieldError from './components/FieldError.jsx';
@@ -135,20 +136,29 @@ export default function App() {
   // La configuración no es un módulo desactivable: la ve siempre el administrador.
   // El modo de trabajo es de la sucursal del usuario.
   const saleFlowMode = currentUser?.branch?.saleFlowMode || 'DIRECT';
-  // El envío a domicilio solo se ofrece si la empresa usa (y tiene contratado) el módulo de entregas.
+  // El envío a domicilio se ofrece si la empresa usa (y tiene contratado) el módulo de entregas y la
+  // sucursal del usuario tiene activados los envíos.
   const deliveriesEnabled = Boolean(settings?.enabledModules?.includes('deliveries'))
-    && (!licensedModules || licensedModules.includes('deliveries'));
+    && (!licensedModules || licensedModules.includes('deliveries'))
+    && currentUser?.branch?.deliveriesEnabled !== false;
 
-  // Pantallas que dependen del modo de trabajo: "Por cobrar" (con pedidos) y "Por despachar" (por etapas).
+  // "Por despachar" existe por etapas (todo lo cobrado) y, en cualquier modo, para los envíos a domicilio.
+  // La atiende quien la sucursal eligió (vendedor, cajero o almacén), el administrador o quien tenga Despacho.
+  const dispatchNeeded = saleFlowMode === 'STAGED' || deliveriesEnabled;
+  const canDispatchHere = isAdmin || effectiveModules.includes('despacho')
+    || effectiveModules.includes(dispatchRoleModule(currentUser?.branch));
+
+  // Pantallas que dependen del modo de trabajo: "Por cobrar" (con pedidos) y "Por despachar".
   const navigableTabs = useMemo(() => {
-    const tabs = effectiveModules.filter(m => m !== 'despacho' || saleFlowMode === 'STAGED');
+    const tabs = effectiveModules.filter(m => m !== 'despacho');
+    if (dispatchNeeded && canDispatchHere) tabs.push('despacho');
     if (saleFlowMode !== 'DIRECT' && effectiveModules.includes('caja')) tabs.push('cobros');
     // Transferencias: solo con más de una sucursal, para quien maneja inventario o kardex.
     if (branchCount > 1 && (effectiveModules.includes('inventory') || effectiveModules.includes('kardex'))) tabs.push('transfers');
     if (isAdmin && hasFeature('audit')) tabs.push('audit');
     if (isAdmin) tabs.push('settings');
     return tabs;
-  }, [effectiveModules, isAdmin, saleFlowMode, branchCount, licensedFeatures]);
+  }, [effectiveModules, isAdmin, saleFlowMode, branchCount, licensedFeatures, dispatchNeeded, canDispatchHere]);
 
   const loadSettings = async () => {
     // Las sucursales solo se muestran si hay más de una; un error aquí no bloquea la aplicación.

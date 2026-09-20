@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
 import CashRegistersSettings from '../components/CashRegistersSettings.jsx';
 import BranchesSettings from '../components/BranchesSettings.jsx';
+import { DISPATCH_ROLE_OPTIONS, effectiveDispatchRole } from '../constants/dispatch.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../constants/modules.js';
@@ -170,6 +171,39 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
   };
 
   const modeBranch = branches.find(b => b.id === modeBranchId) || branches[0] || null;
+
+  const chooseDispatchRole = async (roleId) => {
+    if (!modeBranch || roleId === effectiveDispatchRole(modeBranch)) return;
+    try {
+      setSavingMode(true);
+      setModeMessage(null);
+      await api.put(`/sucursales/${modeBranch.id}`, { dispatchRole: roleId });
+      await loadBranches();
+      setModeMessage({ type: 'success', text: `Ahora despacha: ${DISPATCH_ROLE_OPTIONS.find(o => o.id === roleId).title.toLowerCase()}.` });
+      window.dispatchEvent(new Event('refrescar-sesion'));
+    } catch (err) {
+      setModeMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingMode(false);
+    }
+  };
+
+  const toggleDeliveries = async () => {
+    if (!modeBranch) return;
+    const enable = !modeBranch.deliveriesEnabled;
+    try {
+      setSavingMode(true);
+      setModeMessage(null);
+      await api.put(`/sucursales/${modeBranch.id}`, { deliveriesEnabled: enable });
+      await loadBranches();
+      setModeMessage({ type: 'success', text: enable ? 'Envíos a domicilio activados.' : 'Envíos a domicilio desactivados: la opción ya no aparece al cobrar.' });
+      window.dispatchEvent(new Event('refrescar-sesion'));
+    } catch (err) {
+      setModeMessage({ type: 'error', text: err.message });
+    } finally {
+      setSavingMode(false);
+    }
+  };
 
   // Al elegir un modo se activan (y guardan) los módulos que necesita, y se guarda el modo de la sucursal.
   const selectSaleFlow = async (option) => {
@@ -417,6 +451,64 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
               );
             })}
           </div>
+          {modeBranch && (
+            <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${savedSettings.enabledModules.includes('deliveries') ? 'border-slate-200 cursor-pointer hover:bg-slate-50' : 'border-slate-200 opacity-60'}`}>
+              <input
+                type="checkbox"
+                checked={modeBranch.deliveriesEnabled}
+                onChange={toggleDeliveries}
+                disabled={savingMode || !savedSettings.enabledModules.includes('deliveries')}
+                className="mt-0.5 accent-orange-600"
+              />
+              <span>
+                <span className="font-bold text-slate-800 text-sm">
+                  <i className="fa-solid fa-truck-fast mr-1.5 text-slate-400"></i>
+                  Envíos a domicilio{branches.length > 1 ? ` en ${modeBranch.name}` : ''}
+                </span>
+                <span className="block text-xs text-slate-500 mt-0.5">
+                  {savedSettings.enabledModules.includes('deliveries')
+                    ? 'Al cobrar se ofrece "Envío a domicilio" y el repartidor lo ve en Entregas. Funciona con cualquier modo de trabajo.'
+                    : 'Active primero el módulo Entregas en "Módulos activos".'}
+                </span>
+              </span>
+            </label>
+          )}
+          {modeBranch && (modeBranch.saleFlowMode === 'STAGED' || modeBranch.deliveriesEnabled) && (
+            <div className="mt-4 rounded-xl border border-slate-200 p-4">
+              <p className="font-bold text-slate-800 text-sm">
+                <i className="fa-solid fa-dolly mr-1.5 text-slate-400"></i>
+                ¿Quién despacha{branches.length > 1 ? ` en ${modeBranch.name}` : ''}?
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5 mb-3">
+                Atiende "Por despachar": {modeBranch.saleFlowMode === 'STAGED' ? 'todo lo cobrado' : 'las ventas con envío a domicilio'}.
+                Ve los productos a preparar y marca cuándo los entrega{modeBranch.saleFlowMode === 'STAGED' ? '' : ' al repartidor'}.
+                El administrador también puede despachar.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {DISPATCH_ROLE_OPTIONS.map(option => {
+                  const selected = effectiveDispatchRole(modeBranch) === option.id;
+                  const locked = option.id === 'WAREHOUSE' && !savedSettings.enabledModules.includes('despacho');
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => chooseDispatchRole(option.id)}
+                      disabled={savingMode || locked}
+                      className={`text-left rounded-lg border px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed ${selected ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200 hover:bg-slate-50'}`}
+                    >
+                      <span className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+                        {option.title}
+                        {selected && <i className="fa-solid fa-circle-check text-orange-600 ml-auto"></i>}
+                      </span>
+                      <span className="block text-[11px] text-slate-500">
+                        {locked ? 'Active primero el módulo Despacho.' : option.description}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {modeMessage && (
             <p className={`mt-3 text-xs rounded-lg px-3 py-2 border ${modeMessage.type === 'error' ? 'text-red-700 bg-red-50 border-red-200' : 'text-emerald-700 bg-emerald-50 border-emerald-200'}`}>
               {modeMessage.text}

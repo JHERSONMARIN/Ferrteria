@@ -3,6 +3,8 @@ import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS as moduleOptions } from '../constants/modules.js';
+import { effectiveDispatchRole } from '../constants/dispatch.js';
+import { ROLE_OPTIONS, roleLabel, presetModules, describeDuties } from '../constants/roles.js';
 
 export default function PersonalPage({ currentUser }) {
   const [staff, setStaff] = useState([]);
@@ -21,20 +23,25 @@ export default function PersonalPage({ currentUser }) {
   const [branches, setBranches] = useState([]);
   // Con una sola sucursal no se muestra nada de sucursales.
   const multiBranch = branches.length > 1;
+  // Sucursal del formulario: la elegida o, al crear sin elegir, la del administrador.
+  const formBranch = branches.find(b => b.id === Number(branchId)) || branches.find(b => b.id === currentUser?.branchId) || null;
+  // En la sucursal despacha quien se eligió en Configuración (vendedor, cajero o almacén): el módulo
+  // Despacho solo hace falta cuando despacha almacén.
+  const dispatchRole = formBranch ? effectiveDispatchRole(formBranch) : 'WAREHOUSE';
+  const dispatchUnused = formBranch && dispatchRole !== 'WAREHOUSE';
+  // Módulo Entregas de la empresa: sin él no hay envíos a domicilio en ninguna sucursal.
+  const [companyDeliveries, setCompanyDeliveries] = useState(true);
+  const allModules = moduleOptions.map(m => m.value);
+  const ownBranch = () => branches.find(b => b.id === currentUser?.branchId) || null;
   const [errors, setErrors] = useState({});
 
   const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
 
-  const roleBadgeStyles = {
-    ADMINISTRADOR: 'bg-purple-100 text-purple-700 border-purple-200',
-    VENDEDOR: 'bg-orange-100 text-orange-700 border-orange-200',
-    CAJERO: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    REPARTIDOR: 'bg-blue-100 text-blue-700 border-blue-200',
-  };
 
   useEffect(() => {
     loadStaff();
     api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
+    api.get('/settings').then(res => setCompanyDeliveries(res.settings.enabledModules.includes('deliveries'))).catch(() => {});
   }, []);
 
   const loadStaff = async () => {
@@ -55,7 +62,7 @@ export default function PersonalPage({ currentUser }) {
     setUser('');
     setPass('');
     setRole('VENDEDOR');
-    setModules(['pos']);
+    setModules(presetModules('VENDEDOR', ownBranch(), allModules));
     setActive(true);
     setBranchId('');
     setErrors({});
@@ -91,18 +98,20 @@ export default function PersonalPage({ currentUser }) {
     setModules([]);
   };
 
+  // El rol sugiere los módulos según el modo de la sucursal; después se pueden ajustar a mano.
   const handleRoleChangeWithPreset = (newRole) => {
     setRole(newRole);
-    if (newRole === 'VENDEDOR') {
-      setModules(['pos']);
-    } else if (newRole === 'CAJERO') {
-      setModules(['pos', 'caja', 'customers']);
-    } else if (newRole === 'REPARTIDOR') {
-      setModules(['deliveries']);
-    } else if (newRole === 'ADMINISTRADOR') {
-      setModules(moduleOptions.map(m => m.value));
-    }
+    setModules(presetModules(newRole, formBranch, allModules));
     clearError('modules');
+  };
+
+  // Al crear, cambiar de sucursal vuelve a sugerir los módulos del rol para el modo de esa sucursal.
+  const handleBranchChange = (value) => {
+    setBranchId(value);
+    if (!editingId) {
+      const branch = branches.find(b => b.id === Number(value)) || ownBranch();
+      setModules(presetModules(role, branch, allModules));
+    }
   };
 
   const validateStaff = () => {
@@ -232,7 +241,7 @@ export default function PersonalPage({ currentUser }) {
             </thead>
             <tbody className="text-sm divide-y divide-gray-100">
               {staff.map(s => {
-                const badgeColor = roleBadgeStyles[s.role] || 'bg-gray-100 text-slate-700 border-gray-200';
+                const badgeColor = ROLE_OPTIONS.find(r => r.value === s.role)?.badge || 'bg-gray-100 text-slate-700 border-gray-200';
                 const userModules = Array.isArray(s.modules) ? s.modules : [];
 
                 return (
@@ -251,7 +260,7 @@ export default function PersonalPage({ currentUser }) {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${badgeColor}`}>
-                        {s.role}
+                        {roleLabel(s.role)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -415,10 +424,7 @@ export default function PersonalPage({ currentUser }) {
                   onChange={e => handleRoleChangeWithPreset(e.target.value)}
                   className="w-full border border-gray-300 p-2 rounded-lg outline-none focus:border-orange-500 bg-white text-sm font-medium cursor-pointer"
                 >
-                  <option value="VENDEDOR">Vendedor (Mostrador / Ventas)</option>
-                  <option value="CAJERO">Cajero (Cobro y Arqueos)</option>
-                  <option value="REPARTIDOR">Repartidor (Despacho / Fletes)</option>
-                  <option value="ADMINISTRADOR">Administrador (Control Total)</option>
+                  {ROLE_OPTIONS.map(r => <option key={r.value} value={r.value}>{r.label} ({r.hint})</option>)}
                 </select>
               </div>
 
@@ -427,7 +433,7 @@ export default function PersonalPage({ currentUser }) {
                   <label className="text-xs font-bold text-slate-600 mb-1 block">Sucursal</label>
                   <select
                     value={branchId}
-                    onChange={e => setBranchId(e.target.value)}
+                    onChange={e => handleBranchChange(e.target.value)}
                     className="w-full border border-gray-300 p-2 rounded-lg outline-none focus:border-orange-500 bg-white text-sm font-medium cursor-pointer"
                   >
                     {!editingId && <option value="">La misma que la mía</option>}
@@ -483,11 +489,35 @@ export default function PersonalPage({ currentUser }) {
                         />
                         <i className={`fa-solid ${opt.icon} text-xs ${isChecked ? 'text-orange-500' : 'text-slate-400'}`}></i>
                         <span className="truncate">{opt.label}</span>
+                        {opt.value === 'despacho' && dispatchUnused && (
+                          <span className="ml-auto text-[10px] text-slate-400 whitespace-nowrap">no hace falta</span>
+                        )}
                       </label>
                     );
                   })}
                 </div>
                 <FieldError msg={errors.modules} />
+                {(() => {
+                  // Qué hará la persona en su sucursal con los módulos marcados.
+                  const { duties, warnings } = describeDuties({ role, modules, branch: formBranch, deliveriesEnabled: companyDeliveries });
+                  if (duties.length === 0 && warnings.length === 0) return null;
+                  return (
+                    <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                      <p className="text-[11px] font-bold text-slate-600 mb-1">
+                        <i className="fa-solid fa-list-check mr-1 text-orange-500"></i>
+                        En {multiBranch && formBranch ? formBranch.name : 'la empresa'} esta persona:
+                      </p>
+                      <ul className="text-[11px] text-slate-600 list-disc pl-4 flex flex-col gap-0.5">
+                        {duties.map(d => <li key={d}>{d}</li>)}
+                      </ul>
+                      {warnings.map(w => (
+                        <p key={w} className="mt-1.5 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                          <i className="fa-solid fa-triangle-exclamation mr-1"></i>{w}
+                        </p>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Estado de la cuenta (Activo / Inactivo) */}

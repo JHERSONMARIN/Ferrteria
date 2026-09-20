@@ -31,7 +31,7 @@ router.post('/', handle('crear la sucursal', async (req, res) => {
   res.status(201).json(branch);
 }));
 
-// PUT /api/sucursales/:id { name?, address?, active?, saleFlowMode? }
+// PUT /api/sucursales/:id { name?, address?, active?, saleFlowMode?, deliveriesEnabled?, dispatchRole? }
 router.put('/:id', handle('actualizar la sucursal', async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) throw new BranchError('Sucursal no válida.');

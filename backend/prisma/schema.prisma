@@ -13,6 +13,9 @@ enum Role {
   VENDEDOR
   CAJERO
   REPARTIDOR
+  // Productos, compras, kardex y despacho. El rol es el cargo y la plantilla de módulos: los permisos
+  // reales son los módulos asignados a cada persona.
+  ALMACEN
 }
 
 enum TipoCliente {
@@ -545,6 +548,12 @@ model AuditLog {
 }
 
 // Sucursal o almacén. Una empresa con una sola sucursal no ve nada de esto en pantalla.
+enum DispatchRole {
+  SELLER
+  CASHIER
+  WAREHOUSE
+}
+
 model Branch {
   id        Int      @id @default(autoincrement())
   name      String   @unique
@@ -552,6 +561,11 @@ model Branch {
   active    Boolean  @default(true)
   // Cada sucursal trabaja en su modo: una tienda chica en directo y otra grande por etapas.
   saleFlowMode SaleFlowMode @default(DIRECT)
+  // Envíos a domicilio: se activan por sucursal, con cualquier modo de trabajo.
+  deliveriesEnabled Boolean @default(true)
+  // Quién atiende "Por despachar" (envíos a domicilio y, por etapas, todo lo cobrado).
+  // Null = según el modo: directo → vendedor, vendedor y caja → cajero, por etapas → almacén.
+  dispatchRole DispatchRole?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

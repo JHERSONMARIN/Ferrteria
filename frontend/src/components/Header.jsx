@@ -1,4 +1,5 @@
 import React from 'react';
+import { roleLabel } from '../constants/roles.js';
 
 export default function Header({ pageTitle, user, showBranch = false, onResetDemo, onToggleSidebar }) {
   return (
@@ -14,7 +15,7 @@ export default function Header({ pageTitle, user, showBranch = false, onResetDem
           <span className="truncate">{pageTitle}</span>
           {user && (
             <span className="hidden sm:flex text-xs bg-slate-200 px-3 py-1 rounded-full text-slate-600 font-normal items-center gap-1">
-              <i className="fa-solid fa-user text-slate-500"></i> {user.name} ({user.role})
+              <i className="fa-solid fa-user text-slate-500"></i> {user.name} ({roleLabel(user.role)})
             </span>
           )}
           {user && showBranch && user.branch && (

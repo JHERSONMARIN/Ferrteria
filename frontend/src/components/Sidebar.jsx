@@ -1,4 +1,5 @@
 import React from 'react';
+import { roleLabel } from '../constants/roles.js';
 
 export default function Sidebar({ activeTab, onSwitchTab, user, modules, businessName, open, onClose, onLogout, onChangePassword }) {
   const allowedModules = modules || [];
@@ -132,7 +133,7 @@ export default function Sidebar({ activeTab, onSwitchTab, user, modules, busines
             <i className="fa-solid fa-user text-slate-500 shrink-0"></i>
             <div className="min-w-0">
               <p className="text-sm font-bold truncate">{user.name}</p>
-              <p className="text-[10px] text-slate-500 uppercase truncate">{user.role}</p>
+              <p className="text-[10px] text-slate-500 uppercase truncate">{roleLabel(user.role)}</p>
             </div>
           </div>
           <button
