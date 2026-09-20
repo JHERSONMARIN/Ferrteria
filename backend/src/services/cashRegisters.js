@@ -5,6 +5,7 @@
 
 import { recordAudit } from './audit.js';
 import { roundMoney } from '../utils/quantities.js';
+import { requireFeature, requireWithinLimit } from './license.js';
 
 export class CashError extends Error {
   constructor(message, status = 400) {
@@ -180,6 +181,7 @@ export async function openSession(db, { cashRegisterId, montoInicial }, user) {
 }
 
 export async function joinSession(db, sessionId, user) {
+  requireFeature('shared_cash');
   return db.$transaction(async (tx) => {
     const session = await tx.cajaChica.findUnique({ where: { id: sessionId }, select: { estado: true, cashRegister: { select: { branchId: true } } } });
     if (!session || session.estado !== 'ABIERTA') throw new CashError('El turno no existe o ya se cerró.', 404);
@@ -290,6 +292,9 @@ async function parseRegisterBranch(db, value) {
 }
 
 export async function createRegister(db, input, user) {
+  // La primera caja viene con cualquier plan; varias cajas y turnos compartidos, con el plan Profesional.
+  requireFeature('shared_cash');
+  requireWithinLimit('maxCashRegisters', await db.cashRegister.count({ where: { active: true } }), 'caja(s)');
   const branchId = input.branchId === undefined || input.branchId === null || input.branchId === ''
     ? user.branchId
     : await parseRegisterBranch(db, input.branchId);

@@ -1,6 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
-import { LICENSED_MODULES } from '../services/license.js';
+import { LICENSED_MODULES, LICENSED_FEATURES, LIMITS, licenseStatus } from '../services/license.js';
 import {
   getSettings,
   updateSettings,
@@ -20,7 +20,10 @@ router.get('/', async (req, res) => {
         include: { branch: { select: { id: true, name: true } } },
       }),
     ]);
-    res.json({ settings, documentSeries, availableModules: AVAILABLE_MODULES, licensedModules: LICENSED_MODULES });
+    res.json({
+      settings, documentSeries, availableModules: AVAILABLE_MODULES, licensedModules: LICENSED_MODULES,
+      licensedFeatures: LICENSED_FEATURES, limits: LIMITS, license: licenseStatus(),
+    });
   } catch (error) {
     console.error('[settings.js] Error al obtener la configuración:', error);
     res.status(500).json({ error: 'No se pudo obtener la configuración de la empresa.' });

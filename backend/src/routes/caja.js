@@ -4,6 +4,7 @@ import {
   CashError, getCashStatus, openSession, joinSession, leaveSession, closeSession,
   listRegisters, createRegister, updateRegister,
 } from '../services/cashRegisters.js';
+import { respondIfLicenseError } from '../services/license.js';
 
 const router = express.Router();
 
@@ -11,6 +12,7 @@ const handle = (context, fn) => async (req, res) => {
   try {
     await fn(req, res);
   } catch (error) {
+    if (respondIfLicenseError(res, error)) return;
     if (error instanceof CashError) return res.status(error.status).json({ error: error.message });
     console.error(`[caja.js] ${context}:`, error);
     res.status(500).json({ error: `Error al ${context}.` });

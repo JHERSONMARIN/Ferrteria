@@ -1,6 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { recordAudit } from '../services/audit.js';
+import { requireFeature, respondIfLicenseError } from '../services/license.js';
 
 const router = express.Router();
 
@@ -128,6 +129,7 @@ router.put('/:id/price-list', async (req, res) => {
     const current = await prisma.cliente.findUnique({ where: { id }, select: { name: true, priceList: true } });
     if (!current) return res.status(404).json({ error: 'Cliente no encontrado.' });
 
+    if (priceList === 'WHOLESALE') requireFeature('wholesale');
     const LABELS = { RETAIL: 'minorista', WHOLESALE: 'mayorista' };
     const updated = await prisma.$transaction(async (tx) => {
       const client = await tx.cliente.update({ where: { id }, data: { priceList }, select: { id: true, priceList: true } });
@@ -145,6 +147,7 @@ router.put('/:id/price-list', async (req, res) => {
     });
     res.json({ success: true, client: updated });
   } catch (error) {
+    if (respondIfLicenseError(res, error)) return;
     if (error.code === 'P2025') return res.status(404).json({ error: 'Cliente no encontrado.' });
     console.error('[clientes.js] Error al cambiar la lista de precios:', error);
     res.status(500).json({ error: 'No se pudo cambiar la lista de precios.' });

@@ -1,6 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { salesReport, ReportError } from '../services/reports.js';
+import { respondIfLicenseError } from '../services/license.js';
 
 const router = express.Router();
 
@@ -131,6 +132,7 @@ router.get('/reportes', async (req, res) => {
   try {
     res.json(await salesReport(prisma, req.query));
   } catch (error) {
+    if (respondIfLicenseError(res, error)) return;
     if (error instanceof ReportError) return res.status(400).json({ error: error.message });
     console.error('[dashboard.js] Error al generar reportes:', error);
     res.status(500).json({ error: 'No se pudieron generar los reportes.' });

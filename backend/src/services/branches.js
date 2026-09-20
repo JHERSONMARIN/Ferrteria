@@ -1,6 +1,7 @@
 import { SALE_FLOW_MODES } from '../config/modules.js';
 import { getSettings } from './settings.js';
 import { recordAudit } from './audit.js';
+import { requireFeature, requireWithinLimit } from './license.js';
 
 // Sucursales o almacenes de la empresa. Las operaciones de stock usan la sucursal del usuario; el
 // administrador puede indicar otra (por ejemplo, registrar una compra que llegó a otro almacén).
@@ -60,6 +61,8 @@ const MODE_LABELS = { DIRECT: 'Directo', SEPARATE_CASHIER: 'Vendedor y caja', ST
 // Un modo con pedidos necesita Caja (ahí se cobra) y "por etapas", además, Despacho.
 async function parseSaleFlowMode(db, value) {
   if (!SALE_FLOW_MODES.includes(value)) throw new BranchError('Modo de trabajo no válido.');
+  // Trabajar con pedidos (vendedor y caja, o por etapas) es parte del plan Profesional.
+  if (value !== 'DIRECT') requireFeature('split_flow');
   const { enabledModules } = await getSettings(db);
   if (value !== 'DIRECT' && !enabledModules.includes('caja')) {
     throw new BranchError('Para trabajar con pedidos active primero el módulo Arqueo de Caja (ahí se cobran).');
@@ -71,6 +74,9 @@ async function parseSaleFlowMode(db, value) {
 }
 
 export async function createBranch(db, input) {
+  // Varias sucursales son parte del plan Empresa.
+  requireFeature('branches');
+  requireWithinLimit('maxBranches', await db.branch.count({ where: { active: true } }), 'sucursal(es)');
   const data = parseBranchInput(input);
   if (input.saleFlowMode !== undefined) data.saleFlowMode = await parseSaleFlowMode(db, input.saleFlowMode);
   try {

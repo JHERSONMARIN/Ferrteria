@@ -1,3 +1,4 @@
+import { requireFeature } from './license.js';
 // Registro de auditoría. Se escribe con el mismo cliente (tx) que la operación auditada para que
 // ambas se confirmen o se descarten juntas.
 
@@ -57,6 +58,7 @@ const PAGE_SIZE = 50;
 export class AuditQueryError extends Error {}
 
 export async function listAuditLogs(db, query) {
+  requireFeature('audit');
   const where = {};
   if (query.action) {
     if (!AUDIT_ACTIONS[query.action]) throw new AuditQueryError('Acción no válida.');

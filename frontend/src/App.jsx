@@ -101,6 +101,9 @@ export default function App() {
   const [settings, setSettings] = useState(null);
   const [branchCount, setBranchCount] = useState(1);
   const [licensedModules, setLicensedModules] = useState(null);
+  // Funciones del plan contratado (null = sin planes, todo habilitado) y estado de la licencia.
+  const [licensedFeatures, setLicensedFeatures] = useState(null);
+  const [license, setLicense] = useState(null);
   const [settingsStatus, setSettingsStatus] = useState('loading');
 
   // Los usuarios de prueba solo se ofrecen en la instancia de demostración.
@@ -126,6 +129,8 @@ export default function App() {
   }, [currentUser, settings, licensedModules, settingsStatus]);
 
   const isAdmin = currentUser?.role === 'ADMINISTRADOR';
+  // Sin lista de funciones (instalaciones sin plan) se habilita todo.
+  const hasFeature = (feature) => !licensedFeatures || licensedFeatures.includes(feature);
 
   // La configuración no es un módulo desactivable: la ve siempre el administrador.
   // El modo de trabajo es de la sucursal del usuario.
@@ -140,9 +145,10 @@ export default function App() {
     if (saleFlowMode !== 'DIRECT' && effectiveModules.includes('caja')) tabs.push('cobros');
     // Transferencias: solo con más de una sucursal, para quien maneja inventario o kardex.
     if (branchCount > 1 && (effectiveModules.includes('inventory') || effectiveModules.includes('kardex'))) tabs.push('transfers');
-    if (isAdmin) tabs.push('audit', 'settings');
+    if (isAdmin && hasFeature('audit')) tabs.push('audit');
+    if (isAdmin) tabs.push('settings');
     return tabs;
-  }, [effectiveModules, isAdmin, saleFlowMode, branchCount]);
+  }, [effectiveModules, isAdmin, saleFlowMode, branchCount, licensedFeatures]);
 
   const loadSettings = async () => {
     // Las sucursales solo se muestran si hay más de una; un error aquí no bloquea la aplicación.
@@ -151,6 +157,8 @@ export default function App() {
       const res = await api.get('/settings');
       setSettings(res.settings);
       setLicensedModules(res.licensedModules || null);
+      setLicensedFeatures(res.licensedFeatures || null);
+      setLicense(res.license || null);
       setSettingsStatus('ready');
     } catch (err) {
       console.error('Error cargando la configuración de la empresa:', err);
@@ -435,6 +443,15 @@ export default function App() {
               onToggleSidebar={() => setSidebarOpen(o => !o)}
             />
 
+            {license?.expiresAt && (license.expired || license.daysLeft <= 15) && (
+              <div className={`px-4 py-2 text-sm border-b ${license.expired ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                <i className="fa-solid fa-triangle-exclamation mr-2"></i>
+                {license.expired
+                  ? `La licencia venció el ${license.expiresAt}: el sistema quedó solo para consulta. Comuníquese con VALETEC para renovarla.`
+                  : `La licencia vence el ${license.expiresAt} (en ${license.daysLeft} día(s)). Comuníquese con VALETEC para renovarla.`}
+              </div>
+            )}
+
             <div className="flex-1 overflow-hidden relative w-full h-full bg-gray-50">
               {settingsStatus === 'loading' ? (
                 <div className="h-full flex items-center justify-center text-slate-400 text-sm">
@@ -479,8 +496,8 @@ export default function App() {
               {activeTab === 'client-dir' && <ClientesPage />}
               {activeTab === 'customers' && <CreditosPage />}
               {activeTab === 'personal' && <PersonalPage currentUser={currentUser} />}
-              {activeTab === 'dashboard' && <DashboardPage />}
-              {activeTab === 'settings' && isAdmin && <SettingsPage currentUser={currentUser} onSaved={setSettings} />}
+              {activeTab === 'dashboard' && <DashboardPage periodReports={hasFeature('period_reports')} />}
+              {activeTab === 'settings' && isAdmin && <SettingsPage currentUser={currentUser} onSaved={setSettings} hasFeature={hasFeature} />}
               {activeTab === 'audit' && isAdmin && <AuditPage />}
               {activeTab === 'transfers' && <TransfersPage currentUser={currentUser} />}
               {activeTab === 'cobros' && (

@@ -21,6 +21,7 @@ import pedidosRoutes from './src/routes/pedidos.js';
 import { prisma } from './src/db.js';
 import { initializeDocumentSeries } from './src/services/documentSeries.js';
 import { ensureBranchStockRows } from './src/services/stock.js';
+import { licenseStatus } from './src/services/license.js';
 import sucursalesRoutes from './src/routes/sucursales.js';
 import transferenciasRoutes from './src/routes/transferencias.js';
 import { expireOrders } from './src/services/saleOrders.js';
@@ -61,6 +62,16 @@ app.get('/api/health', (req, res) => {
 
 // ---------- A partir de aquí todo requiere sesión ----------
 app.use('/api', authenticate, requirePasswordChanged);
+
+// Licencia vencida: la empresa queda en solo lectura hasta renovar con VALETEC.
+app.use('/api', (req, res, next) => {
+  const { expired, expiresAt } = licenseStatus();
+  if (!expired || req.method === 'GET' || req.path.startsWith('/auth/')) return next();
+  res.status(403).json({
+    error: `La licencia venció el ${expiresAt}. El sistema queda solo para consulta hasta renovarla con VALETEC.`,
+    codigo: 'LICENCIA_VENCIDA',
+  });
+});
 
 // Catálogos que consultan varias pantallas (POS, compras, entregas…); modificarlos exige su módulo.
 const CATALOG_READERS = ['pos', 'cotizaciones', 'inventory', 'categories', 'kardex', 'compras', 'deliveries'];

@@ -84,6 +84,16 @@ function Field({ label, error, hint, children }) {
   );
 }
 
+// Lo que el plan de la empresa no incluye se muestra, pero bloqueado: así se ve qué se gana al ampliarlo.
+function NoIncluido({ texto }) {
+  return (
+    <p className="text-xs text-slate-500 bg-slate-50 border border-dashed border-slate-300 rounded-lg px-3 py-3">
+      <i className="fa-solid fa-lock mr-1.5 text-slate-400"></i>
+      <strong>No incluido en su plan.</strong> {texto} Consulte con VALETEC para ampliarlo.
+    </p>
+  );
+}
+
 function Card({ icon, title, description, children }) {
   return (
     <section className="bg-white rounded-xl border border-gray-200 shadow-sm">
@@ -98,7 +108,7 @@ function Card({ icon, title, description, children }) {
   );
 }
 
-export default function SettingsPage({ currentUser, onSaved }) {
+export default function SettingsPage({ currentUser, onSaved, hasFeature = () => true }) {
   // Al crear o renombrar sucursales se recarga la lista de cajas (muestra su sucursal).
   const [branchesVersion, setBranchesVersion] = useState(0);
   const [savedSettings, setSavedSettings] = useState(null);
@@ -328,6 +338,7 @@ export default function SettingsPage({ currentUser, onSaved }) {
             <Field label="Descuento máximo (%)" error={errors.maxDiscountPercent} hint="0 = solo el administrador descuenta.">
               {input('maxDiscountPercent', { type: 'number', min: 0, max: 100, step: '0.01' })}
             </Field>
+            {!hasFeature('discounts') && <p className="sm:col-span-4"><NoIncluido texto="Los descuentos son parte del plan Profesional." /></p>}
             <p className="sm:col-span-3 text-xs text-slate-500 leading-relaxed sm:pt-6">
               Vendedores y cajeros pueden rebajar el total de una venta o pedido hasta este porcentaje.
               El administrador no tiene tope. Cada venta guarda el monto descontado y quién lo aplicó.
@@ -336,11 +347,15 @@ export default function SettingsPage({ currentUser, onSaved }) {
         </Card>
 
         <Card icon="fa-store" title="Sucursales" description="Sucursales o almacenes con stock propio. Con una sola, el sistema no muestra nada de sucursales. Se guarda al momento.">
-          <BranchesSettings onChanged={() => setBranchesVersion(v => v + 1)} />
+          {hasFeature('branches')
+            ? <BranchesSettings onChanged={() => setBranchesVersion(v => v + 1)} />
+            : <NoIncluido texto="Varias sucursales, con su stock y sus transferencias, son parte del plan Empresa." />}
         </Card>
 
         <Card icon="fa-cash-register" title="Cajas" description="Gavetas físicas. Varios cajeros pueden compartir el turno de una caja. Se guarda al momento.">
-          <CashRegistersSettings key={branchesVersion} />
+          {hasFeature('shared_cash')
+            ? <CashRegistersSettings key={branchesVersion} />
+            : <NoIncluido texto="Varias cajas y los turnos compartidos entre cajeros son parte del plan Profesional." />}
         </Card>
 
         <Card
@@ -373,7 +388,7 @@ export default function SettingsPage({ currentUser, onSaved }) {
                   key={option.id}
                   type="button"
                   onClick={() => selectSaleFlow(option)}
-                  disabled={missing.length > 0 || savingMode}
+                  disabled={missing.length > 0 || savingMode || (option.id !== 'DIRECT' && !hasFeature('split_flow'))}
                   className={`text-left rounded-xl border p-4 transition-colors flex flex-col gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                     selected ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200 hover:bg-slate-50'
                   }`}
@@ -389,9 +404,13 @@ export default function SettingsPage({ currentUser, onSaved }) {
                       <li key={step}><span className="font-bold text-orange-600">{i + 1}.</span> {step}</li>
                     ))}
                   </ol>
-                  {missing.length > 0 && (
+                  {missing.length > 0 ? (
                     <span className="text-[10px] text-slate-400">
                       <i className="fa-solid fa-lock mr-1"></i>Requiere un módulo no incluido en su plan
+                    </span>
+                  ) : option.id !== 'DIRECT' && !hasFeature('split_flow') && (
+                    <span className="text-[10px] text-slate-400">
+                      <i className="fa-solid fa-lock mr-1"></i>No incluido en su plan
                     </span>
                   )}
                 </button>

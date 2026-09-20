@@ -5,6 +5,7 @@ import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, DeliveryError } from './deliveries.js';
 import { recordAudit } from './audit.js';
 import { requireOpenSession, CashError } from './cashRegisters.js';
+import { requireFeature, LicenseError } from './license.js';
 
 export class VentaError extends Error {
   constructor(message, status = 400, codigo = null, extra = null) {
@@ -140,6 +141,7 @@ export function parseDiscountRequest(raw) {
 // personal puede descontar hasta el % configurado por la empresa.
 export function applyDiscount(subtotal, request, user, maxPercent) {
   if (!request) return { discount: 0, total: subtotal };
+  requireFeature('discounts');
   const discount = roundMoney(request.type === 'PERCENT' ? subtotal * request.value / 100 : request.value);
   if (discount >= subtotal) throw new VentaError('El descuento no puede cubrir todo el total de la venta.');
   if (user?.role !== 'ADMINISTRADOR') {
@@ -368,6 +370,9 @@ export function responderErrorVenta(res, error, contexto) {
   }
   if (error instanceof DeliveryError) {
     return res.status(error.status).json({ error: error.message });
+  }
+  if (error instanceof LicenseError) {
+    return res.status(error.status).json({ error: error.message, codigo: error.codigo });
   }
   if (error instanceof CashError) {
     return res.status(error.status).json({ error: error.message });

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import SalesReports from '../components/SalesReports.jsx';
 
-export default function DashboardPage() {
+export default function DashboardPage({ periodReports = true }) {
   const [stats, setStats] = useState({
     ingresosCaja: 0,
     deudaCreditos: 0,
@@ -52,7 +52,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="flex gap-1 mb-5 border-b border-slate-200" role="tablist">
-        {[['summary', 'Resumen general', 'fa-gauge'], ['reports', 'Reportes por período', 'fa-chart-column']].map(([id, label, icon]) => (
+        {[['summary', 'Resumen general', 'fa-gauge'], ...(periodReports ? [['reports', 'Reportes por período', 'fa-chart-column']] : [])].map(([id, label, icon]) => (
           <button
             key={id}
             type="button"
@@ -66,7 +66,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {view === 'reports' ? <SalesReports /> : <>
+      {view === 'reports' && periodReports ? <SalesReports /> : <>
 
       {/* Métricas Principales (Finanzas + Inventario) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

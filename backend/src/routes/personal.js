@@ -2,6 +2,7 @@ import express from 'express';
 import { prisma } from '../db.js';
 import { hashPassword, validateNewPassword, PasswordPolicyError } from '../services/passwords.js';
 import { recordAudit, changedFields } from '../services/audit.js';
+import { requireWithinLimit, respondIfLicenseError } from '../services/license.js';
 
 // Sucursal asignada: debe existir y estar activa. Sin valor, se usa la del administrador que crea.
 async function parseBranch(value, fallback) {
@@ -52,6 +53,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'El nombre de usuario ya existe. Elija otro.' });
     }
 
+    // El plan limita cuántos usuarios activos puede tener la empresa.
+    requireWithinLimit('maxUsers', await prisma.usuario.count({ where: { active: true } }), 'usuario(s)');
+
     const branchId = await parseBranch(req.body.branchId, req.user.branchId);
     if (branchId === null) return res.status(400).json({ error: 'La sucursal elegida no existe o está desactivada.' });
 
@@ -92,6 +96,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(created);
   } catch (error) {
+    if (respondIfLicenseError(res, error)) return;
     if (error instanceof PasswordPolicyError) {
       return res.status(400).json({ error: error.message });
     }
