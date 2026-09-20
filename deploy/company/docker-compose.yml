@@ -19,6 +19,13 @@ services:
       COMPANY_NAME: ${COMPANY_NAME}
       # Módulos contratados; vacío = todos. Se cambia con deploy/set-modules.sh
       LICENSED_MODULES: ${LICENSED_MODULES:-}
+      # Funciones y límites del plan contratado. Se cambian con deploy/set-plan.sh o desde la consola.
+      LICENSED_FEATURES: ${LICENSED_FEATURES:-}
+      MAX_USERS: ${MAX_USERS:-0}
+      MAX_BRANCHES: ${MAX_BRANCHES:-0}
+      MAX_CASH_REGISTERS: ${MAX_CASH_REGISTERS:-0}
+      LICENSE_EXPIRES_AT: ${LICENSE_EXPIRES_AT:-}
+      PLAN: ${PLAN:-}
       INITIAL_ADMIN_USER: ${INITIAL_ADMIN_USER:-admin}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
     networks:

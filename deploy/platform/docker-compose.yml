@@ -1,0 +1,40 @@
+# Plataforma de VALETEC: es lo único que levanta el servidor de producción.
+#   docker compose -f deploy/platform/docker-compose.yml --env-file deploy/platform/.env up -d --build
+# Las empresas NO se declaran aquí: se crean y administran desde la consola.
+services:
+  console:
+    build:
+      context: ../../console
+    image: ferresys-console:local
+    container_name: ferresys-console
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      TZ: America/Lima
+      DATABASE_URL: ${CONSOLE_DATABASE_URL}
+      JWT_SECRET: ${CONSOLE_JWT_SECRET}
+      # Poner true cuando la consola se sirva por HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Usuario inicial de VALETEC (la clave se pide cambiar al primer ingreso).
+      CONSOLE_ADMIN_USER: ${CONSOLE_ADMIN_USER:-valetec}
+      CONSOLE_ADMIN_PASSWORD: ${CONSOLE_ADMIN_PASSWORD:-}
+      # Los scripts de deploy/ viven en el repositorio montado.
+      DEPLOY_DIR: /repo/deploy
+    volumes:
+      # El repositorio: desde aquí se construyen las imágenes de las empresas y se guardan sus .env.
+      - ${REPO_DIR:-../..}:/repo
+      # Docker del servidor: la consola crea, actualiza y detiene las instancias de las empresas.
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      # En el servidor, el acceso público pasa por el proxy HTTPS del propio servidor.
+      - "${CONSOLE_BIND:-127.0.0.1}:${CONSOLE_PORT:-4000}:4000"
+    networks:
+      - ferresys-infra
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  ferresys-infra:
+    external: true

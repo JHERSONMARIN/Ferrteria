@@ -64,12 +64,14 @@ async function dockerState(slug) {
 // Consulta de solo lectura a la base de la empresa (uso del plan).
 async function usage(slug) {
   const dbName = `ferresys_${slug.replace(/-/g, '_')}`;
-  const sql = `SELECT
-      (SELECT count(*) FROM usuarios WHERE active) || '|' ||
-      (SELECT count(*) FROM branches WHERE active) || '|' ||
-      (SELECT count(*) FROM cash_registers WHERE active) || '|' ||
-      (SELECT count(*) FROM ventas WHERE status IN ('PAID','DISPATCHED')
-        AND COALESCE("paidAt", "createdAt") >= date_trunc('month', (NOW() AT TIME ZONE 'America/Lima')))`;
+  // En una sola línea: al pasarla al contenedor, los saltos de línea quedarían escapados.
+  const sql = [
+    "SELECT (SELECT count(*) FROM usuarios WHERE active) || '|' ||",
+    "(SELECT count(*) FROM branches WHERE active) || '|' ||",
+    "(SELECT count(*) FROM cash_registers WHERE active) || '|' ||",
+    `(SELECT count(*) FROM ventas WHERE status IN ('PAID','DISPATCHED')`,
+    `AND COALESCE("paidAt", "createdAt") >= date_trunc('month', (NOW() AT TIME ZONE 'America/Lima')))`,
+  ].join(' ');
   try {
     const { stdout } = await execFileAsync('docker', ['exec', DB_CONTAINER, 'sh', '-c',
       `psql -U "$POSTGRES_USER" -d ${dbName} -tAc ${JSON.stringify(sql)}`]);
