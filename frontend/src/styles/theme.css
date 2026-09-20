@@ -1,0 +1,52 @@
+/* Sistema de colores de FerreSys.
+ *
+ * Todos los colores del sistema salen de aquí. Para cambiar la apariencia (de toda la instalación o de
+ * una empresa) no hace falta tocar las pantallas: se cambian estas variables.
+ *
+ * - Los valores son "R G B" (sin coma) para que Tailwind pueda aplicarles transparencia: bg-brand/10.
+ * - Cada empresa puede tener su propio color principal: se guarda en su configuración y se aplica al
+ *   entrar (utils/theme.js), pisando --brand, --brand-strong y --brand-soft.
+ *
+ * Uso en las pantallas: bg-brand, text-brand, border-brand, bg-surface, text-ink, text-muted,
+ * border-line, text-success, bg-danger, etc.
+ */
+
+:root {
+  /* Color principal de la marca: acción principal de cada pantalla. Se usa con moderación. */
+  --brand: 234 88 12;         /* naranja */
+  --brand-strong: 194 65 12;  /* al pasar el mouse o presionar */
+  --brand-soft: 255 237 213;  /* fondos suaves, selección */
+  --brand-contrast: 255 255 255; /* texto sobre el color principal */
+  --brand-text: 154 52 18;    /* el color escrito sobre fondo claro (enlaces, énfasis) */
+
+  /* Neutros: la mayor parte de la interfaz */
+  --bg: 248 250 252;          /* fondo de las pantallas */
+  --surface: 255 255 255;     /* tarjetas, tablas, modales */
+  --surface-muted: 248 250 252; /* encabezados de tabla, zonas secundarias */
+  --line: 226 232 240;        /* bordes y separadores */
+  --ink: 15 23 42;            /* texto principal */
+  --ink-soft: 71 85 105;      /* texto secundario */
+  --muted: 100 116 139;       /* texto de ayuda */
+
+  /* Menú lateral */
+  --nav: 15 23 42;
+  --nav-strong: 2 6 23;
+  --nav-ink: 226 232 240;
+  --nav-muted: 148 163 184;
+
+  /* Estados: solo para comunicar, nunca como decoración */
+  --success: 5 150 105;
+  --success-soft: 209 250 229;
+  --warning: 217 119 6;
+  --warning-soft: 254 243 199;
+  --danger: 220 38 38;
+  --danger-soft: 254 226 226;
+  --info: 37 99 235;
+  --info-soft: 219 234 254;
+
+  /* Formas: un solo radio y una sola sombra para todo el sistema */
+  --radius: 0.75rem;
+  --radius-lg: 1rem;
+  --shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 10px 30px rgb(15 23 42 / 0.12);
+}

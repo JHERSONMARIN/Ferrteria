@@ -75,6 +75,17 @@ function parseLogo(value) {
   return logo;
 }
 
+// Color principal de la empresa: #RRGGBB. Vacío o null vuelve al color por defecto del sistema.
+function parseColor(value) {
+  if (value === undefined) return undefined; // no se toca
+  if (value === null || value === '') return null;
+  const color = String(value).trim().toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(color)) {
+    throw new SettingsValidationError('El color principal debe escribirse como #RRGGBB (por ejemplo #ea580c).');
+  }
+  return color;
+}
+
 export function validateSettingsInput(input) {
   const legalName = String(input?.legalName ?? '').trim();
   if (legalName.length < 2 || legalName.length > 150) {
@@ -125,6 +136,7 @@ export function validateSettingsInput(input) {
     taxRate,
     ticketFooter: optionalText(input.ticketFooter, 300, 'El pie del ticket'),
     logo: parseLogo(input.logo),
+    primaryColor: parseColor(input.primaryColor),
     enabledModules,
     maxDiscountPercent,
   };
@@ -132,7 +144,7 @@ export function validateSettingsInput(input) {
 
 const AUDITED_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email', 'currencySymbol', 'taxRate',
-  'ticketFooter', 'enabledModules', 'maxDiscountPercent',
+  'ticketFooter', 'enabledModules', 'maxDiscountPercent', 'primaryColor',
 ];
 
 // El logo se audita por su cambio, no por su contenido (es una imagen larga).

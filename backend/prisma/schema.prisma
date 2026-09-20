@@ -501,6 +501,8 @@ model BusinessSettings {
   ticketFooter   String?
   // Logo de la empresa, guardado como data URL (se muestra en el inicio de sesión, el menú y el ticket).
   logo           String?  @db.Text
+  // Color principal (#RRGGBB) con el que se tiñe la interfaz; vacío usa el color por defecto.
+  primaryColor   String?  @db.VarChar(7)
   enabledModules Json
   // Descuento máximo (%) que puede aplicar quien no es administrador; 0 = no puede descontar.
   maxDiscountPercent Decimal @default(0) @db.Decimal(5, 2)

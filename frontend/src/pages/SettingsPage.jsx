@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../api.js';
 import CashRegistersSettings from '../components/CashRegistersSettings.jsx';
 import BranchesSettings from '../components/BranchesSettings.jsx';
@@ -7,6 +7,7 @@ import { FEATURE_LABELS, FEATURE_ORDER } from '../constants/features.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../constants/modules.js';
+import { applyTheme, BRAND_PRESETS } from '../utils/theme.js';
 
 const DOCUMENT_TYPE_LABELS = {
   NOTA_VENTA: 'Nota de venta',
@@ -16,7 +17,7 @@ const DOCUMENT_TYPE_LABELS = {
 
 const EDITABLE_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email',
-  'currencySymbol', 'taxRate', 'ticketFooter', 'logo', 'enabledModules', 'maxDiscountPercent',
+  'currencySymbol', 'taxRate', 'ticketFooter', 'logo', 'primaryColor', 'enabledModules', 'maxDiscountPercent',
 ];
 
 const SALE_FLOW_OPTIONS = [
@@ -58,6 +59,7 @@ const toForm = (settings, licensedModules) => ({
   taxRate: String(settings.taxRate ?? 18),
   ticketFooter: settings.ticketFooter || '',
   logo: settings.logo || null,
+  primaryColor: settings.primaryColor || '',
   enabledModules: (settings.enabledModules || []).filter(m => !licensedModules || licensedModules.includes(m)),
   maxDiscountPercent: String(settings.maxDiscountPercent ?? 0),
 });
@@ -205,6 +207,52 @@ function LogoField({ logo, onChange }) {
   );
 }
 
+// Color principal de la empresa: tiñe los botones y lo resaltado de todo el sistema.
+// Se ve al instante mientras se elige; al salir sin guardar vuelve el color guardado.
+function ColorField({ color, onChange }) {
+  const actual = color || BRAND_PRESETS[0].hex;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {BRAND_PRESETS.map(preset => (
+          <button
+            key={preset.hex}
+            type="button"
+            title={preset.label}
+            onClick={() => onChange(preset.hex)}
+            style={{ backgroundColor: preset.hex }}
+            className={`w-8 h-8 rounded-lg border-2 transition-transform ${
+              actual.toLowerCase() === preset.hex ? 'border-ink scale-110' : 'border-transparent hover:scale-105'
+            }`}
+          >
+            {actual.toLowerCase() === preset.hex && <i className="fa-solid fa-check text-white text-xs"></i>}
+          </button>
+        ))}
+        <label className="flex items-center gap-2 ml-1 text-xs font-semibold text-slate-600 cursor-pointer">
+          <input
+            type="color"
+            value={actual}
+            onChange={e => onChange(e.target.value.toLowerCase())}
+            className="w-8 h-8 rounded-lg border border-slate-300 bg-white p-0.5 cursor-pointer"
+          />
+          Otro color
+        </label>
+        {color && (
+          <button type="button" onClick={() => onChange('')}
+            className="px-2 py-1 text-xs font-semibold text-slate-500 hover:text-red-600">
+            Usar el color por defecto
+          </button>
+        )}
+      </div>
+      <p className="text-[11px] text-slate-400">
+        Se usa en los botones principales y en lo que el sistema resalta. El resto queda en gris a propósito:
+        así se distingue de un vistazo qué es lo importante de cada pantalla.
+      </p>
+    </div>
+  );
+}
+
 export default function SettingsPage({ currentUser, onSaved, hasFeature = () => true, licensedFeatures = null, license = null }) {
   // Al crear o renombrar sucursales se recarga la lista de cajas (muestra su sucursal).
   const [branchesVersion, setBranchesVersion] = useState(0);
@@ -241,6 +289,11 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
       setLoadError(err.message || 'No se pudo cargar la configuración.');
     }
   };
+
+  // Al salir de Configuración sin guardar, vuelve el color que está guardado.
+  const savedColor = useRef(null);
+  savedColor.current = savedSettings?.primaryColor ?? null;
+  useEffect(() => () => applyTheme(savedColor.current), []);
 
   const hasChanges = useMemo(() => {
     if (!form || !savedSettings) return false;
@@ -401,6 +454,12 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
         <Card icon="fa-palette" title="Identidad" description="El nombre y el logo con los que sus empleados ven el sistema.">
           <div className="flex flex-col gap-4">
             <LogoField logo={form.logo} onChange={value => setField('logo', value)} />
+            <Field label="Color principal">
+              <ColorField
+                color={form.primaryColor}
+                onChange={value => { setField('primaryColor', value); applyTheme(value); }}
+              />
+            </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Nombre comercial" error={errors.tradeName} hint="Es el que se muestra en el sistema.">
                 {input('tradeName', { maxLength: 100, placeholder: 'Ferretería Los Andes' })}

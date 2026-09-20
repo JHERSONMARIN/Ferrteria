@@ -69,13 +69,19 @@ if (QUICK_LOGIN_USERS.length > 0) {
 
 // Información pública para la pantalla de inicio de sesión (nombre y logo de la empresa).
 app.get('/api/app-info', async (req, res) => {
-  let business = { name: process.env.COMPANY_NAME || null, logo: null };
+  let business = { name: process.env.COMPANY_NAME || null, logo: null, primaryColor: null };
   try {
     const settings = await prisma.businessSettings.findUnique({
       where: { id: 1 },
-      select: { legalName: true, tradeName: true, logo: true },
+      select: { legalName: true, tradeName: true, logo: true, primaryColor: true },
     });
-    if (settings) business = { name: settings.tradeName || settings.legalName, logo: settings.logo };
+    if (settings) {
+      business = {
+        name: settings.tradeName || settings.legalName,
+        logo: settings.logo,
+        primaryColor: settings.primaryColor,
+      };
+    }
   } catch (error) {
     console.error('[app-info] No se pudieron leer los datos de la empresa:', error);
   }
