@@ -6,7 +6,7 @@ import { borderClass } from '../utils/validators.js';
 import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quantities.js';
 import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
 
-export default function InventarioPage({ initialCategory = 'Todas', onNavigateToCategories, currentUser }) {
+export default function InventarioPage({ initialCategory = 'Todas', initialSearch = '', onNavigateToCategories, currentUser }) {
   const aviso = useToast();
   const [products, setProducts] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -21,7 +21,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
   const [editingProductId, setEditingProductId] = useState(null);
 
   // Filtros y búsqueda
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [filterCategory, setFilterCategory] = useState(initialCategory || 'Todas');
 
   // Campos formulario producto
@@ -36,6 +36,10 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
   const [wholesalePrice, setWholesalePrice] = useState('');
   const [searchingBarcode, setSearchingBarcode] = useState(false);
   const [productErrors, setProductErrors] = useState({});
+
+  useEffect(() => {
+    if (initialSearch) setSearchQuery(initialSearch);
+  }, [initialSearch]);
 
   useEffect(() => {
     if (initialCategory) {

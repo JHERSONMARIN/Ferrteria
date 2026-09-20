@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
-import { useToast, useConfirm } from '../components/ui/index.js';
+import { useToast, useConfirm, SearchInput, EmptyState } from '../components/ui/index.js';
 
-export default function ClientesPage() {
+export default function ClientesPage({ initialSearch = '' }) {
   const aviso = useToast();
   const confirmar = useConfirm();
   const [clients, setClients] = useState([]);
+  // Búsqueda por nombre o documento: con muchas cuentas es la única forma de encontrar una.
+  const [busqueda, setBusqueda] = useState(initialSearch);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
@@ -21,6 +23,15 @@ export default function ClientesPage() {
   const [maxCredit, setMaxCredit] = useState('1000');
   const [priceList, setPriceList] = useState('RETAIL');
   const [errors, setErrors] = useState({});
+
+  useEffect(() => { if (initialSearch) setBusqueda(initialSearch); }, [initialSearch]);
+
+  const sinTildes = (t) => (t || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const clientesFiltrados = clients.filter(c => {
+    const q = sinTildes(busqueda).trim();
+    if (!q) return true;
+    return sinTildes(c.name).includes(q) || sinTildes(c.doc).includes(q) || sinTildes(c.phone).includes(q);
+  });
 
   const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
 
@@ -147,12 +158,23 @@ export default function ClientesPage() {
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
         <div className="p-4 border-b border-line flex justify-between items-center bg-surface-muted">
           <div>
-            <p className="text-sm font-bold text-ink">{clients.length} cliente{clients.length === 1 ? '' : 's'}</p>
+            <p className="text-sm font-bold text-ink">
+              {busqueda ? `${clientesFiltrados.length} de ${clients.length}` : clients.length} cliente{clients.length === 1 ? '' : 's'}
+            </p>
             <p className="text-xs text-muted">Datos del cliente y su límite de crédito (fiado).</p>
           </div>
           <button onClick={() => setShowModal(true)} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2">
             <i className="fa-solid fa-user-plus"></i> Nuevo cliente
           </button>
+        </div>
+
+        <div className="p-4 border-b border-line">
+          <SearchInput
+            value={busqueda}
+            onChange={e => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre, DNI/RUC o teléfono…"
+            className="max-w-md"
+          />
         </div>
 
         <div className="overflow-x-auto">
@@ -171,7 +193,7 @@ export default function ClientesPage() {
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-line">
-              {clients.map(c => (
+              {clientesFiltrados.map(c => (
                 <tr key={c.id} className="hover:bg-surface-muted border-b border-line">
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.type === 'EMPRESA' ? 'bg-info-soft text-info' : 'bg-info-soft text-info'}`}>
@@ -210,6 +232,15 @@ export default function ClientesPage() {
               ))}
             </tbody>
           </table>
+          {clientesFiltrados.length === 0 && (
+            <EmptyState
+              icon="fa-users"
+              title={clients.length === 0 ? 'Todavía no hay clientes' : 'Ningún cliente coincide'}
+              description={clients.length === 0
+                ? 'Registre a sus clientes para llevarles el crédito y su historial de compras.'
+                : 'Pruebe con el nombre, el documento o el teléfono.'}
+            />
+          )}
         </div>
       </div>
 

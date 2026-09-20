@@ -3,7 +3,7 @@ import Badge from './ui/Badge.jsx';
 
 // Barra superior: el nombre de la pantalla se escribe aquí y en ningún otro lado, para no repetirlo
 // dentro de la página. A la derecha queda el contexto (la sucursal en la que se está trabajando).
-export default function Header({ pageTitle, pageHint, user, showBranch = false, onResetDemo, onToggleSidebar }) {
+export default function Header({ pageTitle, pageHint, user, showBranch = false, onResetDemo, onToggleSidebar, onBuscar }) {
   return (
     <header className="h-16 bg-surface border-b border-line flex items-center justify-between px-3 sm:px-5 gap-3 shrink-0 z-10">
       <div className="flex items-center gap-3 min-w-0">
@@ -21,6 +21,18 @@ export default function Header({ pageTitle, pageHint, user, showBranch = false, 
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {/* El buscador general: visible para que se sepa que existe, y con su atajo a la vista. */}
+        {onBuscar && (
+          <button
+            onClick={onBuscar}
+            className="flex items-center gap-2 text-sm text-muted bg-surface-muted border border-line rounded-xl px-3 py-2 hover:border-brand hover:text-ink transition-colors"
+            title="Buscar en todo el sistema (Ctrl+K)"
+          >
+            <i className="fa-solid fa-magnifying-glass"></i>
+            <span className="hidden md:inline">Buscar</span>
+            <kbd className="hidden md:inline text-[10px] font-bold border border-line rounded px-1.5 py-0.5 bg-surface">Ctrl K</kbd>
+          </button>
+        )}
         {user && showBranch && user.branch && (
           <Badge tone="brand" icon="fa-store">{user.branch.name}</Badge>
         )}

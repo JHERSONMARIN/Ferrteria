@@ -22,6 +22,7 @@ import CashierQueuePage from './pages/CashierQueuePage.jsx';
 import DispatchQueuePage from './pages/DispatchQueuePage.jsx';
 import FieldError from './components/FieldError.jsx';
 import ChangePasswordForm from './components/ChangePasswordForm.jsx';
+import BuscadorGlobal from './components/BuscadorGlobal.jsx';
 import { api } from './api.js';
 import { MODULE_OPTIONS } from './constants/modules.js';
 import { applyTheme } from './utils/theme.js';
@@ -33,6 +34,15 @@ const DEMO_TEST_USERS = [
   { role: 'CAJERO', label: 'Cajero', user: 'cajero1', pass: '1234', icon: 'fa-vault' },
   { role: 'REPARTIDOR', label: 'Repartidor', user: 'repartidor1', pass: '1234', icon: 'fa-truck-fast' },
 ];
+
+// Íconos de cada pantalla, para el buscador general.
+const TAB_ICONS = {
+  pos: 'fa-cash-register', cobros: 'fa-hand-holding-dollar', despacho: 'fa-dolly', caja: 'fa-vault',
+  cotizaciones: 'fa-file-invoice', deliveries: 'fa-truck-fast', inventory: 'fa-boxes-stacked',
+  categories: 'fa-tags', kardex: 'fa-receipt', compras: 'fa-cart-flatbed', transfers: 'fa-right-left',
+  'client-dir': 'fa-users', customers: 'fa-book-journal-whills', personal: 'fa-id-badge',
+  dashboard: 'fa-chart-pie', audit: 'fa-shield-halved', settings: 'fa-gear',
+};
 
 // Los avisos flotantes y las confirmaciones están disponibles en todo el sistema (adiós a alert y confirm).
 export default function App() {
@@ -70,6 +80,9 @@ function Aplicacion() {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('Todas');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  // Buscador general (Ctrl+K) y texto con el que se abre una pantalla desde él.
+  const [buscadorAbierto, setBuscadorAbierto] = useState(false);
+  const [busquedaInicial, setBusquedaInicial] = useState('');
 
   const handlePasswordChanged = () => {
     setShowChangePassword(false);
@@ -313,6 +326,24 @@ function Aplicacion() {
     if (seguro) handleLogout();
   };
 
+  // Ctrl+K abre el buscador general desde cualquier pantalla.
+  useEffect(() => {
+    const alTeclear = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setBuscadorAbierto(abierto => !abierto);
+      }
+    };
+    window.addEventListener('keydown', alTeclear);
+    return () => window.removeEventListener('keydown', alTeclear);
+  }, []);
+
+  // Desde el buscador: se abre la pantalla con el texto ya escrito en su búsqueda.
+  const irDesdeBuscador = (tabId, texto = '') => {
+    setBusquedaInicial(texto);
+    handleSwitchTab(tabId);
+  };
+
   const handleSwitchTab = (tabId) => {
     if (tabId === 'inventory') {
       setSelectedCategoryFilter('Todas');
@@ -446,6 +477,13 @@ function Aplicacion() {
               />
             </div>
           )}
+          <BuscadorGlobal
+            open={buscadorAbierto}
+            onClose={() => setBuscadorAbierto(false)}
+            pantallas={navigableTabs.map(id => ({ id, label: pageTitles[id]?.[0] || id, icon: TAB_ICONS[id] || 'fa-arrow-right' }))}
+            onIr={irDesdeBuscador}
+          />
+
           <Sidebar
             activeTab={activeTab}
             onSwitchTab={handleSwitchTab}
@@ -468,6 +506,7 @@ function Aplicacion() {
               showBranch={branchCount > 1}
               onResetDemo={demoMode ? handleResetDemo : undefined}
               onToggleSidebar={() => setSidebarOpen(o => !o)}
+              onBuscar={() => setBuscadorAbierto(true)}
             />
 
             {license?.expiresAt && (license.expired || license.daysLeft <= 15) && (
@@ -496,6 +535,7 @@ function Aplicacion() {
               {activeTab === 'inventory' && (
                 <InventarioPage
                   currentUser={currentUser}
+                  initialSearch={busquedaInicial}
                   initialCategory={selectedCategoryFilter}
                   onNavigateToCategories={() => setActiveTab('categories')}
                 />
@@ -518,7 +558,7 @@ function Aplicacion() {
               {activeTab === 'deliveries' && (
                 <EntregasPage currentUser={currentUser} />
               )}
-              {activeTab === 'client-dir' && <ClientesPage />}
+              {activeTab === 'client-dir' && <ClientesPage initialSearch={busquedaInicial} />}
               {activeTab === 'customers' && <CreditosPage />}
               {activeTab === 'personal' && <PersonalPage currentUser={currentUser} />}
               {activeTab === 'dashboard' && <DashboardPage periodReports={hasFeature('period_reports')} />}
