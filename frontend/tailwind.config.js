@@ -21,6 +21,8 @@ export default {
         ink: { DEFAULT: color('--ink'), soft: color('--ink-soft') },
         muted: color('--muted'),
         nav: { DEFAULT: color('--nav'), strong: color('--nav-strong'), ink: color('--nav-ink'), muted: color('--nav-muted') },
+        navline: color('--nav-line'),
+        panel: { DEFAULT: color('--panel'), strong: color('--panel-strong') },
         success: { DEFAULT: color('--success'), soft: color('--success-soft') },
         warning: { DEFAULT: color('--warning'), soft: color('--warning-soft') },
         danger: { DEFAULT: color('--danger'), soft: color('--danger-soft') },

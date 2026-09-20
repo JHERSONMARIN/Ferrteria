@@ -347,10 +347,10 @@ export default function PersonalPage({ currentUser }) {
 
       {/* Modal Crear / Modificar Personal */}
       {showModal && (
-        <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-all overflow-y-auto">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-all overflow-y-auto">
           <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-auto border border-line">
             {/* Modal Header */}
-            <div className="p-4 bg-nav-strong text-white flex justify-between items-center border-b border-brand/80">
+            <div className="p-4 bg-panel-strong text-white flex justify-between items-center border-b border-brand/80">
               <div>
                 <h3 className="font-bold text-base flex items-center gap-2">
                   <i className={`fa-solid ${editingId ? 'fa-user-pen' : 'fa-user-plus'} text-brand`}></i>
@@ -362,7 +362,7 @@ export default function PersonalPage({ currentUser }) {
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-nav-strong transition-colors"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-panel-strong transition-colors"
               >
                 <i className="fa-solid fa-xmark text-lg"></i>
               </button>

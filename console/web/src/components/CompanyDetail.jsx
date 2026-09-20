@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../api.js';
 
 // Acciones sobre una empresa: plan, contacto, actualizar, suspender, clave del administrador y baja.
-export default function CompanyDetail({ company, plans, onClose, onChanged }) {
+export default function CompanyDetail({ company, plans, themes, onClose, onChanged }) {
   const [plan, setPlan] = useState(company.plan || '');
   const [extras, setExtras] = useState([]);
   const [expiresAt, setExpiresAt] = useState(company.license.expiresAt || '');
@@ -105,6 +105,50 @@ export default function CompanyDetail({ company, plans, onClose, onChanged }) {
             {plan && plans?.planes[plan] && (
               <p className="text-[11px] text-slate-500 mt-2">{plans.planes[plan].descripcion}</p>
             )}
+          </section>
+
+          <section className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="font-bold text-slate-800 text-sm">Estilo del sistema</h3>
+            <p className="text-xs text-slate-500 mt-0.5 mb-2">
+              Colores con los que la empresa ve FerreSys. También puede cambiarlo su administrador desde
+              <em> Configuración → Identidad</em>.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {themes && Object.entries(themes).map(([id, estilo]) => {
+                const actual = company.usage?.theme;
+                const enUso = (actual?.primaryColor || '').toLowerCase() === estilo.primaryColor.toLowerCase()
+                  && (actual?.navColor || '').toLowerCase() === estilo.navColor.toLowerCase();
+                return (
+                  <button
+                    key={id}
+                    title={estilo.descripcion}
+                    disabled={busy === 'estilo'}
+                    onClick={() => run('estilo', () => api.put(`/empresas/${company.slug}/estilo`, { estilo: id }), `Estilo aplicado: ${estilo.nombre}.`)}
+                    className={`flex items-center gap-2 p-2 rounded-lg border text-left disabled:opacity-50 ${
+                      enUso ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="w-10 h-8 rounded overflow-hidden flex shrink-0 border border-gray-200">
+                      <span className="w-1/3 h-full" style={{ backgroundColor: estilo.navColor }} />
+                      <span className="flex-1 h-full bg-white flex items-center justify-center">
+                        <span className="w-3.5 h-3.5 rounded" style={{ backgroundColor: estilo.primaryColor }} />
+                      </span>
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-xs font-bold text-slate-800 truncate">{estilo.nombre}</span>
+                      {enUso && <span className="block text-[10px] text-orange-700 font-bold">En uso</span>}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => run('estilo', () => api.put(`/empresas/${company.slug}/estilo`, { estilo: 'fabrica' }), 'Estilo de fábrica restaurado.')}
+              disabled={busy === 'estilo'}
+              className="mt-2 text-xs font-bold text-slate-500 hover:text-slate-800"
+            >
+              Volver al estilo de fábrica
+            </button>
           </section>
 
           <section className="bg-white rounded-lg border border-gray-200 p-4">

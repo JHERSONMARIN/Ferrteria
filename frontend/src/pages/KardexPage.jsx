@@ -464,9 +464,9 @@ export default function KardexPage({ currentUser }) {
 
       {/* Modal Ajuste Manual de Kardex */}
       {showModal && (
-        <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
           <div className="bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 bg-nav text-white flex justify-between items-center">
+            <div className="p-4 bg-panel text-white flex justify-between items-center">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <i className="fa-solid fa-boxes-packing text-brand"></i>
                 Nuevo Movimiento de Kardex

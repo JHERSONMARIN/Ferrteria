@@ -160,9 +160,9 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
   }`;
 
   return (
-    <div className="fixed inset-0 bg-nav/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm sm:p-4">
+    <div className="fixed inset-0 bg-panel/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm sm:p-4">
       <div className="bg-surface sm:rounded-xl rounded-t-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
-        <div className="px-5 py-4 bg-nav text-white flex justify-between items-center shrink-0">
+        <div className="px-5 py-4 bg-panel text-white flex justify-between items-center shrink-0">
           <div>
             <p className="text-xs text-muted font-semibold">{title || 'Total a cobrar'} · {units} {units === 1 ? 'producto' : 'productos'}</p>
             <p className="text-3xl font-black text-brand tabular-nums">{formatSoles(total)}</p>

@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { prisma } from '../db.js';
-import { DEPLOY_DIR, readPlans, companySlugs, readCompanyEnv } from './companies.js';
+import { DEPLOY_DIR, readPlans, readThemes, companySlugs, readCompanyEnv } from './companies.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -113,6 +113,18 @@ export async function setPlan({ slug, plan, extras = [], expiresAt = null }, use
     script: 'set-plan.sh', args, action: 'PLAN_CHANGED', slug,
     summary: `Plan de ${slug}: ${planes[plan].nombre}${extras.length ? ` + ${extras.join(', ')}` : ''}${expiresAt ? `, vence ${expiresAt}` : ''}`,
     user,
+  });
+}
+
+// Estilo visual de la empresa: los colores de su menú y de sus botones.
+export async function setTheme({ slug, theme }, user) {
+  assertExists(slug);
+  const estilos = readThemes();
+  if (theme !== 'fabrica' && !estilos[theme]) throw new CommandError(`Estilo desconocido: ${theme}.`);
+  const nombre = theme === 'fabrica' ? 'Estilo de fábrica' : estilos[theme].nombre;
+  return run({
+    script: 'set-theme.sh', args: [slug, theme],
+    action: 'THEME_CHANGED', slug, summary: `Estilo de ${slug}: ${nombre}`, user,
   });
 }
 

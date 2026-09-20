@@ -81,7 +81,7 @@ function DeliveryCard({ delivery, couriers, busy, onAssign, onDepart, onDeliver,
                 <button
                   onClick={() => onDepart(delivery)}
                   disabled={busy}
-                  className="flex-1 bg-nav hover:bg-nav-strong text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
+                  className="flex-1 bg-panel hover:bg-panel-strong text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
                 >
                   <i className="fa-solid fa-truck-fast mr-1.5"></i>Salir a repartir
                 </button>
@@ -174,9 +174,9 @@ function ScheduleDeliveryModal({ onClose, onScheduled }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-nav/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm sm:p-4">
+    <div className="fixed inset-0 bg-panel/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm sm:p-4">
       <div className="bg-surface sm:rounded-xl rounded-t-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[92vh]">
-        <div className="px-5 py-4 bg-nav text-white flex justify-between items-center">
+        <div className="px-5 py-4 bg-panel text-white flex justify-between items-center">
           <h3 className="font-bold"><i className="fa-solid fa-truck-ramp-box mr-2 text-brand"></i>Programar envío de una venta</h3>
           <button onClick={onClose} className="text-muted hover:text-white"><i className="fa-solid fa-xmark text-xl"></i></button>
         </div>
@@ -192,7 +192,7 @@ function ScheduleDeliveryModal({ onClose, onScheduled }) {
                 placeholder="Ej. B001-000038"
                 className="flex-1 border border-line rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-brand"
               />
-              <button onClick={search} disabled={working} className="px-4 rounded-lg bg-nav text-white text-sm font-bold disabled:opacity-50">Buscar</button>
+              <button onClick={search} disabled={working} className="px-4 rounded-lg bg-panel text-white text-sm font-bold disabled:opacity-50">Buscar</button>
             </div>
           </div>
 

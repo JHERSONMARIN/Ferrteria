@@ -1,5 +1,9 @@
-// Color principal por empresa. Se guarda en su configuración (settings.primaryColor) y se aplica al
-// entrar y al guardarlo. Sin color propio, se usa el de src/styles/theme.css.
+// Estilo de cada empresa: color principal y color del menú lateral. Se guardan en su configuración
+// (settings.primaryColor y settings.navColor) y se aplican al entrar y al guardarlos.
+// Sin estilo propio se usa el de src/styles/theme.css.
+//
+// Los estilos predeterminados salen del servidor (backend/src/config/themes.json), que es la misma
+// lista que usa la consola de VALETEC.
 const HEX = /^#([0-9a-fA-F]{6})$/;
 
 const toRgb = (hex) => {
@@ -16,30 +20,39 @@ const mezclar = ([r, g, b], [r2, g2, b2], peso) => [
 // Luminancia relativa: decide si el texto sobre el color va en blanco o en negro.
 const claro = ([r, g, b]) => (0.299 * r + 0.587 * g + 0.114 * b) > 150;
 
-export function applyTheme(primaryColor) {
-  const raiz = document.documentElement;
-  if (!primaryColor || !HEX.test(primaryColor)) {
-    ['--brand', '--brand-strong', '--brand-soft', '--brand-contrast', '--brand-text'].forEach(v => raiz.style.removeProperty(v));
-    return;
-  }
-  const base = toRgb(primaryColor);
-  const fuerte = mezclar(base, [0, 0, 0], 0.18);   // más oscuro, para hover
-  const suave = mezclar(base, [255, 255, 255], 0.88); // muy claro, para fondos
-  const texto = mezclar(base, [0, 0, 0], 0.35);      // legible sobre fondo claro
-  raiz.style.setProperty('--brand', base.join(' '));
-  raiz.style.setProperty('--brand-strong', fuerte.join(' '));
-  raiz.style.setProperty('--brand-soft', suave.join(' '));
-  raiz.style.setProperty('--brand-contrast', claro(base) ? '15 23 42' : '255 255 255');
-  raiz.style.setProperty('--brand-text', texto.join(' '));
-}
+const NEGRO = [15, 23, 42];
+const BLANCO = [255, 255, 255];
 
-// Colores sugeridos en Configuración; cualquier otro se puede escribir a mano.
-export const BRAND_PRESETS = [
-  { hex: '#ea580c', label: 'Naranja' },
-  { hex: '#dc2626', label: 'Rojo' },
-  { hex: '#2563eb', label: 'Azul' },
-  { hex: '#0f766e', label: 'Verde azulado' },
-  { hex: '#16a34a', label: 'Verde' },
-  { hex: '#7c3aed', label: 'Violeta' },
-  { hex: '#0f172a', label: 'Negro' },
-];
+const VARIABLES_MARCA = ['--brand', '--brand-strong', '--brand-soft', '--brand-contrast', '--brand-text'];
+const VARIABLES_MENU = ['--nav', '--nav-strong', '--nav-ink', '--nav-muted', '--nav-line'];
+
+const poner = (raiz, nombre, rgb) => raiz.style.setProperty(nombre, rgb.join(' '));
+
+export function applyTheme(primaryColor, navColor) {
+  const raiz = document.documentElement;
+
+  // Color principal: botones, selección y lo que el sistema resalta.
+  if (primaryColor && HEX.test(primaryColor)) {
+    const base = toRgb(primaryColor);
+    poner(raiz, '--brand', base);
+    poner(raiz, '--brand-strong', mezclar(base, [0, 0, 0], 0.18)); // al pasar el mouse o presionar
+    poner(raiz, '--brand-soft', mezclar(base, BLANCO, 0.88));      // fondos suaves, selección
+    poner(raiz, '--brand-contrast', claro(base) ? NEGRO : BLANCO); // texto sobre el color
+    poner(raiz, '--brand-text', mezclar(base, [0, 0, 0], 0.35));   // el color escrito sobre fondo claro
+  } else {
+    VARIABLES_MARCA.forEach(v => raiz.style.removeProperty(v));
+  }
+
+  // Menú lateral: puede ser oscuro o claro; el texto se ajusta solo al fondo elegido.
+  if (navColor && HEX.test(navColor)) {
+    const base = toRgb(navColor);
+    const esClaro = claro(base);
+    poner(raiz, '--nav', base);
+    poner(raiz, '--nav-strong', esClaro ? mezclar(base, [0, 0, 0], 0.06) : mezclar(base, [0, 0, 0], 0.35));
+    poner(raiz, '--nav-ink', esClaro ? NEGRO : mezclar(base, BLANCO, 0.9));
+    poner(raiz, '--nav-muted', esClaro ? mezclar(base, NEGRO, 0.55) : mezclar(base, BLANCO, 0.6));
+    poner(raiz, '--nav-line', esClaro ? NEGRO : BLANCO);
+  } else {
+    VARIABLES_MENU.forEach(v => raiz.style.removeProperty(v));
+  }
+}

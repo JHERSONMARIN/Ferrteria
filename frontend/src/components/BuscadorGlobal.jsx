@@ -80,7 +80,7 @@ export default function BuscadorGlobal({ open, onClose, pantallas, onIr }) {
 
   return (
     <div
-      className="fixed inset-0 z-[150] bg-nav-strong/60 backdrop-blur-sm flex items-start justify-center p-4 pt-[12vh]"
+      className="fixed inset-0 z-[150] bg-panel-strong/60 backdrop-blur-sm flex items-start justify-center p-4 pt-[12vh]"
       onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-surface rounded-2xl shadow-float w-full max-w-xl overflow-hidden flex flex-col max-h-[70vh]">

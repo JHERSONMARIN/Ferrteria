@@ -43,7 +43,7 @@ function NavButton({ item, active, compact, count, sub = false, onClick }) {
         ${compact ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
         ${active
           ? 'bg-brand text-brand-contrast shadow-card'
-          : `${sub ? 'text-nav-ink' : 'text-nav-muted'} hover:bg-white/10 hover:text-nav-ink`}`}
+          : `${sub ? 'text-nav-ink' : 'text-nav-muted'} hover:bg-navline/10 hover:text-nav-ink`}`}
     >
       <i className={`fa-solid ${item.icon} w-5 text-center shrink-0`}></i>
       {!compact && <span className="flex-1 min-w-0 truncate">{item.label}</span>}
@@ -112,14 +112,14 @@ export default function Sidebar({
           ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         {/* Marca de la empresa */}
-        <div className={`h-16 flex items-center justify-between border-b border-white/10 bg-nav-strong shrink-0
+        <div className={`h-16 flex items-center justify-between border-b border-navline/10 bg-nav-strong shrink-0
           ${compact ? 'lg:px-2 px-4' : 'px-4'}`}>
           <div className="flex items-center min-w-0 gap-3">
             {businessLogo
               ? <img src={businessLogo} alt="" className="w-9 h-9 rounded-lg object-contain bg-white/90 p-0.5 shrink-0" />
               : <i className="fa-solid fa-screwdriver-wrench text-brand text-xl w-9 text-center shrink-0"></i>}
             <div className={`min-w-0 ${compact ? 'lg:hidden' : ''}`}>
-              <span className="block font-bold text-base truncate leading-tight text-white">
+              <span className="block font-bold text-base truncate leading-tight text-nav-ink">
                 {businessName || 'FerreSys'}
               </span>
               <span className="block text-[11px] text-nav-muted truncate">
@@ -127,7 +127,7 @@ export default function Sidebar({
               </span>
             </div>
           </div>
-          <button onClick={onClose} className="text-nav-muted hover:text-white lg:hidden shrink-0 ml-2">
+          <button onClick={onClose} className="text-nav-muted hover:text-nav-ink lg:hidden shrink-0 ml-2">
             <i className="fa-solid fa-xmark text-xl"></i>
           </button>
         </div>
@@ -143,7 +143,7 @@ export default function Sidebar({
                   ${compact ? 'lg:hidden' : ''}`}>
                   {group.section}
                 </p>
-                {compact && <div className="hidden lg:block h-px bg-white/10 my-2" />}
+                {compact && <div className="hidden lg:block h-px bg-navline/10 my-2" />}
 
                 {visibles.map(item => {
                   const active = activeTab === item.id || item.subItems?.some(s => s.id === activeTab);
@@ -158,7 +158,7 @@ export default function Sidebar({
                       />
                       {/* Los submenús solo se abren con la sección activa y con el menú ancho */}
                       {item.subItems && active && !compact && (
-                        <div className="ml-4 pl-3 border-l border-white/10 flex flex-col gap-0.5 my-0.5">
+                        <div className="ml-4 pl-3 border-l border-navline/10 flex flex-col gap-0.5 my-0.5">
                           {item.subItems.map(sub => (
                             <NavButton
                               key={sub.id}
@@ -180,7 +180,7 @@ export default function Sidebar({
         </nav>
 
         {/* Pie: el usuario, y al tocarlo su menú (configuración, contraseña y salir) */}
-        <div className={`border-t border-white/10 py-2 shrink-0 flex flex-col gap-0.5 ${compact ? 'lg:px-2 px-3' : 'px-3'}`}>
+        <div className={`border-t border-navline/10 py-2 shrink-0 flex flex-col gap-0.5 ${compact ? 'lg:px-2 px-3' : 'px-3'}`}>
           {user && (
             <div className="relative" ref={menuUsuarioRef}>
               {menuUsuario && (
@@ -207,7 +207,7 @@ export default function Sidebar({
                 onClick={() => setMenuUsuario(abierto => !abierto)}
                 title={compact ? user.name : undefined}
                 className={`w-full flex items-center gap-3 rounded-xl text-left transition-colors
-                  hover:bg-white/10 ${menuUsuario ? 'bg-white/10' : ''}
+                  hover:bg-navline/10 ${menuUsuario ? 'bg-navline/10' : ''}
                   ${compact ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}`}
               >
                 <i className="fa-solid fa-circle-user text-nav-muted text-lg shrink-0"></i>
@@ -229,7 +229,7 @@ export default function Sidebar({
           <button
             onClick={() => setCompact(c => !c)}
             className="hidden lg:flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold
-              text-nav-muted hover:text-nav-ink hover:bg-white/10 transition-colors"
+              text-nav-muted hover:text-nav-ink hover:bg-navline/10 transition-colors"
             title={compact ? 'Ampliar el menú' : 'Reducir el menú'}
           >
             <i className={`fa-solid ${compact ? 'fa-angles-right' : 'fa-angles-left'} w-5 text-center`}></i>

@@ -102,7 +102,7 @@ export default function BranchesSettings({ onChanged }) {
           placeholder="Nombre (ej. Sucursal Norte, Almacén Central)" className={`${inputClass} flex-1 py-2`} />
         <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} maxLength={200}
           placeholder="Dirección (opcional)" className={`${inputClass} flex-1 py-2`} />
-        <button type="submit" disabled={busy || !form.name.trim()} className="px-3 py-2 text-sm font-bold text-white bg-nav hover:bg-nav-strong rounded-lg disabled:opacity-50 shrink-0">
+        <button type="submit" disabled={busy || !form.name.trim()} className="px-3 py-2 text-sm font-bold text-white bg-panel hover:bg-panel-strong rounded-lg disabled:opacity-50 shrink-0">
           <i className="fa-solid fa-plus mr-1"></i> Agregar sucursal
         </button>
       </form>

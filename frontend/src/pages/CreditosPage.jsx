@@ -115,7 +115,7 @@ export default function CreditosPage() {
                     <td className="px-4 py-4 text-center">
                       <button
                         onClick={() => handleOpenModal(c)}
-                        className="bg-nav hover:bg-nav-strong transition-colors text-white text-xs px-3 py-2 rounded font-bold shadow"
+                        className="bg-panel hover:bg-panel-strong transition-colors text-white text-xs px-3 py-2 rounded font-bold shadow"
                       >
                         <i className="fa-solid fa-eye mr-1"></i> Ver Detalle / Abono
                       </button>
@@ -130,9 +130,9 @@ export default function CreditosPage() {
 
       {/* Modal Estado de Cuenta */}
       {selectedCredito && (
-        <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
           <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 bg-nav text-white flex justify-between items-center shrink-0">
+            <div className="p-4 bg-panel text-white flex justify-between items-center shrink-0">
               <div>
                 <h3 className="font-bold text-lg"><i className="fa-solid fa-handshake-angle mr-2"></i> Estado de Cuenta</h3>
                 <p className="text-muted text-sm">Cliente: {selectedCredito.name} (DNI/RUC: {selectedCredito.doc})</p>

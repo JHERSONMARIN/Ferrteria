@@ -206,7 +206,7 @@ export default function SalesReports() {
             key={p.id}
             type="button"
             onClick={() => applyPreset(p)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${preset === p.id ? 'bg-nav text-white border-white/10' : 'bg-surface text-ink-soft border-line hover:bg-surface-muted'}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${preset === p.id ? 'bg-panel text-white border-white/10' : 'bg-surface text-ink-soft border-line hover:bg-surface-muted'}`}
           >
             {p.label}
           </button>

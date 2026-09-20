@@ -125,7 +125,7 @@ export default function CashRegistersSettings() {
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         )}
-        <button type="submit" disabled={busy || !newName.trim()} className="px-3 py-2 text-sm font-bold text-white bg-nav hover:bg-nav-strong rounded-lg disabled:opacity-50">
+        <button type="submit" disabled={busy || !newName.trim()} className="px-3 py-2 text-sm font-bold text-white bg-panel hover:bg-panel-strong rounded-lg disabled:opacity-50">
           <i className="fa-solid fa-plus mr-1"></i> Agregar caja
         </button>
       </form>

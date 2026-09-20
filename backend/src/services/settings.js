@@ -75,7 +75,7 @@ function parseLogo(value) {
   return logo;
 }
 
-// Color principal de la empresa: #RRGGBB. Vacío o null vuelve al color por defecto del sistema.
+// Colores de la empresa (principal y del menú): #RRGGBB. Vacío o null vuelve al estilo por defecto.
 function parseColor(value) {
   if (value === undefined) return undefined; // no se toca
   if (value === null || value === '') return null;
@@ -137,6 +137,7 @@ export function validateSettingsInput(input) {
     ticketFooter: optionalText(input.ticketFooter, 300, 'El pie del ticket'),
     logo: parseLogo(input.logo),
     primaryColor: parseColor(input.primaryColor),
+    navColor: parseColor(input.navColor),
     enabledModules,
     maxDiscountPercent,
   };
@@ -144,7 +145,7 @@ export function validateSettingsInput(input) {
 
 const AUDITED_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email', 'currencySymbol', 'taxRate',
-  'ticketFooter', 'enabledModules', 'maxDiscountPercent', 'primaryColor',
+  'ticketFooter', 'enabledModules', 'maxDiscountPercent', 'primaryColor', 'navColor',
 ];
 
 // El logo se audita por su cambio, no por su contenido (es una imagen larga).

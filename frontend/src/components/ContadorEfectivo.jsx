@@ -133,7 +133,7 @@ export default function ContadorEfectivo({ conteo, onChange }) {
         </div>
       </div>
 
-      <div className="flex justify-between items-center px-4 py-3 bg-nav text-white">
+      <div className="flex justify-between items-center px-4 py-3 bg-panel text-white">
         <div className="flex flex-col">
           <span className="text-xs font-semibold">Total Contado</span>
           <span className="text-[10px] text-muted">

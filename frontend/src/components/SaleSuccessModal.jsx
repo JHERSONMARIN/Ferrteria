@@ -4,7 +4,7 @@ import { formatSoles } from '../utils/currency.js';
 // Confirmación de una operación terminada (venta cobrada, pedido enviado a caja…).
 export default function SaleSuccessModal({ icon = 'fa-check', title, highlight, subtitle, rows = [], change = null, buttonLabel, onClose }) {
   return (
-    <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+    <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
       <div className="bg-surface rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
         <div className="w-16 h-16 rounded-full bg-success-soft text-success flex items-center justify-center mx-auto mb-3 text-3xl">
           <i className={`fa-solid ${icon}`}></i>

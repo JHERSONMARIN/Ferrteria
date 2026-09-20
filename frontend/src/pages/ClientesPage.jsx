@@ -246,9 +246,9 @@ export default function ClientesPage({ initialSearch = '' }) {
 
       {/* Modal Nuevo Cliente */}
       {showModal && (
-        <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
           <div className="bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 bg-nav text-white flex justify-between items-center">
+            <div className="p-4 bg-panel text-white flex justify-between items-center">
               <h3 className="font-bold text-lg"><i className="fa-solid fa-user-plus mr-2"></i> Registrar Cliente</h3>
               <button onClick={() => setShowModal(false)} className="text-muted hover:text-white">
                 <i className="fa-solid fa-xmark text-xl"></i>

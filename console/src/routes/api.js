@@ -1,8 +1,8 @@
 import express from 'express';
 import { prisma } from '../db.js';
-import { listCompanies, getCompany, readPlans } from '../services/companies.js';
+import { listCompanies, getCompany, readPlans, readThemes } from '../services/companies.js';
 import {
-  CommandError, createCompany, setPlan, resetAdminPassword, removeCompany,
+  CommandError, createCompany, setPlan, setTheme, resetAdminPassword, removeCompany,
   startCompany, stopCompany, updateCompany, listHistory,
 } from '../services/commands.js';
 import { login, userFromToken, changePassword, sessionCookie, clearedCookie, readCookie, SESSION_COOKIE, PasswordPolicyError } from '../services/auth.js';
@@ -61,6 +61,11 @@ router.get('/planes', handle('listar los planes', async (req, res) => {
   res.json({ planes, adicionales });
 }));
 
+// ---------- Estilos ----------
+router.get('/estilos', handle('listar los estilos', async (req, res) => {
+  res.json(readThemes());
+}));
+
 // ---------- Empresas ----------
 router.get('/empresas', handle('listar las empresas', async (req, res) => {
   const [companies, managed] = await Promise.all([
@@ -85,6 +90,10 @@ router.post('/empresas', handle('crear la empresa', async (req, res) => {
 router.put('/empresas/:slug/plan', handle('cambiar el plan', async (req, res) => {
   const { plan, extras = [], expiresAt = null } = req.body ?? {};
   res.json({ success: true, salida: await setPlan({ slug: req.params.slug, plan, extras, expiresAt }, req.user) });
+}));
+
+router.put('/empresas/:slug/estilo', handle('cambiar el estilo', async (req, res) => {
+  res.json({ success: true, salida: await setTheme({ slug: req.params.slug, theme: req.body?.estilo }, req.user) });
 }));
 
 router.put('/empresas/:slug/contacto', handle('guardar el contacto', async (req, res) => {

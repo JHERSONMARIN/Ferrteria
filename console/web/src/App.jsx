@@ -12,6 +12,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [companies, setCompanies] = useState([]);
   const [plans, setPlans] = useState(null);
+  const [themes, setThemes] = useState(null);
   const [selected, setSelected] = useState(null);
   const [showNew, setShowNew] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -26,16 +27,21 @@ export default function App() {
     try {
       setRefreshing(true);
       setError('');
-      const [list, planData] = await Promise.all([api.get('/empresas?uso=1'), plans ? plans : api.get('/planes')]);
+      const [list, planData, themeData] = await Promise.all([
+        api.get('/empresas?uso=1'),
+        plans ? plans : api.get('/planes'),
+        themes ? themes : api.get('/estilos'),
+      ]);
       setCompanies(list);
       if (!plans) setPlans(planData);
+      if (!themes) setThemes(themeData);
     } catch (err) {
       if (err.codigo === 'SESION_INVALIDA') setUser(null);
       else setError(err.message);
     } finally {
       setRefreshing(false);
     }
-  }, [plans]);
+  }, [plans, themes]);
 
   useEffect(() => {
     if (user && !user.mustChangePassword) loadCompanies();
@@ -91,6 +97,7 @@ export default function App() {
         <CompanyDetail
           company={selectedCompany}
           plans={plans}
+          themes={themes}
           onClose={() => setSelected(null)}
           onChanged={loadCompanies}
         />

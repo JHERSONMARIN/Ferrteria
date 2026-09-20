@@ -503,6 +503,8 @@ model BusinessSettings {
   logo           String?  @db.Text
   // Color principal (#RRGGBB) con el que se tiñe la interfaz; vacío usa el color por defecto.
   primaryColor   String?  @db.VarChar(7)
+  // Color del menú lateral; con el anterior forma el estilo (backend/src/config/themes.json).
+  navColor       String?  @db.VarChar(7)
   enabledModules Json
   // Descuento máximo (%) que puede aplicar quien no es administrador; 0 = no puede descontar.
   maxDiscountPercent Decimal @default(0) @db.Decimal(5, 2)

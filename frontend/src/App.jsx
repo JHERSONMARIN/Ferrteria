@@ -109,10 +109,13 @@ function Aplicacion() {
       .catch(() => setDemoMode(false));
   }, []);
 
-  // Color de la empresa: en el inicio de sesión viene de /app-info y, ya dentro, de la configuración.
+  // Estilo de la empresa: en el inicio de sesión viene de /app-info y, ya dentro, de la configuración.
   useEffect(() => {
-    applyTheme(settings?.primaryColor ?? loginBrand?.primaryColor);
-  }, [settings?.primaryColor, loginBrand?.primaryColor]);
+    applyTheme(
+      settings?.primaryColor ?? loginBrand?.primaryColor,
+      settings?.navColor ?? loginBrand?.navColor,
+    );
+  }, [settings?.primaryColor, settings?.navColor, loginBrand?.primaryColor, loginBrand?.navColor]);
 
   // Módulos visibles: los asignados al usuario que además estén activos en la empresa.
   // Mientras carga no se muestra ninguno (evita enseñar módulos desactivados); si la carga
@@ -382,16 +385,16 @@ function Aplicacion() {
 
       {/* Pantalla de Login si no hay usuario autenticado */}
       {!currentUser ? (
-        <div id="login-screen" className="fixed inset-0 bg-nav z-[100] flex items-center justify-center p-4 transition-all overflow-y-auto">
+        <div id="login-screen" className="fixed inset-0 bg-panel z-[100] flex items-center justify-center p-4 transition-all overflow-y-auto">
           <div className="bg-surface rounded-2xl shadow-float w-full max-w-md overflow-hidden flex flex-col my-auto">
-            <div className="p-5 bg-nav-strong text-white text-center border-b-2 border-brand">
+            <div className="p-5 bg-panel-strong text-white text-center border-b-2 border-brand">
               {loginBrand?.logo
                 ? <img src={loginBrand.logo} alt="" className="h-14 mx-auto mb-2 object-contain" />
                 : <i className="fa-solid fa-screwdriver-wrench text-brand text-3xl mb-2"></i>}
               <h2 className="text-xl font-bold tracking-wide">
                 {loginBrand?.name || <>FerreSys <span className="text-xs text-brand align-top">v4.8</span></>}
               </h2>
-              <p className="text-nav-muted text-xs mt-0.5">Inicio de sesión</p>
+              <p className="text-muted text-xs mt-0.5">Inicio de sesión</p>
             </div>
 
             <form onSubmit={handleLogin} className="p-5 flex flex-col gap-3">
@@ -465,14 +468,14 @@ function Aplicacion() {
         </div>
       ) : currentUser.mustChangePassword ? (
         /* Clave temporal: hay que cambiarla antes de usar el sistema */
-        <div className="fixed inset-0 bg-nav z-[100] flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-panel z-[100] flex items-center justify-center p-4 overflow-y-auto">
           <ChangePasswordForm mandatory onDone={handlePasswordChanged} onLogout={handleLogout} />
         </div>
       ) : (
         /* Layout Principal Full-Stack React */
         <div className="print:hidden h-screen flex overflow-hidden">
           {showChangePassword && (
-            <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+            <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
               <ChangePasswordForm
                 onDone={() => { handlePasswordChanged(); aviso.exito('Contraseña actualizada.'); }}
                 onCancel={() => setShowChangePassword(false)}

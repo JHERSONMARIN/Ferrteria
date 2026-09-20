@@ -16,7 +16,7 @@ export default function Modal({ open, onClose, title, description, icon, size = 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-nav-strong/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-panel-strong/60 backdrop-blur-sm"
       onMouseDown={e => { if (e.target === e.currentTarget && onClose) onClose(); }}
     >
       <div className={`bg-surface rounded-2xl shadow-float w-full ${SIZES[size]} max-h-[90vh] flex flex-col overflow-hidden`}>

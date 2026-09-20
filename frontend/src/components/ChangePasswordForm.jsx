@@ -68,7 +68,7 @@ export default function ChangePasswordForm({ mandatory, onDone, onCancel, onLogo
 
   return (
     <div className="bg-surface rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-white/10/20">
-      <div className="p-5 bg-nav-strong text-white text-center border-b border-brand">
+      <div className="p-5 bg-panel-strong text-white text-center border-b border-brand">
         <i className="fa-solid fa-key text-brand text-2xl mb-2"></i>
         <h2 className="text-lg font-bold">{mandatory ? 'Elija su contraseña' : 'Cambiar contraseña'}</h2>
         {mandatory && (

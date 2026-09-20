@@ -10,10 +10,13 @@ const execFileAsync = promisify(execFile);
 export const DEPLOY_DIR = process.env.DEPLOY_DIR || join(process.cwd(), '..', 'deploy');
 const COMPANIES_DIR = join(DEPLOY_DIR, 'companies');
 const PLANS_FILE = join(DEPLOY_DIR, 'plans.json');
+// Los estilos viven con el producto (los usa también la Configuración de cada empresa).
+const THEMES_FILE = join(DEPLOY_DIR, '..', 'backend', 'src', 'config', 'themes.json');
 const DB_CONTAINER = 'ferresys-infra-db';
 const CLAVES_SECRETAS = ['DATABASE_URL', 'JWT_SECRET', 'INITIAL_ADMIN_PASSWORD'];
 
 export const readPlans = () => JSON.parse(readFileSync(PLANS_FILE, 'utf8'));
+export const readThemes = () => JSON.parse(readFileSync(THEMES_FILE, 'utf8')).estilos;
 
 // .env sencillo: CLAVE=valor, una por línea, con comillas opcionales.
 function parseEnv(text) {
@@ -70,13 +73,19 @@ async function usage(slug) {
     "(SELECT count(*) FROM branches WHERE active) || '|' ||",
     "(SELECT count(*) FROM cash_registers WHERE active) || '|' ||",
     `(SELECT count(*) FROM ventas WHERE status IN ('PAID','DISPATCHED')`,
-    `AND COALESCE("paidAt", "createdAt") >= date_trunc('month', (NOW() AT TIME ZONE 'America/Lima')))`,
+    `AND COALESCE("paidAt", "createdAt") >= date_trunc('month', (NOW() AT TIME ZONE 'America/Lima'))) || '|' ||`,
+    `(SELECT COALESCE("primaryColor", '') || ',' || COALESCE("navColor", '') FROM business_settings WHERE id = 1)`,
   ].join(' ');
   try {
     const { stdout } = await execFileAsync('docker', ['exec', DB_CONTAINER, 'sh', '-c',
       `psql -U "$POSTGRES_USER" -d ${dbName} -tAc ${JSON.stringify(sql)}`]);
-    const [users, branches, cashRegisters, salesThisMonth] = stdout.trim().split('|').map(Number);
-    return { users, branches, cashRegisters, salesThisMonth };
+    const [users, branches, cashRegisters, salesThisMonth, colores] = stdout.trim().split('|');
+    const [primaryColor, navColor] = (colores || '').split(',');
+    return {
+      users: Number(users), branches: Number(branches), cashRegisters: Number(cashRegisters),
+      salesThisMonth: Number(salesThisMonth),
+      theme: { primaryColor: primaryColor || null, navColor: navColor || null },
+    };
   } catch {
     return null; // la empresa puede estar detenida o la base todavía sin migrar
   }

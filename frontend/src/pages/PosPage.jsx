@@ -755,7 +755,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                         key={type}
                         type="button"
                         onClick={() => setDiscountType(type)}
-                        className={`px-2.5 py-1 ${discountType === type ? 'bg-nav text-white' : 'bg-surface text-ink-soft hover:bg-surface-muted'}`}
+                        className={`px-2.5 py-1 ${discountType === type ? 'bg-panel text-white' : 'bg-surface text-ink-soft hover:bg-surface-muted'}`}
                       >
                         {label}
                       </button>
@@ -822,7 +822,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         <div className="xl:hidden fixed bottom-0 inset-x-0 lg:left-64 z-20 p-3 bg-surface/95 backdrop-blur border-t border-line shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
           <button
             onClick={() => cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="w-full bg-nav text-white rounded-lg py-3 px-4 flex justify-between items-center font-bold"
+            className="w-full bg-panel text-white rounded-lg py-3 px-4 flex justify-between items-center font-bold"
           >
             <span className="flex items-center gap-2 text-sm">
               <i className="fa-solid fa-cart-shopping text-brand"></i> Ver {isDirect ? 'venta' : 'pedido'} ({cartUnits})
@@ -849,9 +849,9 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
       {/* ===== MODAL: COTIZACIONES PENDIENTES ===== */}
       {showQuotesModal && (
-        <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
           <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="px-5 py-4 bg-nav text-white flex justify-between items-center">
+            <div className="px-5 py-4 bg-panel text-white flex justify-between items-center">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <i className="fa-solid fa-file-import text-brand"></i> Cargar cotización
               </h3>

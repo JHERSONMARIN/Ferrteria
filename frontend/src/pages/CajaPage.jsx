@@ -67,7 +67,7 @@ function RegisterList({ registers, selectedId, onSelect, onJoin, loading }) {
                   type="button"
                   onClick={() => onJoin(r)}
                   disabled={loading}
-                  className="mt-auto w-full bg-nav hover:bg-nav-strong text-white font-bold py-2 rounded-lg text-sm disabled:opacity-50"
+                  className="mt-auto w-full bg-panel hover:bg-panel-strong text-white font-bold py-2 rounded-lg text-sm disabled:opacity-50"
                 >
                   <i className="fa-solid fa-user-plus mr-1.5"></i> Unirme a este turno
                 </button>
@@ -490,7 +490,7 @@ export default function CajaPage({ currentUser }) {
               <button
                 onClick={handleCerrarCaja}
                 disabled={loading || isNaN(totalCierre)}
-                className="w-full mt-auto bg-nav hover:bg-nav-strong text-white font-bold py-3.5 rounded-lg shadow transition-colors text-sm disabled:opacity-50"
+                className="w-full mt-auto bg-panel hover:bg-panel-strong text-white font-bold py-3.5 rounded-lg shadow transition-colors text-sm disabled:opacity-50"
               >
                 Ejecutar Cierre y Guardar Arqueo
               </button>

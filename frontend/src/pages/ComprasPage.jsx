@@ -273,13 +273,13 @@ export default function ComprasPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setViewMode('historial')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'historial' ? 'bg-nav text-white shadow' : 'bg-surface text-ink-soft border'}`}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'historial' ? 'bg-panel text-white shadow' : 'bg-surface text-ink-soft border'}`}
             >
               <i className="fa-solid fa-receipt mr-1.5"></i> Historial de Compras
             </button>
             <button
               onClick={() => setViewMode('costos')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'costos' ? 'bg-nav text-white shadow' : 'bg-surface text-ink-soft border'}`}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewMode === 'costos' ? 'bg-panel text-white shadow' : 'bg-surface text-ink-soft border'}`}
             >
               <i className="fa-solid fa-chart-line mr-1.5"></i> Histórico de Variación de Costos
             </button>
@@ -507,9 +507,9 @@ export default function ComprasPage() {
 
       {/* Modal Nuevo Proveedor */}
       {showProveedorModal && (
-        <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
           <div className="bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 bg-nav text-white flex justify-between items-center">
+            <div className="p-4 bg-panel text-white flex justify-between items-center">
               <h3 className="font-bold text-lg"><i className="fa-solid fa-truck-field mr-2"></i> Registrar Proveedor</h3>
               <button onClick={() => setShowProveedorModal(false)} className="text-muted hover:text-white">
                 <i className="fa-solid fa-xmark text-xl"></i>
@@ -572,9 +572,9 @@ export default function ComprasPage() {
 
       {/* Modal Registrar Compra */}
       {showCompraModal && (
-        <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
           <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 bg-nav text-white flex justify-between items-center shrink-0">
+            <div className="p-4 bg-panel text-white flex justify-between items-center shrink-0">
               <h3 className="font-bold text-lg"><i className="fa-solid fa-cart-flatbed mr-2"></i> Registrar Entrada de Mercadería</h3>
               <button onClick={() => setShowCompraModal(false)} className="text-muted hover:text-white">
                 <i className="fa-solid fa-xmark text-xl"></i>
@@ -652,7 +652,7 @@ export default function ComprasPage() {
                 </div>
                 <button
                   onClick={handleAddCompraItem}
-                  className="bg-nav text-white font-bold px-4 py-2 rounded shadow hover:bg-nav-strong text-sm h-[38px]"
+                  className="bg-panel text-white font-bold px-4 py-2 rounded shadow hover:bg-panel-strong text-sm h-[38px]"
                 >
                   Agregar
                 </button>
@@ -712,9 +712,9 @@ export default function ComprasPage() {
         const baseImponible = totalConIgv / (1 + IGV_RATE);
         const igv = totalConIgv - baseImponible;
         return (
-          <div className="fixed inset-0 bg-nav/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+          <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
             <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="p-4 bg-nav text-white flex justify-between items-center shrink-0">
+              <div className="p-4 bg-panel text-white flex justify-between items-center shrink-0">
                 <div>
                   <h3 className="font-bold text-lg"><i className="fa-solid fa-file-invoice-dollar mr-2"></i> Detalle de Compra</h3>
                   <p className="text-muted text-xs mt-0.5">

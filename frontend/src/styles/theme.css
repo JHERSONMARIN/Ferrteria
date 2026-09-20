@@ -28,11 +28,16 @@
   --ink-soft: 71 85 105;      /* texto secundario */
   --muted: 100 116 139;       /* texto de ayuda */
 
-  /* Menú lateral */
+  /* Gris oscuro de cabeceras de ventanas, botones oscuros y fondos de modal (no cambia con el estilo) */
+  --panel: 15 23 42;
+  --panel-strong: 2 6 23;
+
+  /* Menú lateral (lo cambia el estilo de cada empresa) */
   --nav: 15 23 42;
   --nav-strong: 2 6 23;
   --nav-ink: 226 232 240;
   --nav-muted: 148 163 184;
+  --nav-line: 255 255 255;    /* separadores y resaltado dentro del menú (se usa con /10) */
 
   /* Estados: solo para comunicar, nunca como decoración */
   --success: 5 150 105;

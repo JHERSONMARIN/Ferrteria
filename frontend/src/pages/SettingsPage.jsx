@@ -7,7 +7,7 @@ import { FEATURE_LABELS, FEATURE_ORDER } from '../constants/features.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../constants/modules.js';
-import { applyTheme, BRAND_PRESETS } from '../utils/theme.js';
+import { applyTheme } from '../utils/theme.js';
 import { useConfirm } from '../components/ui/index.js';
 
 const DOCUMENT_TYPE_LABELS = {
@@ -18,7 +18,7 @@ const DOCUMENT_TYPE_LABELS = {
 
 const EDITABLE_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email',
-  'currencySymbol', 'taxRate', 'ticketFooter', 'logo', 'primaryColor', 'enabledModules', 'maxDiscountPercent',
+  'currencySymbol', 'taxRate', 'ticketFooter', 'logo', 'primaryColor', 'navColor', 'enabledModules', 'maxDiscountPercent',
 ];
 
 const SALE_FLOW_OPTIONS = [
@@ -61,6 +61,7 @@ const toForm = (settings, licensedModules) => ({
   ticketFooter: settings.ticketFooter || '',
   logo: settings.logo || null,
   primaryColor: settings.primaryColor || '',
+  navColor: settings.navColor || '',
   enabledModules: (settings.enabledModules || []).filter(m => !licensedModules || licensedModules.includes(m)),
   maxDiscountPercent: String(settings.maxDiscountPercent ?? 0),
 });
@@ -104,7 +105,7 @@ function MiPlan({ license, licensedModules, licensedFeatures, enabledModules }) 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="bg-nav text-white text-xs font-bold px-2.5 py-1 rounded-lg">
+        <span className="bg-panel text-white text-xs font-bold px-2.5 py-1 rounded-lg">
           Plan {license?.plan ? license.plan.toUpperCase() : 'sin restricciones'}
         </span>
         {license?.expiresAt && (
@@ -208,47 +209,74 @@ function LogoField({ logo, onChange }) {
   );
 }
 
-// Color principal de la empresa: tiñe los botones y lo resaltado de todo el sistema.
-// Se ve al instante mientras se elige; al salir sin guardar vuelve el color guardado.
-function ColorField({ color, onChange }) {
-  const actual = color || BRAND_PRESETS[0].hex;
+// Estilo de la empresa: color principal (botones y lo resaltado) y color del menú lateral.
+// Los estilos vienen del servidor (backend/src/config/themes.json), los mismos que usa VALETEC.
+// Se ve al instante mientras se elige; al salir sin guardar vuelve el estilo guardado.
+function EstiloField({ themes, primaryColor, navColor, onChange }) {
+  const iguales = (a, b) => (a || '').toLowerCase() === (b || '').toLowerCase();
+  const elegido = Object.entries(themes || {}).find(([, e]) =>
+    iguales(e.primaryColor, primaryColor) && iguales(e.navColor, navColor));
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {BRAND_PRESETS.map(preset => (
-          <button
-            key={preset.hex}
-            type="button"
-            title={preset.label}
-            onClick={() => onChange(preset.hex)}
-            style={{ backgroundColor: preset.hex }}
-            className={`w-8 h-8 rounded-lg border-2 transition-transform ${
-              actual.toLowerCase() === preset.hex ? 'border-ink scale-110' : 'border-transparent hover:scale-105'
-            }`}
-          >
-            {actual.toLowerCase() === preset.hex && <i className="fa-solid fa-check text-white text-xs"></i>}
-          </button>
-        ))}
-        <label className="flex items-center gap-2 ml-1 text-xs font-semibold text-ink-soft cursor-pointer">
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {Object.entries(themes || {}).map(([id, estilo]) => {
+          const activo = elegido?.[0] === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              title={estilo.descripcion}
+              onClick={() => onChange(estilo.primaryColor, estilo.navColor)}
+              className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-colors
+                ${activo ? 'border-brand bg-brand-soft' : 'border-line hover:bg-surface-muted'}`}
+            >
+              {/* Muestra en chico cómo queda: el menú y el color principal */}
+              <span className="w-10 h-8 rounded-lg overflow-hidden flex shrink-0 border border-line">
+                <span className="w-1/3 h-full" style={{ backgroundColor: estilo.navColor }} />
+                <span className="flex-1 h-full bg-surface flex items-center justify-center">
+                  <span className="w-3.5 h-3.5 rounded" style={{ backgroundColor: estilo.primaryColor }} />
+                </span>
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-bold text-ink truncate">{estilo.nombre}</span>
+                {activo && <span className="block text-[10px] text-brand-text font-semibold">En uso</span>}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4 border-t border-line pt-3">
+        <label className="flex items-center gap-2 text-xs font-semibold text-ink-soft cursor-pointer">
           <input
             type="color"
-            value={actual}
-            onChange={e => onChange(e.target.value.toLowerCase())}
+            value={primaryColor || '#ea580c'}
+            onChange={e => onChange(e.target.value.toLowerCase(), navColor)}
             className="w-8 h-8 rounded-lg border border-line bg-surface p-0.5 cursor-pointer"
           />
-          Otro color
+          Color principal
         </label>
-        {color && (
-          <button type="button" onClick={() => onChange('')}
+        <label className="flex items-center gap-2 text-xs font-semibold text-ink-soft cursor-pointer">
+          <input
+            type="color"
+            value={navColor || '#0f172a'}
+            onChange={e => onChange(primaryColor, e.target.value.toLowerCase())}
+            className="w-8 h-8 rounded-lg border border-line bg-surface p-0.5 cursor-pointer"
+          />
+          Color del menú
+        </label>
+        {(primaryColor || navColor) && (
+          <button type="button" onClick={() => onChange('', '')}
             className="px-2 py-1 text-xs font-semibold text-muted hover:text-danger">
-            Usar el color por defecto
+            Volver al estilo de fábrica
           </button>
         )}
       </div>
+
       <p className="text-[11px] text-muted">
-        Se usa en los botones principales y en lo que el sistema resalta. El resto queda en gris a propósito:
-        así se distingue de un vistazo qué es lo importante de cada pantalla.
+        El color principal se usa en los botones y en lo que el sistema resalta; el resto queda en gris a
+        propósito, para que se vea de un vistazo qué es lo importante de cada pantalla.
       </p>
     </div>
   );
@@ -261,6 +289,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
   const [savedSettings, setSavedSettings] = useState(null);
   const [form, setForm] = useState(null);
   const [documentSeries, setDocumentSeries] = useState([]);
+  const [themes, setThemes] = useState({});
   const [licensedModules, setLicensedModules] = useState(null);
   const [errors, setErrors] = useState({});
   const [loadError, setLoadError] = useState('');
@@ -287,15 +316,16 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
       setLicensedModules(res.licensedModules || null);
       setForm(toForm(res.settings, res.licensedModules));
       setDocumentSeries(res.documentSeries || []);
+      setThemes(res.themes || {});
     } catch (err) {
       setLoadError(err.message || 'No se pudo cargar la configuración.');
     }
   };
 
-  // Al salir de Configuración sin guardar, vuelve el color que está guardado.
-  const savedColor = useRef(null);
-  savedColor.current = savedSettings?.primaryColor ?? null;
-  useEffect(() => () => applyTheme(savedColor.current), []);
+  // Al salir de Configuración sin guardar, vuelve el estilo que está guardado.
+  const estiloGuardado = useRef({});
+  estiloGuardado.current = { primaryColor: savedSettings?.primaryColor ?? null, navColor: savedSettings?.navColor ?? null };
+  useEffect(() => () => applyTheme(estiloGuardado.current.primaryColor, estiloGuardado.current.navColor), []);
 
   const hasChanges = useMemo(() => {
     if (!form || !savedSettings) return false;
@@ -454,10 +484,16 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
         <Card icon="fa-palette" title="Identidad" description="El nombre y el logo con los que sus empleados ven el sistema.">
           <div className="flex flex-col gap-4">
             <LogoField logo={form.logo} onChange={value => setField('logo', value)} />
-            <Field label="Color principal">
-              <ColorField
-                color={form.primaryColor}
-                onChange={value => { setField('primaryColor', value); applyTheme(value); }}
+            <Field label="Estilo">
+              <EstiloField
+                themes={themes}
+                primaryColor={form.primaryColor}
+                navColor={form.navColor}
+                onChange={(principal, menu) => {
+                  setForm(prev => ({ ...prev, primaryColor: principal, navColor: menu }));
+                  setSaveMessage(null);
+                  applyTheme(principal, menu);
+                }}
               />
             </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -578,7 +614,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
                   key={b.id}
                   type="button"
                   onClick={() => { setModeBranchId(b.id); setModeMessage(null); }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${modeBranch?.id === b.id ? 'bg-nav text-white border-white/10' : 'bg-surface text-ink-soft border-line hover:bg-surface-muted'}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${modeBranch?.id === b.id ? 'bg-panel text-white border-white/10' : 'bg-surface text-ink-soft border-line hover:bg-surface-muted'}`}
                 >
                   {b.name}
                   <span className="ml-1.5 font-normal opacity-75">· {SALE_FLOW_OPTIONS.find(o => o.id === b.saleFlowMode)?.title}</span>
