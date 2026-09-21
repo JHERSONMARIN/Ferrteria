@@ -43,7 +43,7 @@ function RegisterList({ registers, selectedId, onSelect, onJoin, loading }) {
     );
   }
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
       {registers.map(r => {
         const selected = selectedId === r.id;
         return (
@@ -260,62 +260,73 @@ export default function CajaPage({ currentUser }) {
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       {!estadoCaja.abierta ? (
-        /* SIN TURNO: ELEGIR CAJA PARA ABRIR O UNIRSE */
-        <div className="max-w-5xl mx-auto flex flex-col gap-5">
-          <div>
-            <h3 className="text-lg font-bold text-ink">Cajas</h3>
-            <p className="text-xs text-muted">Abra el turno de una caja cerrada o únase al turno de una caja que ya está abierta.</p>
+        /* SIN TURNO: las cajas a la izquierda y la apertura de la elegida a la derecha */
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
+          <div className="lg:col-span-2 flex flex-col gap-3">
+            <div>
+              <h3 className="text-lg font-bold text-ink">Cajas</h3>
+              <p className="text-xs text-muted">Elija una caja cerrada para abrirla o únase al turno de una que ya está abierta.</p>
+            </div>
+
+            <RegisterList
+              registers={estadoCaja.registers || []}
+              selectedId={registerToOpen?.id}
+              onSelect={setSelectedRegisterId}
+              onJoin={handleUnirse}
+              loading={loading}
+            />
           </div>
 
-          <RegisterList
-            registers={estadoCaja.registers || []}
-            selectedId={registerToOpen?.id}
-            onSelect={setSelectedRegisterId}
-            onJoin={handleUnirse}
-            loading={loading}
-          />
-
-          {registerToOpen && (
-            <div className="bg-surface rounded-xl shadow-sm border border-line p-5 sm:p-8 w-full max-w-2xl mx-auto">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-brand-soft text-brand rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">
-                  <i className="fa-solid fa-cash-register"></i>
-                </div>
-                <h3 className="text-xl font-bold text-ink">Apertura de {registerToOpen.name}</h3>
-                <p className="text-xs text-muted mt-1">Cuente el efectivo con el que inicia el turno.</p>
-              </div>
-
-              <div className="flex flex-col gap-4">
-                <SelectorModo modo={modoApertura} onChange={setModoApertura} />
-
-                {modoApertura === 'CONTEO' ? (
-                  <ContadorEfectivo conteo={conteoApertura} onChange={setConteoApertura} />
-                ) : (
-                  <div>
-                    <label className="text-xs font-bold text-muted mb-1 block">Monto Inicial en Efectivo (S/)</label>
-                    <input
-                      type="number"
-                      step="0.50"
-                      min="0"
-                      value={montoInicial}
-                      onChange={e => { setMontoInicial(e.target.value); setErrors(p => ({ ...p, montoInicial: '' })); }}
-                      placeholder="Ej: 100.00"
-                      className={`w-full border p-3 rounded-lg outline-none font-bold text-lg text-ink ${borderClass(errors.montoInicial)}`}
-                    />
-                    <FieldError msg={errors.montoInicial} />
+          <div className="lg:col-span-3 lg:sticky lg:top-0">
+            {registerToOpen ? (
+              <div className="bg-surface rounded-xl shadow-sm border border-line p-5">
+                <div className="flex items-center gap-3 mb-4 pb-4 border-b border-line">
+                  <div className="w-11 h-11 bg-brand-soft text-brand rounded-full flex items-center justify-center text-lg shrink-0">
+                    <i className="fa-solid fa-cash-register"></i>
                   </div>
-                )}
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-bold text-ink truncate">Apertura de {registerToOpen.name}</h3>
+                    <p className="text-xs text-muted">Cuente el efectivo con el que inicia el turno.</p>
+                  </div>
+                </div>
 
-                <button
-                  onClick={handleAbrirCaja}
-                  disabled={loading}
-                  className="w-full bg-success hover:brightness-95 text-white font-bold py-3.5 rounded-lg shadow-md transition-colors text-base disabled:opacity-50"
-                >
-                  Abrir {registerToOpen.name} y comenzar turno
-                </button>
+                <div className="flex flex-col gap-4">
+                  <SelectorModo modo={modoApertura} onChange={setModoApertura} />
+
+                  {modoApertura === 'CONTEO' ? (
+                    <ContadorEfectivo conteo={conteoApertura} onChange={setConteoApertura} />
+                  ) : (
+                    <div>
+                      <label className="text-xs font-bold text-muted mb-1 block">Monto Inicial en Efectivo (S/)</label>
+                      <input
+                        type="number"
+                        step="0.50"
+                        min="0"
+                        value={montoInicial}
+                        onChange={e => { setMontoInicial(e.target.value); setErrors(p => ({ ...p, montoInicial: '' })); }}
+                        placeholder="Ej: 100.00"
+                        className={`w-full border p-3 rounded-lg outline-none font-bold text-lg text-ink ${borderClass(errors.montoInicial)}`}
+                      />
+                      <FieldError msg={errors.montoInicial} />
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleAbrirCaja}
+                    disabled={loading}
+                    className="w-full bg-success hover:brightness-95 text-white font-bold py-3.5 rounded-lg shadow-md transition-colors text-base disabled:opacity-50"
+                  >
+                    Abrir {registerToOpen.name} y comenzar turno
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            ) : (estadoCaja.registers || []).length > 0 && (
+              <div className="bg-surface rounded-xl border border-dashed border-line p-8 text-center text-sm text-muted">
+                <i className="fa-solid fa-lock-open text-2xl mb-2 block"></i>
+                Todas las cajas tienen un turno abierto. Únase a uno desde la lista.
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         /* ESTADO Y ARQUEO DE CAJA ABIERTA */
