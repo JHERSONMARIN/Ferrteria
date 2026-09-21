@@ -102,6 +102,81 @@ router.post('/', async (req, res) => {
   }
 });
 
+const MAX_IMPORT_ROWS = 1000;
+const CATEGORY_COLORS = ['orange', 'blue', 'emerald', 'cyan', 'purple', 'amber', 'red', 'indigo', 'slate', 'yellow'];
+const ICON_PATTERN = /^fa-[a-z0-9-]{1,40}$/;
+
+/**
+ * POST /api/categorias/importar  { rows: [{ name, description, icon, color }], onExisting: 'update' | 'skip' }
+ * Todo o nada: con una fila inválida no se guarda ninguna y se devuelven los errores por fila.
+ */
+router.post('/importar', async (req, res) => {
+  try {
+    const rows = req.body?.rows;
+    const onExisting = req.body?.onExisting === 'update' ? 'update' : 'skip';
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'No hay filas para importar.' });
+    if (rows.length > MAX_IMPORT_ROWS) return res.status(400).json({ error: `Se pueden importar hasta ${MAX_IMPORT_ROWS} filas por vez.` });
+
+    const errors = [];
+    const parsed = [];
+    const seen = new Map();
+    rows.forEach((row, index) => {
+      const name = String(row?.name ?? '').trim();
+      const description = String(row?.description ?? '').trim();
+      const iconRaw = String(row?.icon ?? '').trim().toLowerCase();
+      const icon = iconRaw && !iconRaw.startsWith('fa-') ? `fa-${iconRaw}` : iconRaw;
+      const color = String(row?.color ?? '').trim().toLowerCase();
+      if (name.length < 2 || name.length > 60) return errors.push({ index, error: 'El nombre debe tener entre 2 y 60 caracteres.' });
+      if (description.length > 200) return errors.push({ index, error: 'La descripción es demasiado larga (máx. 200).' });
+      if (icon && !ICON_PATTERN.test(icon)) return errors.push({ index, error: 'El ícono no es válido (ej. fa-hammer).' });
+      if (color && !CATEGORY_COLORS.includes(color)) return errors.push({ index, error: `Color no válido. Use: ${CATEGORY_COLORS.join(', ')}.` });
+      const key = name.toLowerCase();
+      if (seen.has(key)) return errors.push({ index, error: `La categoría se repite en la fila ${seen.get(key) + 1}.` });
+      seen.set(key, index);
+      parsed.push({ name, description: description || null, icon: icon || null, color: color || null });
+    });
+    if (errors.length > 0) {
+      return res.status(400).json({ error: 'Hay filas con problemas: corríjalas antes de importar.', rows: errors });
+    }
+
+    const existing = await prisma.categoria.findMany({ select: { id: true, name: true } });
+    const byName = new Map(existing.map(c => [c.name.toLowerCase(), c]));
+
+    const summary = await prisma.$transaction(async (tx) => {
+      const result = { created: 0, updated: 0, skipped: 0 };
+      for (const row of parsed) {
+        const current = byName.get(row.name.toLowerCase());
+        if (current && onExisting === 'skip') { result.skipped++; continue; }
+        if (current) {
+          // El nombre no se cambia al actualizar: los productos lo usan como texto.
+          await tx.categoria.update({
+            where: { id: current.id },
+            data: {
+              active: true,
+              ...(row.description !== null && { description: row.description }),
+              ...(row.icon && { icon: row.icon }),
+              ...(row.color && { color: row.color }),
+            },
+          });
+          result.updated++;
+        } else {
+          await tx.categoria.create({
+            data: { name: row.name, description: row.description, icon: row.icon || 'fa-tag', color: row.color || 'orange' },
+          });
+          result.created++;
+        }
+      }
+      return result;
+    }, { timeout: 60000 });
+
+    res.json({ success: true, ...summary });
+  } catch (error) {
+    if (error.code === 'P2002') return res.status(409).json({ error: 'Otra persona creó una de estas categorías mientras se importaba. Vuelva a intentarlo.' });
+    console.error('[categories.js] Error al importar categorías:', error);
+    res.status(500).json({ error: 'No se pudo completar la importación. No se guardó ninguna categoría.' });
+  }
+});
+
 /**
  * PUT /api/categorias/:id
  * Actualiza los datos de una categoría. Si se modifica el nombre, sincroniza
