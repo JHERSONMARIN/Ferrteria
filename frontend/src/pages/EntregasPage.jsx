@@ -15,7 +15,7 @@ const STATUS_BADGE = {
 const formatTime = (date) => (date ? new Date(date).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) : '');
 const mapsUrl = (address) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
-function DeliveryCard({ delivery, couriers, busy, onAssign, onDepart, onDeliver, onCancel }) {
+function DeliveryCard({ delivery, busy, onDepart, onDeliver, onCancel }) {
   const active = delivery.status === 'PENDIENTE' || delivery.status === 'EN_CAMINO';
   const badge = STATUS_BADGE[delivery.status];
 
@@ -58,42 +58,36 @@ function DeliveryCard({ delivery, couriers, busy, onAssign, onDepart, onDeliver,
 
       {active ? (
         <>
-          <div>
-            <label className="text-[11px] font-bold text-muted uppercase tracking-wide mb-1 block">Repartidor</label>
-            <select
-              value={delivery.courier?.id ?? ''}
-              onChange={e => onAssign(delivery, e.target.value ? Number(e.target.value) : null)}
-              disabled={busy}
-              className="w-full border border-line rounded-lg px-2 py-2 text-sm bg-surface outline-none focus:border-brand"
-            >
-              <option value="">Sin asignar</option>
-              {couriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
+          {/* En camino: quien lo lleva es quien lo sacó a repartir. */}
+          {delivery.status === 'EN_CAMINO' && delivery.courier && (
+            <p className="text-xs text-ink-soft flex items-center gap-2">
+              <i className="fa-solid fa-truck-fast text-brand"></i>
+              Lleva: <span className="font-semibold text-ink">{delivery.courier.name}</span>
+            </p>
+          )}
 
           {delivery.waitingDispatch ? (
             <p className="text-xs text-warning bg-warning-soft border border-warning/30 rounded-lg px-3 py-2">
               <i className="fa-solid fa-hourglass-half mr-1.5"></i>Esperando que almacén despache los productos.
             </p>
+          ) : delivery.status === 'PENDIENTE' ? (
+            // Por salir: el pedido está libre; se lo lleva el repartidor que lo saque.
+            <button
+              onClick={() => onDepart(delivery)}
+              disabled={busy}
+              className="w-full bg-panel hover:bg-panel-strong text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
+            >
+              <i className="fa-solid fa-truck-fast mr-1.5"></i>Salir a repartir
+            </button>
           ) : (
-            <div className="flex gap-2">
-              {delivery.status === 'PENDIENTE' && (
-                <button
-                  onClick={() => onDepart(delivery)}
-                  disabled={busy}
-                  className="flex-1 bg-panel hover:bg-panel-strong text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
-                >
-                  <i className="fa-solid fa-truck-fast mr-1.5"></i>Salir a repartir
-                </button>
-              )}
-              <button
-                onClick={() => onDeliver(delivery)}
-                disabled={busy}
-                className="flex-1 bg-success hover:brightness-95 text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
-              >
-                <i className="fa-solid fa-check mr-1.5"></i>Entregado
-              </button>
-            </div>
+            // En camino: solo queda cerrarlo.
+            <button
+              onClick={() => onDeliver(delivery)}
+              disabled={busy}
+              className="w-full bg-success hover:brightness-95 text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
+            >
+              <i className="fa-solid fa-check mr-1.5"></i>Entregado
+            </button>
           )}
 
           {delivery.status === 'PENDIENTE' && !delivery.legacy && (
@@ -240,7 +234,6 @@ export default function EntregasPage({ currentUser }) {
   const [view, setView] = useState('activas');
   const [onlyMine, setOnlyMine] = useState(isCourier);
   const [deliveries, setDeliveries] = useState([]);
-  const [couriers, setCouriers] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -276,14 +269,6 @@ export default function EntregasPage({ currentUser }) {
     return () => { wakeLockRef.current?.release(); };
   }, []);
 
-  useEffect(() => {
-    api.get('/personal')
-      .then(staff => setCouriers(staff.filter(s => s.active !== false && (
-        s.role === 'REPARTIDOR' || s.role === 'ADMINISTRADOR' || (Array.isArray(s.modules) && s.modules.includes('deliveries'))
-      ))))
-      .catch(() => setCouriers([]));
-  }, []);
-
   const run = async (delivery, action, successText) => {
     try {
       setBusyId(delivery.id);
@@ -299,8 +284,6 @@ export default function EntregasPage({ currentUser }) {
   };
 
   const cardProps = {
-    couriers,
-    onAssign: (d, courierId) => run(d, () => api.patch(`/entregas/${d.id}/repartidor`, { repartidorId: courierId })),
     onDepart: (d) => run(d, () => api.post(`/entregas/${d.id}/salir`, {}), `${d.ref} en camino.`),
     onDeliver: async (d) => {
       const seguro = await confirmar({
