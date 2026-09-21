@@ -35,6 +35,14 @@ export default function CreditosPage() {
     setAbonoError('');
   };
 
+  // El abono nunca supera la deuda: si se escribe más, queda en el total adeudado.
+  const limitAbono = (value, debt) => {
+    if (value === '') return '';
+    const [entero, decimales] = value.split('.');
+    const limpio = decimales !== undefined ? `${entero}.${decimales.slice(0, 2)}` : entero;
+    return Number(limpio) > debt ? debt.toFixed(2) : limpio;
+  };
+
   const handleRegisterAbono = async (amountToPay) => {
     const val = amountToPay || parseFloat(abonoAmount);
     if (isNaN(val) || val <= 0) {
@@ -165,7 +173,7 @@ export default function CreditosPage() {
                   min="0"
                   max={selectedCredito.debt}
                   value={abonoAmount}
-                  onChange={e => { setAbonoAmount(e.target.value); setAbonoError(''); }}
+                  onChange={e => { setAbonoAmount(limitAbono(e.target.value, selectedCredito.debt)); setAbonoError(''); }}
                   placeholder="Monto de abono en S/..."
                   className={`flex-1 px-3 py-2 border rounded outline-none text-sm font-bold ${borderClass(abonoError)}`}
                 />
