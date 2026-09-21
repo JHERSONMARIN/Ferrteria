@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
 import CashRegistersSettings from '../components/CashRegistersSettings.jsx';
 import BranchesSettings from '../components/BranchesSettings.jsx';
@@ -7,7 +7,6 @@ import { FEATURE_LABELS, FEATURE_ORDER } from '../constants/features.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../constants/modules.js';
-import { applyTheme } from '../utils/theme.js';
 import { useConfirm } from '../components/ui/index.js';
 
 const DOCUMENT_TYPE_LABELS = {
@@ -18,7 +17,7 @@ const DOCUMENT_TYPE_LABELS = {
 
 const EDITABLE_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email',
-  'currencySymbol', 'taxRate', 'ticketFooter', 'logo', 'primaryColor', 'navColor', 'enabledModules', 'maxDiscountPercent',
+  'currencySymbol', 'taxRate', 'ticketFooter', 'logo', 'maxDiscountPercent',
 ];
 
 const SALE_FLOW_OPTIONS = [
@@ -60,9 +59,6 @@ const toForm = (settings, licensedModules) => ({
   taxRate: String(settings.taxRate ?? 18),
   ticketFooter: settings.ticketFooter || '',
   logo: settings.logo || null,
-  primaryColor: settings.primaryColor || '',
-  navColor: settings.navColor || '',
-  enabledModules: (settings.enabledModules || []).filter(m => !licensedModules || licensedModules.includes(m)),
   maxDiscountPercent: String(settings.maxDiscountPercent ?? 0),
 });
 
@@ -123,9 +119,6 @@ function MiPlan({ license, licensedModules, licensedFeatures, enabledModules }) 
               <li key={value}>
                 <i className="fa-solid fa-check text-success mr-1.5"></i>
                 {moduloLabel(value)}
-                {!enabledModules.includes(value) && !ALWAYS_ENABLED_MODULES.includes(value) && (
-                  <span className="text-muted"> (desactivado por usted)</span>
-                )}
               </li>
             ))}
             {funcionesIncluidas.map(f => (
@@ -209,79 +202,6 @@ function LogoField({ logo, onChange }) {
   );
 }
 
-// Estilo de la empresa: color principal (botones y lo resaltado) y color del menú lateral.
-// Los estilos vienen del servidor (backend/src/config/themes.json), los mismos que usa VALETEC.
-// Se ve al instante mientras se elige; al salir sin guardar vuelve el estilo guardado.
-function EstiloField({ themes, primaryColor, navColor, onChange }) {
-  const iguales = (a, b) => (a || '').toLowerCase() === (b || '').toLowerCase();
-  const elegido = Object.entries(themes || {}).find(([, e]) =>
-    iguales(e.primaryColor, primaryColor) && iguales(e.navColor, navColor));
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        {Object.entries(themes || {}).map(([id, estilo]) => {
-          const activo = elegido?.[0] === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              title={estilo.descripcion}
-              onClick={() => onChange(estilo.primaryColor, estilo.navColor)}
-              className={`flex items-center gap-2.5 p-2 rounded-xl border text-left transition-colors
-                ${activo ? 'border-brand bg-brand-soft' : 'border-line hover:bg-surface-muted'}`}
-            >
-              {/* Muestra en chico cómo queda: el menú y el color principal */}
-              <span className="w-10 h-8 rounded-lg overflow-hidden flex shrink-0 border border-line">
-                <span className="w-1/3 h-full" style={{ backgroundColor: estilo.navColor }} />
-                <span className="flex-1 h-full bg-surface flex items-center justify-center">
-                  <span className="w-3.5 h-3.5 rounded" style={{ backgroundColor: estilo.primaryColor }} />
-                </span>
-              </span>
-              <span className="min-w-0">
-                <span className="block text-xs font-bold text-ink truncate">{estilo.nombre}</span>
-                {activo && <span className="block text-[10px] text-brand-text font-semibold">En uso</span>}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-4 border-t border-line pt-3">
-        <label className="flex items-center gap-2 text-xs font-semibold text-ink-soft cursor-pointer">
-          <input
-            type="color"
-            value={primaryColor || '#ea580c'}
-            onChange={e => onChange(e.target.value.toLowerCase(), navColor)}
-            className="w-8 h-8 rounded-lg border border-line bg-surface p-0.5 cursor-pointer"
-          />
-          Color principal
-        </label>
-        <label className="flex items-center gap-2 text-xs font-semibold text-ink-soft cursor-pointer">
-          <input
-            type="color"
-            value={navColor || '#0f172a'}
-            onChange={e => onChange(primaryColor, e.target.value.toLowerCase())}
-            className="w-8 h-8 rounded-lg border border-line bg-surface p-0.5 cursor-pointer"
-          />
-          Color del menú
-        </label>
-        {(primaryColor || navColor) && (
-          <button type="button" onClick={() => onChange('', '')}
-            className="px-2 py-1 text-xs font-semibold text-muted hover:text-danger">
-            Volver al estilo de fábrica
-          </button>
-        )}
-      </div>
-
-      <p className="text-[11px] text-muted">
-        El color principal se usa en los botones y en lo que el sistema resalta; el resto queda en gris a
-        propósito, para que se vea de un vistazo qué es lo importante de cada pantalla.
-      </p>
-    </div>
-  );
-}
-
 export default function SettingsPage({ currentUser, onSaved, hasFeature = () => true, licensedFeatures = null, license = null }) {
   const confirmar = useConfirm();
   // Al crear o renombrar sucursales se recarga la lista de cajas (muestra su sucursal).
@@ -289,7 +209,6 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
   const [savedSettings, setSavedSettings] = useState(null);
   const [form, setForm] = useState(null);
   const [documentSeries, setDocumentSeries] = useState([]);
-  const [themes, setThemes] = useState({});
   const [licensedModules, setLicensedModules] = useState(null);
   const [errors, setErrors] = useState({});
   const [loadError, setLoadError] = useState('');
@@ -316,16 +235,10 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
       setLicensedModules(res.licensedModules || null);
       setForm(toForm(res.settings, res.licensedModules));
       setDocumentSeries(res.documentSeries || []);
-      setThemes(res.themes || {});
     } catch (err) {
       setLoadError(err.message || 'No se pudo cargar la configuración.');
     }
   };
-
-  // Al salir de Configuración sin guardar, vuelve el estilo que está guardado.
-  const estiloGuardado = useRef({});
-  estiloGuardado.current = { primaryColor: savedSettings?.primaryColor ?? null, navColor: savedSettings?.navColor ?? null };
-  useEffect(() => () => applyTheme(estiloGuardado.current.primaryColor, estiloGuardado.current.navColor), []);
 
   const hasChanges = useMemo(() => {
     if (!form || !savedSettings) return false;
@@ -340,16 +253,6 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
   };
 
   const isLicensed = (moduleId) => !licensedModules || licensedModules.includes(moduleId);
-
-  const toggleModule = (moduleId) => {
-    if (ALWAYS_ENABLED_MODULES.includes(moduleId) || !isLicensed(moduleId)) return;
-    setField(
-      'enabledModules',
-      form.enabledModules.includes(moduleId)
-        ? form.enabledModules.filter(m => m !== moduleId)
-        : [...form.enabledModules, moduleId]
-    );
-  };
 
   const modeBranch = branches.find(b => b.id === modeBranchId) || branches[0] || null;
   // Envíos a domicilio: hacen falta la función del plan y el módulo Entregas contratado.
@@ -405,7 +308,6 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
       if (missing.length > 0) {
         const res = await api.put('/settings', { ...savedSettings, enabledModules: [...savedSettings.enabledModules, ...missing] });
         setSavedSettings(res.settings);
-        setForm(prev => ({ ...prev, enabledModules: [...new Set([...prev.enabledModules, ...missing])] }));
         if (onSaved) onSaved(res.settings);
       }
       await api.put(`/sucursales/${modeBranch.id}`, { saleFlowMode: option.id });
@@ -477,25 +379,13 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
             license={license}
             licensedModules={licensedModules}
             licensedFeatures={licensedFeatures}
-            enabledModules={form.enabledModules}
+            enabledModules={savedSettings.enabledModules}
           />
         </Card>
 
         <Card icon="fa-palette" title="Identidad" description="El nombre y el logo con los que sus empleados ven el sistema.">
           <div className="flex flex-col gap-4">
             <LogoField logo={form.logo} onChange={value => setField('logo', value)} />
-            <Field label="Estilo">
-              <EstiloField
-                themes={themes}
-                primaryColor={form.primaryColor}
-                navColor={form.navColor}
-                onChange={(principal, menu) => {
-                  setForm(prev => ({ ...prev, primaryColor: principal, navColor: menu }));
-                  setSaveMessage(null);
-                  applyTheme(principal, menu);
-                }}
-              />
-            </Field>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Nombre comercial" error={errors.tradeName} hint="Es el que se muestra en el sistema.">
                 {input('tradeName', { maxLength: 100, placeholder: 'Ferretería Los Andes' })}
@@ -677,7 +567,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
                 <span className="block text-xs text-muted mt-0.5">
                   {savedSettings.enabledModules.includes('deliveries')
                     ? 'Al cobrar se ofrece "Envío a domicilio" y el repartidor lo ve en Entregas. Funciona con cualquier modo de trabajo.'
-                    : 'Active primero el módulo Entregas en "Módulos activos".'}
+                    : 'Su plan no incluye Entregas: consúltelo con VALETEC.'}
                 </span>
               </span>
             </label>
@@ -725,41 +615,6 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
           )}
         </Card>
 
-        <Card
-          icon="fa-puzzle-piece"
-          title="Módulos activos"
-          description="Los módulos desactivados se ocultan para todos los usuarios, aunque los tengan asignados."
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {MODULE_OPTIONS.filter(mod => isLicensed(mod.value)).map(mod => {
-              const alwaysOn = ALWAYS_ENABLED_MODULES.includes(mod.value);
-              const locked = alwaysOn;
-              const enabled = alwaysOn || form.enabledModules.includes(mod.value);
-              return (
-                <button
-                  key={mod.value}
-                  type="button"
-                  onClick={() => toggleModule(mod.value)}
-                  disabled={locked}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors ${
-                    enabled
-                      ? 'border-brand/40 bg-brand-soft'
-                      : 'border-line bg-surface hover:bg-surface-muted'
-                  } ${locked ? 'cursor-not-allowed' : ''}`}
-                >
-                  <i className={`fa-solid ${mod.icon} w-5 text-center ${enabled ? 'text-brand' : 'text-muted'}`}></i>
-                  <span className={`flex-1 text-sm font-semibold ${enabled ? 'text-ink' : 'text-muted'}`}>
-                    {mod.label}
-                    {alwaysOn && <span className="block text-[10px] font-normal text-muted">Siempre activo</span>}
-                  </span>
-                  <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${enabled ? 'bg-brand' : 'bg-line'}`}>
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-surface shadow transition-all ${enabled ? 'left-[18px]' : 'left-0.5'}`}></span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </Card>
       </div>
 
       {/* Barra fija para guardar: visible siempre para dar feedback del estado */}

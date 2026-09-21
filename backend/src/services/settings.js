@@ -41,7 +41,10 @@ const optionalText = (value, maxLength, fieldLabel) => {
   return text || null;
 };
 
+// Los módulos activos los define VALETEC (deploy/set-modules.sh y la consola): si la petición no los
+// trae, se conservan los que ya tiene la empresa.
 function normalizeModules(modules) {
+  if (modules === undefined) return undefined;
   if (!Array.isArray(modules)) {
     throw new SettingsValidationError('La lista de módulos es inválida.');
   }
@@ -157,11 +160,12 @@ export async function updateSettings(db, input, user = null) {
   const current = await getSettings(db);
 
   // Las sucursales que trabajan con pedidos cobran en Caja; las que van por etapas despachan en Despacho.
+  const enabledModules = data.enabledModules ?? current.enabledModules;
   const modes = (await db.branch.findMany({ where: { active: true }, select: { saleFlowMode: true } })).map(b => b.saleFlowMode);
-  if (!data.enabledModules.includes('caja') && modes.some(m => m !== 'DIRECT')) {
+  if (!enabledModules.includes('caja') && modes.some(m => m !== 'DIRECT')) {
     throw new SettingsValidationError('Hay sucursales que trabajan con pedidos: el módulo Arqueo de Caja debe seguir activo.');
   }
-  if (!data.enabledModules.includes('despacho') && modes.includes('STAGED')) {
+  if (!enabledModules.includes('despacho') && modes.includes('STAGED')) {
     throw new SettingsValidationError('Hay sucursales que trabajan por etapas: el módulo Despacho debe seguir activo.');
   }
 
@@ -169,7 +173,7 @@ export async function updateSettings(db, input, user = null) {
     const saved = await tx.businessSettings.upsert({
       where: { id: SETTINGS_ID },
       update: data,
-      create: { ...data, id: SETTINGS_ID },
+      create: { ...data, enabledModules, id: SETTINGS_ID },
     });
     const changes = changedFields(current, saved, AUDITED_FIELDS) ?? {};
     if (current[LOGO_FIELD] !== saved[LOGO_FIELD]) {
