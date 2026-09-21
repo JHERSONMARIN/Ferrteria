@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import CustomerSelector from '../components/CustomerSelector.jsx';
 import CheckoutModal from '../components/CheckoutModal.jsx';
 import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
+import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
 import { formatSoles } from '../utils/currency.js';
 import { findCustomerByInput } from '../utils/customers.js';
 import { buildSaleTicket, buildOrderTicket } from '../utils/tickets.js';
@@ -75,6 +76,18 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const searchRef = useRef(null);
   const customerPanelRef = useRef(null);
   const cartRef = useRef(null);
+  const cartActionsRef = useRef(null);
+  const [showScanner, setShowScanner] = useState(false);
+  // En pantallas angostas la barra "Ver venta" solo aparece si los botones del carrito no se ven,
+  // así no tapa "Cobrar" ni "Guardar como cotización".
+  const [cartActionsVisible, setCartActionsVisible] = useState(false);
+  useEffect(() => {
+    const el = cartActionsRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const observer = new IntersectionObserver(([entry]) => setCartActionsVisible(entry.isIntersecting), { threshold: 0.1 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const showToast = (message, type = 'info') => {
     if (type === 'error') aviso.error(message);
@@ -263,6 +276,18 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       setSearch('');
     } else if (filteredProducts.length === 0) {
       showToast('No se encontró ningún producto con ese código o nombre.', 'error');
+    }
+  };
+
+  // Código leído con la cámara o el lector: si coincide con un producto se agrega; si no, se busca.
+  const handleScanned = (code) => {
+    const product = products.find(p => p.code.toLowerCase() === code.toLowerCase());
+    if (product) {
+      addToCart(product);
+      setSearch('');
+    } else {
+      setSearch(code);
+      showToast(`No hay un producto con el código ${code}.`, 'error');
     }
   };
 
@@ -474,7 +499,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
   const shortcutsRef = useRef(null);
   shortcutsRef.current = (e) => {
-    if (showCheckout) return; // La ventana de cobro maneja sus propias teclas.
+    if (showCheckout || showScanner) return; // Esas ventanas manejan sus propias teclas.
     if (e.key === 'F2') {
       e.preventDefault();
       searchRef.current?.focus();
@@ -526,13 +551,22 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                   <kbd className="hidden sm:block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted border border-line rounded px-1.5 py-0.5">F2</kbd>
                 )}
               </div>
+              <div className="flex gap-2">
+              <button
+                onClick={() => setShowScanner(true)}
+                className="flex-1 sm:flex-none bg-surface border border-line hover:bg-surface-muted text-ink-soft font-bold px-3 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 shrink-0"
+                title="Escanear código de barras con la cámara o el lector"
+              >
+                <i className="fa-solid fa-barcode text-brand"></i> Escanear
+              </button>
               <button
                 onClick={openQuotesModal}
                 disabled={processing}
-                className="bg-surface border border-line hover:bg-surface-muted text-ink-soft font-bold px-3 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 shrink-0 disabled:opacity-50"
+                className="flex-1 sm:flex-none bg-surface border border-line hover:bg-surface-muted text-ink-soft font-bold px-3 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 shrink-0 disabled:opacity-50"
               >
                 <i className="fa-solid fa-file-import text-brand"></i> Cargar cotización
               </button>
+              </div>
             </div>
 
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
@@ -720,7 +754,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             )}
           </div>
 
-          <div className="border-t border-line bg-surface-muted p-4 flex flex-col gap-3 shrink-0">
+          <div ref={cartActionsRef} className="border-t border-line bg-surface-muted p-4 flex flex-col gap-3 shrink-0">
             <div>
               <label className="text-[11px] font-bold text-muted uppercase tracking-wide mb-1 block">
                 Cliente {!isDirect && <span className="normal-case font-normal">(opcional, también se puede elegir en caja)</span>}
@@ -818,7 +852,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       </div>
 
       {/* Barra inferior en móvil/tablet para llegar al carrito */}
-      {cart.length > 0 && !showCheckout && (
+      {cart.length > 0 && !showCheckout && !cartActionsVisible && (
         <div className="xl:hidden fixed bottom-0 inset-x-0 lg:left-64 z-20 p-3 bg-surface/95 backdrop-blur border-t border-line shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
           <button
             onClick={() => cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -846,6 +880,8 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       )}
 
       {success && <SaleSuccessModal {...success} onClose={closeSuccess} />}
+
+      <BarcodeScannerModal open={showScanner} onClose={() => setShowScanner(false)} onDetected={handleScanned} />
 
       {/* ===== MODAL: COTIZACIONES PENDIENTES ===== */}
       {showQuotesModal && (
