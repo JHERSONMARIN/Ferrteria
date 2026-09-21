@@ -277,11 +277,17 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
                   >
                     <div>
                       {/* Cabecera: Icono y Botones */}
-                      <div className="flex justify-between items-start mb-2">
-                        <span className={`w-10 h-10 rounded-xl ${style.bg} ${style.text} flex items-center justify-center font-bold text-base shadow-sm border ${style.border}`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`w-10 h-10 shrink-0 rounded-xl ${style.bg} ${style.text} flex items-center justify-center font-bold text-base shadow-sm border ${style.border}`}>
                           <i className={`fa-solid ${cat.icon || 'fa-tag'}`}></i>
                         </span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex-1 min-w-0">
+                          <h5 className="font-bold text-ink text-base leading-tight truncate" title={cat.name}>{cat.name}</h5>
+                          {cat.description && (
+                            <p className="text-xs text-muted mt-0.5 line-clamp-1">{cat.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
                           <button
                             onClick={() => openEditModal(cat)}
                             className="text-muted hover:text-brand p-1.5 rounded hover:bg-surface-muted transition-colors"
@@ -298,11 +304,6 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
                           </button>
                         </div>
                       </div>
-
-                      <h5 className="font-bold text-ink text-base leading-tight">{cat.name}</h5>
-                      {cat.description && (
-                        <p className="text-xs text-muted mt-0.5 line-clamp-1">{cat.description}</p>
-                      )}
 
                       {/* Métricas */}
                       <div className="mt-3 pt-3 border-t border-line flex flex-col gap-1.5 text-xs text-muted">
