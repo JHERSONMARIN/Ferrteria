@@ -21,6 +21,7 @@ import pedidosRoutes from './src/routes/pedidos.js';
 import { prisma } from './src/db.js';
 import { initializeDocumentSeries } from './src/services/documentSeries.js';
 import { ensureBranchStockRows } from './src/services/stock.js';
+import { licenseStatus } from './src/services/license.js';
 import sucursalesRoutes from './src/routes/sucursales.js';
 import transferenciasRoutes from './src/routes/transferencias.js';
 import { expireOrders } from './src/services/saleOrders.js';
@@ -50,9 +51,42 @@ app.use((req, res, next) => {
 // ---------- Rutas públicas ----------
 app.use('/api/auth', authRoutes);
 
-// Información pública para la pantalla de inicio de sesión
-app.get('/api/app-info', (req, res) => {
-  res.json({ demoMode: process.env.DEMO_MODE === 'true' });
+// Accesos rápidos para probar: QUICK_LOGIN="usuario:clave:Etiqueta,usuario2:clave2".
+// Se muestran en la pantalla de inicio, así que SOLO deben definirse en entornos de prueba.
+function quickLoginUsers() {
+  const raw = process.env.QUICK_LOGIN?.trim();
+  if (!raw) return [];
+  return raw.split(',').map(entry => {
+    const [user, pass, label] = entry.split(':').map(part => part?.trim());
+    return user && pass ? { user, pass, label: label || user } : null;
+  }).filter(Boolean);
+}
+
+const QUICK_LOGIN_USERS = quickLoginUsers();
+if (QUICK_LOGIN_USERS.length > 0) {
+  console.warn(`[login] ${QUICK_LOGIN_USERS.length} acceso(s) rápido(s) de prueba visibles en la pantalla de inicio (QUICK_LOGIN). No usar en producción.`);
+}
+
+// Información pública para la pantalla de inicio de sesión (nombre y logo de la empresa).
+app.get('/api/app-info', async (req, res) => {
+  let business = { name: process.env.COMPANY_NAME || null, logo: null, primaryColor: null, navColor: null };
+  try {
+    const settings = await prisma.businessSettings.findUnique({
+      where: { id: 1 },
+      select: { legalName: true, tradeName: true, logo: true, primaryColor: true, navColor: true },
+    });
+    if (settings) {
+      business = {
+        name: settings.tradeName || settings.legalName,
+        logo: settings.logo,
+        primaryColor: settings.primaryColor,
+        navColor: settings.navColor,
+      };
+    }
+  } catch (error) {
+    console.error('[app-info] No se pudieron leer los datos de la empresa:', error);
+  }
+  res.json({ demoMode: process.env.DEMO_MODE === 'true', quickLogin: QUICK_LOGIN_USERS, business });
 });
 
 app.get('/api/health', (req, res) => {
@@ -61,6 +95,16 @@ app.get('/api/health', (req, res) => {
 
 // ---------- A partir de aquí todo requiere sesión ----------
 app.use('/api', authenticate, requirePasswordChanged);
+
+// Licencia vencida: la empresa queda en solo lectura hasta renovar con VALETEC.
+app.use('/api', (req, res, next) => {
+  const { expired, expiresAt } = licenseStatus();
+  if (!expired || req.method === 'GET' || req.path.startsWith('/auth/')) return next();
+  res.status(403).json({
+    error: `La licencia venció el ${expiresAt}. El sistema queda solo para consulta hasta renovarla con VALETEC.`,
+    codigo: 'LICENCIA_VENCIDA',
+  });
+});
 
 // Catálogos que consultan varias pantallas (POS, compras, entregas…); modificarlos exige su módulo.
 const CATALOG_READERS = ['pos', 'cotizaciones', 'inventory', 'categories', 'kardex', 'compras', 'deliveries'];

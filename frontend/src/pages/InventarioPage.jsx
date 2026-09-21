@@ -4,8 +4,10 @@ import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quantities.js';
+import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
 
-export default function InventarioPage({ initialCategory = 'Todas', onNavigateToCategories, currentUser }) {
+export default function InventarioPage({ initialCategory = 'Todas', initialSearch = '', onNavigateToCategories, currentUser }) {
+  const aviso = useToast();
   const [products, setProducts] = useState([]);
   const [branches, setBranches] = useState([]);
   // Con una sola sucursal no se muestra nada de sucursales.
@@ -19,7 +21,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
   const [editingProductId, setEditingProductId] = useState(null);
 
   // Filtros y búsqueda
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [filterCategory, setFilterCategory] = useState(initialCategory || 'Todas');
 
   // Campos formulario producto
@@ -34,6 +36,10 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
   const [wholesalePrice, setWholesalePrice] = useState('');
   const [searchingBarcode, setSearchingBarcode] = useState(false);
   const [productErrors, setProductErrors] = useState({});
+
+  useEffect(() => {
+    if (initialSearch) setSearchQuery(initialSearch);
+  }, [initialSearch]);
 
   useEffect(() => {
     if (initialCategory) {
@@ -54,7 +60,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
       setProducts(data || []);
     } catch (err) {
       console.error('Error cargando productos:', err);
-      alert('Error cargando inventario: ' + err.message);
+      aviso.error('Error cargando inventario: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -202,9 +208,9 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
       closeModal();
       await loadProducts();
       await loadCategories();
-      alert(editingProductId ? 'Producto actualizado correctamente.' : 'Producto registrado exitosamente.');
+      aviso.exito(editingProductId ? 'Producto actualizado correctamente.' : 'Producto registrado exitosamente.');
     } catch (err) {
-      alert('Error guardando producto: ' + err.message);
+      aviso.error('Error guardando producto: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -216,7 +222,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
       setSearchingBarcode(true);
       const res = await api.get(`/productos/barcode/${code.trim()}`);
       if (res.foundInDb) {
-        alert('Este producto ya existe en el inventario.');
+        aviso.exito('Este producto ya existe en el inventario.');
         setName(res.product.name);
         setUnit(res.product.unit);
         setPrice(res.product.price);
@@ -225,7 +231,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
         setName(res.name);
       }
     } catch (err) {
-      alert('No se encontró el nombre del producto de forma automática. Ingrese el nombre manualmente.');
+      aviso.error('No se encontró el nombre del producto de forma automática. Ingrese el nombre manualmente.');
     } finally {
       setSearchingBarcode(false);
     }
@@ -248,18 +254,13 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
 
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col min-h-full">
+      <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
         {/* Header de la Página */}
-        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50">
+        <div className="p-4 border-b border-line flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-muted">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="bg-orange-100 text-orange-700 px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                <i className="fa-solid fa-box"></i> Almacén
-              </span>
-              <h3 className="font-bold text-slate-800 text-lg">Catálogo de Productos ({products.length})</h3>
-            </div>
-            <p className="text-xs text-slate-500">
-              Control de existencias físicas, alertas de reposición de stock mínimo y exportación valorizada.
+            <p className="text-sm font-bold text-ink">{products.length} producto{products.length === 1 ? '' : 's'} en el catálogo</p>
+            <p className="text-xs text-muted">
+              Existencias, alertas de stock mínimo y valorización del almacén.
             </p>
           </div>
 
@@ -267,44 +268,44 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
             {onNavigateToCategories && (
               <button
                 onClick={onNavigateToCategories}
-                className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+                className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
               >
-                <i className="fa-solid fa-tags text-orange-600"></i> Gestionar Categorías
+                <i className="fa-solid fa-tags"></i> Categorías
               </button>
             )}
             <button
               onClick={handleExportExcel}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow transition-colors flex items-center gap-2"
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-file-excel"></i> Exportar Excel
+              <i className="fa-solid fa-file-excel"></i> Exportar
             </button>
             <button
               onClick={openCreateModal}
-              className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2"
+              className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-plus"></i> Agregar Producto
+              <i className="fa-solid fa-plus"></i> Agregar producto
             </button>
           </div>
         </div>
 
         {/* Barra de Búsqueda y Filtros */}
-        <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-3 items-center justify-between">
+        <div className="p-4 border-b border-line bg-surface flex flex-col md:flex-row gap-3 items-center justify-between">
           <div className="relative flex-1 w-full">
-            <i className="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+            <i className="fa-solid fa-magnifying-glass absolute left-3 top-3 text-muted text-sm"></i>
             <input
               type="text"
               placeholder="Buscar producto por nombre o código de barras..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-orange-500 transition-colors"
+              className="w-full pl-9 pr-4 py-2 bg-surface-muted border border-line rounded-lg text-sm outline-none focus:border-brand transition-colors"
             />
           </div>
           <div className="flex gap-2 w-full md:w-auto items-center">
-            <label className="text-xs font-bold text-slate-500 whitespace-nowrap">Categoría:</label>
+            <label className="text-xs font-bold text-muted whitespace-nowrap">Categoría:</label>
             <select
               value={filterCategory}
               onChange={e => setFilterCategory(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-slate-700 py-2 px-3 rounded-lg text-sm outline-none focus:border-orange-500 w-full md:w-56 font-medium"
+              className="bg-surface-muted border border-line text-ink-soft py-2 px-3 rounded-lg text-sm outline-none focus:border-brand w-full md:w-56 font-medium"
             >
               <option value="Todas">Todas las categorías</option>
               {categoryOptions.map(cat => (
@@ -315,27 +316,27 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
         </div>
 
         {/* Resumen Superior de Filtro */}
-        <div className="px-4 py-2 bg-slate-50/70 border-b border-slate-100 flex flex-wrap justify-between items-center text-xs text-slate-500 gap-2">
+        <div className="px-4 py-2 bg-surface-muted/70 border-b border-line flex flex-wrap justify-between items-center text-xs text-muted gap-2">
           <div className="flex items-center gap-2">
-            <span>Mostrando: <strong className="text-slate-800">{filteredProducts.length}</strong> de {products.length} productos</span>
+            <span>Mostrando: <strong className="text-ink">{filteredProducts.length}</strong> de {products.length} productos</span>
             {filterCategory !== 'Todas' && (
               <button
                 onClick={() => setFilterCategory('Todas')}
-                className="text-orange-600 hover:underline font-semibold ml-2"
+                className="text-brand hover:underline font-semibold ml-2"
               >
                 (Quitar filtro de categoría)
               </button>
             )}
           </div>
           <div>
-            <span>Valorización mostrada: <strong className="text-emerald-700 font-bold">S/ {totalValuation.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong></span>
+            <span>Valorización mostrada: <strong className="text-success font-bold">S/ {totalValuation.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong></span>
           </div>
         </div>
 
         {/* Tabla de Productos */}
         <div className="flex-1 overflow-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0 z-10 shadow-sm">
+            <thead className="bg-surface-muted text-muted text-xs uppercase sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Producto</th>
@@ -348,54 +349,65 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                 <th className="px-4 py-3 text-center">Acciones</th>
               </tr>
             </thead>
-            <tbody className="text-sm divide-y divide-gray-100">
+            <tbody className="text-sm divide-y divide-line">
               {loading && products.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="text-center py-8 text-slate-400">
-                    <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando catálogo...
-                  </td>
+                  <td colSpan="9" className="p-0"><SkeletonTable rows={8} columns={5} /></td>
                 </tr>
               ) : filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="text-center py-8 text-slate-400">
-                    No se encontraron productos en esta categoría o búsqueda.
+                  <td colSpan="9" className="p-0">
+                    {products.length === 0 ? (
+                      <EmptyState
+                        icon="fa-box"
+                        title="Todavía no hay productos"
+                        description="Cargue su catálogo para empezar a vender y a controlar el stock."
+                        action={<button onClick={openCreateModal} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold">Agregar el primero</button>}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon="fa-magnifying-glass"
+                        title="Ningún producto coincide"
+                        description="Pruebe con otro texto o quite el filtro de categoría."
+                      />
+                    )}
                   </td>
                 </tr>
               ) : (
                 filteredProducts.map(p => {
                   const isLowStock = p.stock <= (p.minStock ?? 10);
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs font-bold text-slate-600">{p.code}</td>
-                      <td className="px-4 py-3 font-semibold text-slate-800">{p.name}</td>
+                    <tr key={p.id} className="hover:bg-surface-muted transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs font-bold text-ink-soft">{p.code}</td>
+                      <td className="px-4 py-3 font-semibold text-ink">{p.name}</td>
                       <td className="px-4 py-3">
-                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs">
+                        <span className="bg-surface-muted text-ink-soft px-2 py-0.5 rounded text-xs">
                           {p.category || 'General'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center text-xs text-slate-500">{p.unit}</td>
-                      <td className="px-4 py-3 text-right font-bold text-slate-700">
+                      <td className="px-4 py-3 text-center text-xs text-muted">{p.unit}</td>
+                      <td className="px-4 py-3 text-right font-bold text-ink-soft">
                         {formatQuantity(p.stock)}
                         {multiBranch && (
                           <span
-                            className="block text-[10px] font-normal text-slate-400 cursor-help"
+                            className="block text-[10px] font-normal text-muted cursor-help"
                             title={(p.branches || []).map(b => `${branchName(b.branchId)}: ${formatQuantity(b.stock)}`).join('\n')}
                           >
                             Empresa: {formatQuantity(p.totalStock ?? p.stock)}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right text-xs text-slate-400">{formatQuantity(p.minStock ?? 10)}</td>
-                      <td className="px-4 py-3 text-right font-bold text-orange-600">
+                      <td className="px-4 py-3 text-right text-xs text-muted">{formatQuantity(p.minStock ?? 10)}</td>
+                      <td className="px-4 py-3 text-right font-bold text-ink tabular-nums">
                         S/ {parseFloat(p.price).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-center">
                         {isLowStock ? (
-                          <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-bold flex items-center justify-center gap-1">
+                          <span className="bg-danger-soft text-danger px-2 py-0.5 rounded-full text-xs font-bold flex items-center justify-center gap-1">
                             <i className="fa-solid fa-triangle-exclamation"></i> Bajo
                           </span>
                         ) : (
-                          <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-xs font-semibold">
+                          <span className="bg-success-soft text-success px-2 py-0.5 rounded-full text-xs font-semibold">
                             OK
                           </span>
                         )}
@@ -403,7 +415,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => openEditModal(p)}
-                          className="text-slate-500 hover:text-orange-600 p-1.5 rounded hover:bg-orange-50 transition-colors"
+                          className="text-muted hover:text-brand p-1.5 rounded hover:bg-brand-soft transition-colors"
                           title="Editar producto"
                         >
                           <i className="fa-solid fa-pen-to-square"></i>
@@ -420,21 +432,21 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
 
       {/* Modal Nuevo / Editar Producto */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
+          <div className="bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-4 bg-panel text-white flex justify-between items-center">
               <h3 className="font-bold text-lg">
                 <i className={`fa-solid ${editingProductId ? 'fa-pen-to-square' : 'fa-box-open'} mr-2`}></i>
                 {editingProductId ? 'Editar Producto' : 'Nuevo Producto'}
               </h3>
-              <button onClick={closeModal} className="text-slate-300 hover:text-white">
+              <button onClick={closeModal} className="text-muted hover:text-white">
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
             <div className="p-6 flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Código (Escanear)</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Código (Escanear)</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -448,7 +460,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                     <button
                       onClick={handleSearchBarcode}
                       disabled={searchingBarcode || !!editingProductId}
-                      className="bg-slate-200 text-slate-600 px-3 rounded hover:bg-slate-300 text-xs disabled:opacity-50"
+                      className="bg-surface-muted text-ink-soft px-3 rounded hover:bg-line text-xs disabled:opacity-50"
                       title="Buscar código en internet"
                     >
                       <i className="fa-solid fa-magnifying-glass"></i>
@@ -457,14 +469,14 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                   <FieldError msg={productErrors.code} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Unidad</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Unidad</label>
                   <select
                     value={unit}
                     onChange={e => {
                       setUnit(e.target.value);
                       if (FRACTIONAL_UNITS.includes(e.target.value)) setAllowsFractions(true);
                     }}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 bg-white text-sm"
+                    className="w-full border border-line p-2 rounded outline-none focus:border-brand bg-surface text-sm"
                   >
                     <option value="Unidad">Unidad</option>
                     <option value="Bolsa">Bolsa</option>
@@ -478,7 +490,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                 </div>
               </div>
 
-              <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+              <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer bg-surface-muted border border-line rounded-lg px-3 py-2">
                 <input
                   type="checkbox"
                   checked={allowsFractions}
@@ -487,12 +499,12 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                 />
                 <span>
                   <span className="font-semibold">Se vende fraccionado</span>
-                  <span className="block text-xs text-slate-500">Permite vender cantidades con decimales, por ejemplo 2.5 metros o 0.750 kilos.</span>
+                  <span className="block text-xs text-muted">Permite vender cantidades con decimales, por ejemplo 2.5 metros o 0.750 kilos.</span>
                 </span>
               </label>
 
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Nombre del Producto</label>
+                <label className="text-xs font-bold text-muted mb-1 block">Nombre del Producto</label>
                 <input
                   type="text"
                   maxLength={120}
@@ -505,11 +517,11 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Categoría de Almacén</label>
+                <label className="text-xs font-bold text-muted mb-1 block">Categoría de Almacén</label>
                 <select
                   value={category}
                   onChange={e => { setCategory(e.target.value); clearProductError('category'); }}
-                  className={`w-full border p-2 rounded outline-none bg-white text-sm ${borderClass(productErrors.category)}`}
+                  className={`w-full border p-2 rounded outline-none bg-surface text-sm ${borderClass(productErrors.category)}`}
                 >
                   {categoryOptions.map(c => (
                     <option key={c} value={c}>{c}</option>
@@ -520,19 +532,19 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Stock {editingProductId ? 'Actual' : 'Inicial'}</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Stock {editingProductId ? 'Actual' : 'Inicial'}</label>
                   <input
                     type="number"
                     min="0"
                     disabled={!!editingProductId}
                     value={stock}
                     onChange={e => { setStock(e.target.value); clearProductError('stock'); }}
-                    className={`w-full border p-2 rounded outline-none text-sm ${editingProductId ? 'bg-gray-100 cursor-not-allowed' : ''} ${borderClass(productErrors.stock)}`}
+                    className={`w-full border p-2 rounded outline-none text-sm ${editingProductId ? 'bg-surface-muted cursor-not-allowed' : ''} ${borderClass(productErrors.stock)}`}
                   />
                   <FieldError msg={productErrors.stock} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Stock Mínimo</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Stock Mínimo</label>
                   <input
                     type="number"
                     min="0"
@@ -543,7 +555,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                   <FieldError msg={productErrors.minStock} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Precio (S/)</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Precio (S/)</label>
                   <input
                     type="number"
                     step="0.10"
@@ -555,7 +567,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                   <FieldError msg={productErrors.price} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Precio mayorista (opcional)</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Precio mayorista (opcional)</label>
                   <input
                     type="number"
                     step="0.10"
@@ -569,9 +581,9 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                 </div>
               </div>
             </div>
-            <div className="p-4 bg-slate-50 border-t flex justify-end gap-3">
-              <button onClick={closeModal} className="px-4 py-2 font-bold text-slate-600 bg-slate-200 rounded-lg text-sm">Cancelar</button>
-              <button onClick={handleSaveProduct} disabled={loading} className="px-4 py-2 font-bold text-white bg-orange-600 hover:bg-orange-700 rounded-lg text-sm shadow-sm transition-colors">
+            <div className="p-4 bg-surface-muted border-t flex justify-end gap-3">
+              <button onClick={closeModal} className="px-4 py-2 font-bold text-ink-soft bg-surface-muted rounded-lg text-sm">Cancelar</button>
+              <button onClick={handleSaveProduct} disabled={loading} className="px-4 py-2 font-bold text-brand-contrast bg-brand hover:bg-brand-strong rounded-lg text-sm shadow-sm transition-colors">
                 {editingProductId ? 'Guardar Cambios' : 'Guardar Producto'}
               </button>
             </div>

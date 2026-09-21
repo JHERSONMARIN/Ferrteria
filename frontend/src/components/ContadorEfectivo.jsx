@@ -34,14 +34,14 @@ function FilaDenominacion({ den, cantidad, onCantidadChange }) {
   const subtotal = (den.centimos * cant) / 100;
 
   return (
-    <div className={`flex items-center gap-2 py-1.5 px-2 rounded-lg ${cant > 0 ? 'bg-orange-50' : ''}`}>
-      <span className="w-16 sm:w-20 text-xs font-bold text-slate-700 shrink-0">{den.label}</span>
+    <div className={`flex items-center gap-2 py-1.5 px-2 rounded-lg ${cant > 0 ? 'bg-brand-soft' : ''}`}>
+      <span className="w-16 sm:w-20 text-xs font-bold text-ink-soft shrink-0">{den.label}</span>
 
       <div className="flex items-center gap-1 shrink-0">
         <button
           type="button"
           onClick={() => onCantidadChange(Math.max(0, cant - 1))}
-          className="w-7 h-7 bg-slate-200 hover:bg-slate-300 rounded text-slate-700 font-bold text-sm transition-colors"
+          className="w-7 h-7 bg-surface-muted hover:bg-line rounded text-ink-soft font-bold text-sm transition-colors"
         >
           −
         </button>
@@ -54,18 +54,18 @@ function FilaDenominacion({ den, cantidad, onCantidadChange }) {
             onCantidadChange(limpio === '' ? '' : parseInt(limpio, 10));
           }}
           placeholder="0"
-          className="w-12 text-center border border-slate-300 rounded py-1 text-sm font-bold outline-none focus:border-orange-500"
+          className="w-12 text-center border border-line rounded py-1 text-sm font-bold outline-none focus:border-brand"
         />
         <button
           type="button"
           onClick={() => onCantidadChange(cant + 1)}
-          className="w-7 h-7 bg-slate-200 hover:bg-slate-300 rounded text-slate-700 font-bold text-sm transition-colors"
+          className="w-7 h-7 bg-surface-muted hover:bg-line rounded text-ink-soft font-bold text-sm transition-colors"
         >
           +
         </button>
       </div>
 
-      <span className={`flex-1 text-right text-xs font-bold tabular-nums ${cant > 0 ? 'text-slate-800' : 'text-slate-300'}`}>
+      <span className={`flex-1 text-right text-xs font-bold tabular-nums ${cant > 0 ? 'text-ink' : 'text-muted'}`}>
         S/ {subtotal.toFixed(2)}
       </span>
     </div>
@@ -87,16 +87,16 @@ export default function ContadorEfectivo({ conteo, onChange }) {
   const monedas = DENOMINACIONES.filter(d => d.tipo === 'MONEDA');
 
   return (
-    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
-      <div className="flex justify-between items-center px-3 py-2 bg-slate-100 border-b border-slate-200">
-        <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">
-          <i className="fa-solid fa-calculator mr-1.5 text-orange-500"></i>
+    <div className="border border-line rounded-xl overflow-hidden bg-surface">
+      <div className="flex justify-between items-center px-3 py-2 bg-surface-muted border-b border-line">
+        <span className="text-xs font-bold text-ink-soft uppercase tracking-wide">
+          <i className="fa-solid fa-calculator mr-1.5 text-brand"></i>
           Conteo de Efectivo
         </span>
         <button
           type="button"
           onClick={limpiar}
-          className="text-[11px] font-bold text-slate-500 hover:text-red-600 transition-colors"
+          className="text-[11px] font-bold text-muted hover:text-danger transition-colors"
         >
           <i className="fa-solid fa-eraser mr-1"></i> Limpiar
         </button>
@@ -105,7 +105,7 @@ export default function ContadorEfectivo({ conteo, onChange }) {
       {/* En lg la columna del contador se angosta, por eso vuelve a una sola columna hasta xl. */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-x-4 p-3">
         <div>
-          <p className="text-[11px] font-bold text-slate-400 uppercase px-2 mb-1">
+          <p className="text-[11px] font-bold text-muted uppercase px-2 mb-1">
             Billetes ({totalBilletes})
           </p>
           {billetes.map(den => (
@@ -119,7 +119,7 @@ export default function ContadorEfectivo({ conteo, onChange }) {
         </div>
 
         <div className="mt-3 md:mt-0 lg:mt-3 xl:mt-0">
-          <p className="text-[11px] font-bold text-slate-400 uppercase px-2 mb-1">
+          <p className="text-[11px] font-bold text-muted uppercase px-2 mb-1">
             Monedas ({totalMonedas})
           </p>
           {monedas.map(den => (
@@ -133,14 +133,14 @@ export default function ContadorEfectivo({ conteo, onChange }) {
         </div>
       </div>
 
-      <div className="flex justify-between items-center px-4 py-3 bg-slate-900 text-white">
+      <div className="flex justify-between items-center px-4 py-3 bg-panel text-white">
         <div className="flex flex-col">
           <span className="text-xs font-semibold">Total Contado</span>
-          <span className="text-[10px] text-slate-400">
+          <span className="text-[10px] text-muted">
             {totalBilletes} billete{totalBilletes === 1 ? '' : 's'} · {totalMonedas} moneda{totalMonedas === 1 ? '' : 's'}
           </span>
         </div>
-        <span className="text-2xl font-black text-orange-500 tabular-nums">S/ {total.toFixed(2)}</span>
+        <span className="text-2xl font-black text-brand tabular-nums">S/ {total.toFixed(2)}</span>
       </div>
     </div>
   );

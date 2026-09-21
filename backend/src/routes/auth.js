@@ -39,7 +39,7 @@ router.post('/login', async (req, res) => {
         active: true,
         mustChangePassword: true,
         branchId: true,
-        branch: { select: { id: true, name: true, saleFlowMode: true } },
+        branch: { select: { id: true, name: true, saleFlowMode: true, deliveriesEnabled: true, dispatchRole: true } },
       }
     });
 

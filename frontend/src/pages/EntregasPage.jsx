@@ -3,12 +3,13 @@ import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { formatSoles } from '../utils/currency.js';
+import { useConfirm } from '../components/ui/index.js';
 
 const REFRESH_MS = 5000;
 
 const STATUS_BADGE = {
-  ENTREGADO: { label: 'Entregado', className: 'bg-emerald-100 text-emerald-700' },
-  CANCELADO: { label: 'Cancelado', className: 'bg-slate-200 text-slate-600' },
+  ENTREGADO: { label: 'Entregado', className: 'bg-success-soft text-success' },
+  CANCELADO: { label: 'Cancelado', className: 'bg-surface-muted text-ink-soft' },
 };
 
 const formatTime = (date) => (date ? new Date(date).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) : '');
@@ -19,37 +20,37 @@ function DeliveryCard({ delivery, couriers, busy, onAssign, onDepart, onDeliver,
   const badge = STATUS_BADGE[delivery.status];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-3">
+    <div className="bg-surface rounded-xl border border-line shadow-sm p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-bold text-slate-800 truncate">{delivery.contactName}</p>
-          <p className="text-[11px] text-slate-400 font-mono">
+          <p className="font-bold text-ink truncate">{delivery.contactName}</p>
+          <p className="text-[11px] text-muted font-mono">
             {delivery.ref}{delivery.saleNumDoc && ` · ${delivery.saleNumDoc}`}
           </p>
         </div>
         {badge ? (
           <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${badge.className}`}>{badge.label}</span>
         ) : delivery.total !== null && (
-          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full shrink-0">Pagado {formatSoles(delivery.total)}</span>
+          <span className="text-xs font-bold text-success bg-success-soft px-2 py-0.5 rounded-full shrink-0">Pagado {formatSoles(delivery.total)}</span>
         )}
       </div>
 
       <div className="flex flex-col gap-1.5 text-sm">
-        <a href={mapsUrl(delivery.address)} target="_blank" rel="noreferrer" className="text-slate-700 hover:text-orange-600 flex gap-2">
-          <i className="fa-solid fa-location-dot text-orange-500 mt-0.5"></i>
+        <a href={mapsUrl(delivery.address)} target="_blank" rel="noreferrer" className="text-ink-soft hover:text-brand flex gap-2">
+          <i className="fa-solid fa-location-dot text-brand mt-0.5"></i>
           <span className="underline decoration-dotted">{delivery.address}</span>
         </a>
         {delivery.contactPhone && (
-          <a href={`tel:${delivery.contactPhone}`} className="text-slate-700 hover:text-orange-600 flex gap-2 items-center">
-            <i className="fa-solid fa-phone text-orange-500"></i> {delivery.contactPhone}
+          <a href={`tel:${delivery.contactPhone}`} className="text-ink-soft hover:text-brand flex gap-2 items-center">
+            <i className="fa-solid fa-phone text-brand"></i> {delivery.contactPhone}
           </a>
         )}
         {delivery.notes && (
-          <p className="text-xs text-slate-500 bg-slate-50 rounded px-2 py-1"><i className="fa-solid fa-note-sticky mr-1"></i>{delivery.notes}</p>
+          <p className="text-xs text-muted bg-surface-muted rounded px-2 py-1"><i className="fa-solid fa-note-sticky mr-1"></i>{delivery.notes}</p>
         )}
       </div>
 
-      <ul className="text-xs text-slate-600 bg-slate-50 rounded-lg p-2 flex flex-col gap-0.5">
+      <ul className="text-xs text-ink-soft bg-surface-muted rounded-lg p-2 flex flex-col gap-0.5">
         {delivery.items.map((item, i) => (
           <li key={i}><span className="font-bold">{item.qty}×</span> {item.name}</li>
         ))}
@@ -58,12 +59,12 @@ function DeliveryCard({ delivery, couriers, busy, onAssign, onDepart, onDeliver,
       {active ? (
         <>
           <div>
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1 block">Repartidor</label>
+            <label className="text-[11px] font-bold text-muted uppercase tracking-wide mb-1 block">Repartidor</label>
             <select
               value={delivery.courier?.id ?? ''}
               onChange={e => onAssign(delivery, e.target.value ? Number(e.target.value) : null)}
               disabled={busy}
-              className="w-full border border-gray-300 rounded-lg px-2 py-2 text-sm bg-white outline-none focus:border-orange-500"
+              className="w-full border border-line rounded-lg px-2 py-2 text-sm bg-surface outline-none focus:border-brand"
             >
               <option value="">Sin asignar</option>
               {couriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -71,7 +72,7 @@ function DeliveryCard({ delivery, couriers, busy, onAssign, onDepart, onDeliver,
           </div>
 
           {delivery.waitingDispatch ? (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="text-xs text-warning bg-warning-soft border border-warning/30 rounded-lg px-3 py-2">
               <i className="fa-solid fa-hourglass-half mr-1.5"></i>Esperando que almacén despache los productos.
             </p>
           ) : (
@@ -80,7 +81,7 @@ function DeliveryCard({ delivery, couriers, busy, onAssign, onDepart, onDeliver,
                 <button
                   onClick={() => onDepart(delivery)}
                   disabled={busy}
-                  className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
+                  className="flex-1 bg-panel hover:bg-panel-strong text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
                 >
                   <i className="fa-solid fa-truck-fast mr-1.5"></i>Salir a repartir
                 </button>
@@ -88,7 +89,7 @@ function DeliveryCard({ delivery, couriers, busy, onAssign, onDepart, onDeliver,
               <button
                 onClick={() => onDeliver(delivery)}
                 disabled={busy}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
+                className="flex-1 bg-success hover:brightness-95 text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
               >
                 <i className="fa-solid fa-check mr-1.5"></i>Entregado
               </button>
@@ -96,13 +97,13 @@ function DeliveryCard({ delivery, couriers, busy, onAssign, onDepart, onDeliver,
           )}
 
           {delivery.status === 'PENDIENTE' && !delivery.legacy && (
-            <button onClick={() => onCancel(delivery)} disabled={busy} className="text-xs font-semibold text-slate-400 hover:text-red-600">
+            <button onClick={() => onCancel(delivery)} disabled={busy} className="text-xs font-semibold text-muted hover:text-danger">
               Cancelar envío (el cliente recoge en tienda)
             </button>
           )}
         </>
       ) : (
-        <p className="text-[11px] text-slate-400">
+        <p className="text-[11px] text-muted">
           {delivery.courier && <>Repartidor: {delivery.courier.name} · </>}
           {delivery.status === 'ENTREGADO' ? `Entregado ${formatTime(delivery.deliveredAt)}` : `Registrado ${formatTime(delivery.createdAt)}`}
         </p>
@@ -114,12 +115,12 @@ function DeliveryCard({ delivery, couriers, busy, onAssign, onDepart, onDeliver,
 function Column({ title, icon, deliveries, emptyText, renderCard }) {
   return (
     <section className="flex flex-col gap-3 min-w-0">
-      <h3 className="text-sm font-bold text-slate-600 flex items-center gap-2">
-        <i className={`fa-solid ${icon} text-orange-500`}></i>{title}
-        <span className="bg-slate-200 text-slate-600 text-[11px] px-2 py-0.5 rounded-full">{deliveries.length}</span>
+      <h3 className="text-sm font-bold text-ink-soft flex items-center gap-2">
+        <i className={`fa-solid ${icon} text-brand`}></i>{title}
+        <span className="bg-surface-muted text-ink-soft text-[11px] px-2 py-0.5 rounded-full">{deliveries.length}</span>
       </h3>
       {deliveries.length === 0 ? (
-        <p className="text-xs text-slate-400 border border-dashed border-slate-300 rounded-xl p-4 text-center">{emptyText}</p>
+        <p className="text-xs text-muted border border-dashed border-line rounded-xl p-4 text-center">{emptyText}</p>
       ) : deliveries.map(renderCard)}
     </section>
   );
@@ -173,15 +174,15 @@ function ScheduleDeliveryModal({ onClose, onScheduled }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm sm:p-4">
-      <div className="bg-white sm:rounded-xl rounded-t-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[92vh]">
-        <div className="px-5 py-4 bg-slate-900 text-white flex justify-between items-center">
-          <h3 className="font-bold"><i className="fa-solid fa-truck-ramp-box mr-2 text-orange-400"></i>Programar envío de una venta</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><i className="fa-solid fa-xmark text-xl"></i></button>
+    <div className="fixed inset-0 bg-panel/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm sm:p-4">
+      <div className="bg-surface sm:rounded-xl rounded-t-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[92vh]">
+        <div className="px-5 py-4 bg-panel text-white flex justify-between items-center">
+          <h3 className="font-bold"><i className="fa-solid fa-truck-ramp-box mr-2 text-brand"></i>Programar envío de una venta</h3>
+          <button onClick={onClose} className="text-muted hover:text-white"><i className="fa-solid fa-xmark text-xl"></i></button>
         </div>
         <div className="p-5 flex flex-col gap-3 overflow-y-auto">
           <div>
-            <label className="text-xs font-bold text-slate-500 mb-1 block">Comprobante de la venta</label>
+            <label className="text-xs font-bold text-muted mb-1 block">Comprobante de la venta</label>
             <div className="flex gap-2">
               <input
                 autoFocus
@@ -189,20 +190,20 @@ function ScheduleDeliveryModal({ onClose, onScheduled }) {
                 onChange={e => { setNumDoc(e.target.value.toUpperCase()); setSale(null); setError(''); }}
                 onKeyDown={e => e.key === 'Enter' && search()}
                 placeholder="Ej. B001-000038"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-orange-500"
+                className="flex-1 border border-line rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-brand"
               />
-              <button onClick={search} disabled={working} className="px-4 rounded-lg bg-slate-800 text-white text-sm font-bold disabled:opacity-50">Buscar</button>
+              <button onClick={search} disabled={working} className="px-4 rounded-lg bg-panel text-white text-sm font-bold disabled:opacity-50">Buscar</button>
             </div>
           </div>
 
           {sale && (
             <>
-              <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm">
-                <p className="font-bold text-slate-800">{sale.customer?.name || 'Público general'} · {formatSoles(sale.total)}</p>
-                <p className="text-xs text-slate-500">{sale.items.map(i => `${i.qty}× ${i.name}`).join(', ')}</p>
+              <div className="rounded-lg bg-surface-muted border border-line p-3 text-sm">
+                <p className="font-bold text-ink">{sale.customer?.name || 'Público general'} · {formatSoles(sale.total)}</p>
+                <p className="text-xs text-muted">{sale.items.map(i => `${i.qty}× ${i.name}`).join(', ')}</p>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Dirección de entrega</label>
+                <label className="text-xs font-bold text-muted mb-1 block">Dirección de entrega</label>
                 <input
                   value={address}
                   onChange={e => setAddress(e.target.value)}
@@ -211,19 +212,19 @@ function ScheduleDeliveryModal({ onClose, onScheduled }) {
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <input value={phone} onChange={e => setPhone(e.target.value)} maxLength={30} placeholder="Teléfono" className="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none" />
-                <input value={notes} onChange={e => setNotes(e.target.value)} maxLength={300} placeholder="Indicaciones" className="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none" />
+                <input value={phone} onChange={e => setPhone(e.target.value)} maxLength={30} placeholder="Teléfono" className="border border-line rounded-lg px-3 py-2 text-sm outline-none" />
+                <input value={notes} onChange={e => setNotes(e.target.value)} maxLength={300} placeholder="Indicaciones" className="border border-line rounded-lg px-3 py-2 text-sm outline-none" />
               </div>
             </>
           )}
           <FieldError msg={error} />
         </div>
-        <div className="p-4 border-t border-gray-200 bg-slate-50 flex gap-2">
-          <button onClick={onClose} className="px-4 py-2.5 rounded-lg bg-slate-200 text-slate-600 font-bold text-sm">Cancelar</button>
+        <div className="p-4 border-t border-line bg-surface-muted flex gap-2">
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg bg-surface-muted text-ink-soft font-bold text-sm">Cancelar</button>
           <button
             onClick={schedule}
             disabled={!sale || working}
-            className="flex-1 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm disabled:opacity-50"
+            className="flex-1 py-2.5 rounded-lg bg-brand hover:bg-brand-strong text-brand-contrast font-bold text-sm disabled:opacity-50"
           >
             Programar envío
           </button>
@@ -234,6 +235,7 @@ function ScheduleDeliveryModal({ onClose, onScheduled }) {
 }
 
 export default function EntregasPage({ currentUser }) {
+  const confirmar = useConfirm();
   const isCourier = currentUser?.role === 'REPARTIDOR';
   const [view, setView] = useState('activas');
   const [onlyMine, setOnlyMine] = useState(isCourier);
@@ -300,8 +302,13 @@ export default function EntregasPage({ currentUser }) {
     couriers,
     onAssign: (d, courierId) => run(d, () => api.patch(`/entregas/${d.id}/repartidor`, { repartidorId: courierId })),
     onDepart: (d) => run(d, () => api.post(`/entregas/${d.id}/salir`, {}), `${d.ref} en camino.`),
-    onDeliver: (d) => {
-      if (window.confirm(`¿Confirmar que ${d.ref} fue entregado a ${d.contactName}?`)) {
+    onDeliver: async (d) => {
+      const seguro = await confirmar({
+        title: 'Marcar como entregado',
+        description: `${d.ref} fue entregado a ${d.contactName}.`,
+        confirmText: 'Sí, se entregó',
+      });
+      if (seguro) {
         run(d, () => api.post(`/entregas/${d.id}/entregar`, {}), `${d.ref} entregado.`);
       }
     },
@@ -320,25 +327,25 @@ export default function EntregasPage({ currentUser }) {
     <div className="tab-content active h-full p-3 sm:p-4 overflow-y-auto">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex rounded-lg border border-slate-200 bg-white overflow-hidden text-sm font-bold">
+          <div className="flex rounded-lg border border-line bg-surface overflow-hidden text-sm font-bold">
             {[{ id: 'activas', label: 'Activas' }, { id: 'finalizadas', label: 'Finalizadas (7 días)' }].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setView(tab.id)}
-                className={`px-4 py-2 ${view === tab.id ? 'bg-orange-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                className={`px-4 py-2 ${view === tab.id ? 'bg-brand text-brand-contrast' : 'text-ink-soft hover:bg-surface-muted'}`}
               >
                 {tab.label}
               </button>
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-ink-soft cursor-pointer">
               <input type="checkbox" checked={onlyMine} onChange={e => setOnlyMine(e.target.checked)} className="accent-orange-600 w-4 h-4" />
               Solo mis entregas
             </label>
             <button
               onClick={() => setShowSchedule(true)}
-              className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg shadow text-sm"
+              className="bg-brand hover:bg-brand-strong text-brand-contrast font-bold py-2 px-4 rounded-lg shadow text-sm"
             >
               <i className="fa-solid fa-plus mr-1.5"></i>Programar envío
             </button>
@@ -347,13 +354,13 @@ export default function EntregasPage({ currentUser }) {
 
         {notice && (
           <div className={`rounded-lg px-4 py-2.5 text-sm flex justify-between gap-2 border ${
-            notice.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'
+            notice.type === 'success' ? 'bg-success-soft border-success/30 text-success' : 'bg-warning-soft border-warning/30 text-warning'
           }`}>
             <span>{notice.text}</span>
             <button onClick={() => setNotice(null)} className="opacity-60 hover:opacity-100"><i className="fa-solid fa-xmark"></i></button>
           </div>
         )}
-        {loadError && <p className="text-sm text-red-600">{loadError}</p>}
+        {loadError && <p className="text-sm text-danger">{loadError}</p>}
 
         {view === 'activas' ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
@@ -362,7 +369,7 @@ export default function EntregasPage({ currentUser }) {
             <Column title="En camino" icon="fa-truck-fast" deliveries={onTheWay} emptyText="Ningún repartidor en ruta." renderCard={renderCard} />
           </div>
         ) : deliveries.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-12">No hay entregas finalizadas en los últimos 7 días.</p>
+          <p className="text-sm text-muted text-center py-12">No hay entregas finalizadas en los últimos 7 días.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{deliveries.map(renderCard)}</div>
         )}

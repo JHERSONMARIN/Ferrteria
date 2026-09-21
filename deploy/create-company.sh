@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Crea una empresa nueva: base de datos limpia, usuario de BD propio, archivo .env e instancia.
 #
-#   Uso: deploy/create-company.sh <identificador> "<Razón social>" <puerto_web>
-#   Ej.: deploy/create-company.sh ferreteriax "Ferretería X S.A.C." 5301
+#   Uso: deploy/create-company.sh <identificador> "<Razón social>" <puerto_web> [plan]
+#   Ej.: deploy/create-company.sh ferreteriax "Ferretería X S.A.C." 5301 profesional
+#   Sin plan, la empresa queda con todos los módulos y sin límites (desarrollo y pruebas).
 set -euo pipefail
 
 DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -14,10 +15,11 @@ DB_CONTAINER="ferresys-infra-db"
 fail() { echo "❌ $*" >&2; exit 1; }
 random_secret() { openssl rand -hex "$1"; }
 
-[ $# -eq 3 ] || fail "Uso: $0 <identificador> \"<Razón social>\" <puerto_web>"
+[ $# -ge 3 ] && [ $# -le 4 ] || fail "Uso: $0 <identificador> \"<Razón social>\" <puerto_web> [plan]"
 SLUG="$1"
 COMPANY_NAME="$2"
 WEB_PORT="$3"
+PLAN="${4:-}"
 
 [[ "$SLUG" =~ ^[a-z][a-z0-9-]{1,30}$ ]] || fail "Identificador inválido: use minúsculas, números y guiones (2 a 31 caracteres, empieza con letra)."
 [[ "$WEB_PORT" =~ ^[0-9]{2,5}$ ]] && [ "$WEB_PORT" -ge 1024 ] && [ "$WEB_PORT" -le 65535 ] || fail "Puerto inválido: use un número entre 1024 y 65535."
@@ -82,9 +84,10 @@ chmod 600 "$COMPANY_ENV"
 echo "▶ Levantando la instancia $PROJECT (la primera vez construye las imágenes)…"
 docker compose -p "$PROJECT" -f "$COMPANY_COMPOSE" --env-file "$COMPANY_ENV" up -d --build >/dev/null
 
+# Se consulta dentro del propio contenedor: así funciona igual desde el servidor o desde la consola.
 echo -n "▶ Esperando que responda"
 for _ in $(seq 1 90); do
-  if curl -sf "http://127.0.0.1:$WEB_PORT/api/health" >/dev/null; then READY=1; break; fi
+  if docker exec "$PROJECT-backend-1" wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1; then READY=1; break; fi
   echo -n "."; sleep 2
 done
 echo
@@ -93,12 +96,18 @@ echo
 # La clave inicial ya se usó para crear el administrador: no se deja guardada en disco.
 sed -i '/^INITIAL_ADMIN_PASSWORD=/d' "$COMPANY_ENV"
 
+# 5. Plan contratado (módulos, funciones, límites y vencimiento).
+if [ -n "$PLAN" ]; then
+  "$DEPLOY_DIR/set-plan.sh" "$SLUG" "$PLAN"
+fi
+
 cat <<INFO
 
 ✅ Empresa creada: $COMPANY_NAME
    URL:         http://127.0.0.1:$WEB_PORT
    Usuario:     admin
    Contraseña:  $ADMIN_PASSWORD   (temporal: se pedirá cambiarla al ingresar)
+   Plan:        ${PLAN:-sin plan (todos los módulos)}
    Base datos:  $DB_NAME
    Config.:     $COMPANY_ENV
 INFO

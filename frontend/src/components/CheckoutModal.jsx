@@ -23,7 +23,7 @@ const PAYMENT_METHODS = [
 function Section({ title, children }) {
   return (
     <section>
-      <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">{title}</h4>
+      <h4 className="text-[11px] font-bold text-muted uppercase tracking-wide mb-2">{title}</h4>
       {children}
     </section>
   );
@@ -156,25 +156,25 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
   };
 
   const tile = (active) => `rounded-lg border text-center transition-colors ${
-    active ? 'border-orange-500 bg-orange-50 text-orange-700 ring-1 ring-orange-500' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+    active ? 'border-brand bg-brand-soft text-brand-text ring-1 ring-brand' : 'border-line text-ink-soft hover:bg-surface-muted'
   }`;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm sm:p-4">
-      <div className="bg-white sm:rounded-xl rounded-t-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
-        <div className="px-5 py-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+    <div className="fixed inset-0 bg-panel/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm sm:p-4">
+      <div className="bg-surface sm:rounded-xl rounded-t-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
+        <div className="px-5 py-4 bg-panel text-white flex justify-between items-center shrink-0">
           <div>
-            <p className="text-xs text-slate-400 font-semibold">{title || 'Total a cobrar'} · {units} {units === 1 ? 'producto' : 'productos'}</p>
-            <p className="text-3xl font-black text-orange-400 tabular-nums">{formatSoles(total)}</p>
+            <p className="text-xs text-muted font-semibold">{title || 'Total a cobrar'} · {units} {units === 1 ? 'producto' : 'productos'}</p>
+            <p className="text-3xl font-black text-brand tabular-nums">{formatSoles(total)}</p>
           </div>
-          <button onClick={close} className="text-slate-400 hover:text-white p-1" title="Cerrar (Esc)">
+          <button onClick={close} className="text-muted hover:text-white p-1" title="Cerrar (Esc)">
             <i className="fa-solid fa-xmark text-xl"></i>
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
           {serverError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 flex gap-2">
+            <div className="bg-danger-soft border border-danger/30 text-danger text-sm rounded-lg p-3 flex gap-2">
               <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
               <span>{serverError}</span>
             </div>
@@ -206,8 +206,8 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
               error={errors.customer}
             />
             {!customer && docType !== 'Nota de Venta' && (
-              <div className="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-                <p className="text-xs text-slate-500 mb-2">
+              <div className="mt-3 p-3 rounded-lg bg-surface-muted border border-line">
+                <p className="text-xs text-muted mb-2">
                   Cliente no registrado: ingrese sus datos para la {docType.toLowerCase()}.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
@@ -257,7 +257,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
               <div className="mt-3 flex flex-col gap-2">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-slate-500 mb-1 block">Recibido (opcional)</label>
+                    <label className="text-xs text-muted mb-1 block">Recibido (opcional)</label>
                     <input
                       type="number"
                       min="0"
@@ -271,8 +271,8 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
                   </div>
                   <div className={`rounded-lg border px-3 py-2 flex flex-col justify-center ${
                     change === null
-                      ? 'bg-slate-50 border-slate-200 text-slate-400'
-                      : change < 0 ? 'bg-red-50 border-red-200 text-red-600' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      ? 'bg-surface-muted border-line text-muted'
+                      : change < 0 ? 'bg-danger-soft border-danger/30 text-danger' : 'bg-success-soft border-success/30 text-success'
                   }`}>
                     <span className="text-xs font-semibold">{change !== null && change < 0 ? 'Falta' : 'Vuelto'}</span>
                     <span className="text-2xl font-black tabular-nums">{change === null ? '—' : formatSoles(Math.abs(change))}</span>
@@ -284,7 +284,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
                       key={q.label}
                       type="button"
                       onClick={() => { setReceivedCash(q.value.toFixed(2)); clearError('receivedCash'); }}
-                      className="px-3 py-1.5 rounded-full text-xs font-bold border border-slate-300 bg-white hover:bg-slate-100 text-slate-700"
+                      className="px-3 py-1.5 rounded-full text-xs font-bold border border-line bg-surface hover:bg-surface-muted text-ink-soft"
                     >
                       {q.label}
                     </button>
@@ -296,7 +296,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
 
             {payMethod === 'Yape/Plin' && (
               <div className="mt-3">
-                <label className="text-xs text-slate-500 mb-1 block">N° de operación</label>
+                <label className="text-xs text-muted mb-1 block">N° de operación</label>
                 <input
                   type="text"
                   maxLength={40}
@@ -317,7 +317,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
                     { label: 'Digital', value: mixDigital, set: setMixDigital, error: errors.mixDigital },
                   ].map(field => (
                     <div key={field.label}>
-                      <label className="text-xs text-slate-500 mb-1 block">{field.label}</label>
+                      <label className="text-xs text-muted mb-1 block">{field.label}</label>
                       <input
                         type="number"
                         min="0"
@@ -334,7 +334,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
                   <button
                     type="button"
                     onClick={() => { setMixDigital(digitalRemainder.toFixed(2)); clearError('mixDigital'); }}
-                    className="mt-2 text-xs font-bold text-orange-600 hover:underline"
+                    className="mt-2 text-xs font-bold text-brand hover:underline"
                   >
                     Completar digital con {formatSoles(digitalRemainder)}
                   </button>
@@ -344,8 +344,8 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
             )}
 
             {payMethod === 'Fiado' && (
-              <p className="mt-3 text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <i className="fa-solid fa-circle-info text-amber-500 mr-1"></i>
+              <p className="mt-3 text-xs text-ink-soft bg-warning-soft border border-warning/30 rounded-lg p-3">
+                <i className="fa-solid fa-circle-info text-warning mr-1"></i>
                 Se cargará a la cuenta del cliente. Requiere un cliente registrado con crédito disponible.
               </p>
             )}
@@ -373,7 +373,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
               {deliveryType === 'DELIVERY' && (
                 <div className="mt-3 flex flex-col gap-2">
                   <div>
-                    <label className="text-xs text-slate-500 mb-1 block">Dirección de entrega</label>
+                    <label className="text-xs text-muted mb-1 block">Dirección de entrega</label>
                     <input
                       type="text"
                       maxLength={250}
@@ -386,18 +386,18 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs text-slate-500 mb-1 block">Recibe</label>
+                      <label className="text-xs text-muted mb-1 block">Recibe</label>
                       <input
                         type="text"
                         maxLength={120}
                         value={deliveryRecipient}
                         onChange={e => setDeliveryRecipient(e.target.value)}
                         placeholder="Nombre de quien recibe"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm"
+                        className="w-full px-3 py-2 border border-line rounded-lg outline-none text-sm"
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-500 mb-1 block">Teléfono de contacto</label>
+                      <label className="text-xs text-muted mb-1 block">Teléfono de contacto</label>
                       <input
                         type="tel"
                         maxLength={30}
@@ -409,14 +409,14 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
                       <FieldError msg={errors.deliveryPhone} />
                     </div>
                     <div className="sm:col-span-2">
-                      <label className="text-xs text-slate-500 mb-1 block">Indicaciones</label>
+                      <label className="text-xs text-muted mb-1 block">Indicaciones</label>
                       <input
                         type="text"
                         maxLength={300}
                         value={deliveryNotes}
                         onChange={e => setDeliveryNotes(e.target.value)}
                         placeholder="Ej. dejar en portería"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm"
+                        className="w-full px-3 py-2 border border-line rounded-lg outline-none text-sm"
                       />
                     </div>
                   </div>
@@ -426,18 +426,18 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
           )}
         </div>
 
-        <div className="p-4 border-t border-gray-200 bg-slate-50 flex gap-2 shrink-0">
+        <div className="p-4 border-t border-line bg-surface-muted flex gap-2 shrink-0">
           <button
             onClick={close}
             disabled={processing}
-            className="px-4 py-3 font-bold text-slate-600 bg-slate-200 hover:bg-slate-300 rounded-lg text-sm transition-colors disabled:opacity-50"
+            className="px-4 py-3 font-bold text-ink-soft bg-surface-muted hover:bg-line rounded-lg text-sm transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={handleConfirm}
             disabled={processing}
-            className="flex-1 py-3 font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg text-base shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+            className="flex-1 py-3 font-bold text-white bg-success hover:brightness-95 rounded-lg text-base shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {processing
               ? <><i className="fa-solid fa-spinner fa-spin"></i> Procesando…</>

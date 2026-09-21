@@ -41,7 +41,10 @@ const optionalText = (value, maxLength, fieldLabel) => {
   return text || null;
 };
 
+// Los módulos activos los define VALETEC (deploy/set-modules.sh y la consola): si la petición no los
+// trae, se conservan los que ya tiene la empresa.
 function normalizeModules(modules) {
+  if (modules === undefined) return undefined;
   if (!Array.isArray(modules)) {
     throw new SettingsValidationError('La lista de módulos es inválida.');
   }
@@ -56,6 +59,34 @@ function normalizeModules(modules) {
   const enabled = new Set([...modules, ...ALWAYS_ENABLED_MODULES]);
   // Se conserva el orden del menú.
   return AVAILABLE_MODULES.filter(m => enabled.has(m));
+}
+
+// Logo: data URL de imagen, hasta 300 KB. Vacío o null lo quita.
+const MAX_LOGO_BYTES = 300 * 1024;
+const LOGO_PATTERN = /^data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+
+function parseLogo(value) {
+  if (value === undefined) return undefined; // no se toca
+  if (value === null || value === '') return null;
+  const logo = String(value).trim();
+  if (!LOGO_PATTERN.test(logo)) {
+    throw new SettingsValidationError('El logo debe ser una imagen PNG, JPG, WEBP o SVG.');
+  }
+  if (Buffer.byteLength(logo, 'utf8') > MAX_LOGO_BYTES) {
+    throw new SettingsValidationError('El logo no puede superar 300 KB. Use una imagen más liviana.');
+  }
+  return logo;
+}
+
+// Colores de la empresa (principal y del menú): #RRGGBB. Vacío o null vuelve al estilo por defecto.
+function parseColor(value) {
+  if (value === undefined) return undefined; // no se toca
+  if (value === null || value === '') return null;
+  const color = String(value).trim().toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(color)) {
+    throw new SettingsValidationError('El color principal debe escribirse como #RRGGBB (por ejemplo #ea580c).');
+  }
+  return color;
 }
 
 export function validateSettingsInput(input) {
@@ -107,6 +138,9 @@ export function validateSettingsInput(input) {
     currencySymbol,
     taxRate,
     ticketFooter: optionalText(input.ticketFooter, 300, 'El pie del ticket'),
+    logo: parseLogo(input.logo),
+    primaryColor: parseColor(input.primaryColor),
+    navColor: parseColor(input.navColor),
     enabledModules,
     maxDiscountPercent,
   };
@@ -114,8 +148,11 @@ export function validateSettingsInput(input) {
 
 const AUDITED_FIELDS = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email', 'currencySymbol', 'taxRate',
-  'ticketFooter', 'enabledModules', 'maxDiscountPercent',
+  'ticketFooter', 'enabledModules', 'maxDiscountPercent', 'primaryColor', 'navColor',
 ];
+
+// El logo se audita por su cambio, no por su contenido (es una imagen larga).
+const LOGO_FIELD = 'logo';
 
 export async function updateSettings(db, input, user = null) {
   const data = validateSettingsInput(input);
@@ -123,11 +160,12 @@ export async function updateSettings(db, input, user = null) {
   const current = await getSettings(db);
 
   // Las sucursales que trabajan con pedidos cobran en Caja; las que van por etapas despachan en Despacho.
+  const enabledModules = data.enabledModules ?? current.enabledModules;
   const modes = (await db.branch.findMany({ where: { active: true }, select: { saleFlowMode: true } })).map(b => b.saleFlowMode);
-  if (!data.enabledModules.includes('caja') && modes.some(m => m !== 'DIRECT')) {
+  if (!enabledModules.includes('caja') && modes.some(m => m !== 'DIRECT')) {
     throw new SettingsValidationError('Hay sucursales que trabajan con pedidos: el módulo Arqueo de Caja debe seguir activo.');
   }
-  if (!data.enabledModules.includes('despacho') && modes.includes('STAGED')) {
+  if (!enabledModules.includes('despacho') && modes.includes('STAGED')) {
     throw new SettingsValidationError('Hay sucursales que trabajan por etapas: el módulo Despacho debe seguir activo.');
   }
 
@@ -135,10 +173,13 @@ export async function updateSettings(db, input, user = null) {
     const saved = await tx.businessSettings.upsert({
       where: { id: SETTINGS_ID },
       update: data,
-      create: { ...data, id: SETTINGS_ID },
+      create: { ...data, enabledModules, id: SETTINGS_ID },
     });
-    const changes = changedFields(current, saved, AUDITED_FIELDS);
-    if (changes) {
+    const changes = changedFields(current, saved, AUDITED_FIELDS) ?? {};
+    if (current[LOGO_FIELD] !== saved[LOGO_FIELD]) {
+      changes[LOGO_FIELD] = { before: current.logo ? 'imagen anterior' : null, after: saved.logo ? 'imagen nueva' : null };
+    }
+    if (Object.keys(changes).length > 0) {
       await recordAudit(tx, {
         action: 'SETTINGS_CHANGED',
         entity: 'Configuracion',

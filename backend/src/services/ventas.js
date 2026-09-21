@@ -1,10 +1,11 @@
 import { nextDocumentNumber, DocumentSeriesError } from './documentSeries.js';
-import { takeAvailableStock, StockError } from './stock.js';
+import { takeAvailableStock, reserveStock, StockError } from './stock.js';
 import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
-import { parseDeliveryRequest, scheduleDeliveryForSale, DeliveryError } from './deliveries.js';
+import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers, DeliveryError } from './deliveries.js';
 import { recordAudit } from './audit.js';
 import { requireOpenSession, CashError } from './cashRegisters.js';
+import { requireFeature, LicenseError } from './license.js';
 
 export class VentaError extends Error {
   constructor(message, status = 400, codigo = null, extra = null) {
@@ -140,6 +141,7 @@ export function parseDiscountRequest(raw) {
 // personal puede descontar hasta el % configurado por la empresa.
 export function applyDiscount(subtotal, request, user, maxPercent) {
   if (!request) return { discount: 0, total: subtotal };
+  requireFeature('discounts');
   const discount = roundMoney(request.type === 'PERCENT' ? subtotal * request.value / 100 : request.value);
   if (discount >= subtotal) throw new VentaError('El descuento no puede cubrir todo el total de la venta.');
   if (user?.role !== 'ADMINISTRADOR') {
@@ -291,10 +293,11 @@ async function ejecutarVenta(tx, datos) {
       // La mercadería sale de la sucursal de quien cobra en el POS.
       branchId: user.branchId,
       cotizacionId,
-      status: 'DISPATCHED',
+      // Con envío a domicilio la mercadería sigue en el local: queda por despachar hasta entregarla al repartidor.
+      status: delivery ? 'PAID' : 'DISPATCHED',
       paidAt: now,
-      dispatchedAt: now,
-      dispatchedById: vendedorId,
+      dispatchedAt: delivery ? null : now,
+      dispatchedById: delivery ? null : vendedorId,
     },
   });
 
@@ -302,10 +305,15 @@ async function ejecutarVenta(tx, datos) {
   await auditDiscount(tx, { saleId: venta.id, reference: numDoc, subtotal, discount, total, request: discountRequest, user });
 
   for (const linea of lineas) {
-    const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty, user.branchId);
     await tx.detalleVenta.create({
       data: { ventaId: venta.id, productoId: linea.id, quantity: linea.qty, unitPrice: linea.price, subtotal: linea.subtotal },
     });
+    // Por despachar: se reserva y el kardex registra la salida al despachar.
+    if (delivery) {
+      await reserveStock(tx, linea.id, linea.qty, user.branchId);
+      continue;
+    }
+    const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty, user.branchId);
     await writeKardexExit(tx, {
       productId: linea.id,
       qty: linea.qty,
@@ -356,6 +364,8 @@ export async function procesarVenta(prisma, payload, user) {
     maxDiscountPercent: settings.maxDiscountPercent,
   };
 
+  if (datos.delivery) assertBranchDelivers(user.branch);
+
   return prisma.$transaction(tx => ejecutarVenta(tx, datos));
 }
 
@@ -368,6 +378,9 @@ export function responderErrorVenta(res, error, contexto) {
   }
   if (error instanceof DeliveryError) {
     return res.status(error.status).json({ error: error.message });
+  }
+  if (error instanceof LicenseError) {
+    return res.status(error.status).json({ error: error.message, codigo: error.codigo });
   }
   if (error instanceof CashError) {
     return res.status(error.status).json({ error: error.message });

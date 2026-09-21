@@ -5,6 +5,7 @@
 
 import { Prisma } from '@prisma/client';
 import { roundMoney, roundQuantity } from '../utils/quantities.js';
+import { requireFeature } from './license.js';
 
 export class ReportError extends Error {}
 
@@ -46,6 +47,7 @@ const PAY_METHOD_LABELS = {
 };
 
 export async function salesReport(db, query) {
+  requireFeature('period_reports');
   const range = parseRange(query);
   // Sucursal opcional: sin ella, toda la empresa.
   let branchId = null;

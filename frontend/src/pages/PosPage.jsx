@@ -7,6 +7,7 @@ import { formatSoles } from '../utils/currency.js';
 import { findCustomerByInput } from '../utils/customers.js';
 import { buildSaleTicket, buildOrderTicket } from '../utils/tickets.js';
 import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../utils/quantities.js';
+import { useToast, useConfirm, SkeletonCards } from '../components/ui/index.js';
 
 // Stock que se puede vender: lo reservado por pedidos sin despachar ya tiene dueño.
 const availableStock = (product) => roundQuantity(product.stock - (product.reserved || 0));
@@ -36,15 +37,15 @@ function CartQtyInput({ item, onCommit }) {
       onChange={e => setDraft(e.target.value.replace(item.allowsFractions ? /[^0-9.,]/g : /\D/g, ''))}
       onBlur={commit}
       onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
-      className={`${item.allowsFractions ? 'w-16' : 'w-11'} h-7 text-center border border-slate-300 rounded-md text-sm font-bold outline-none focus:border-orange-500`}
+      className={`${item.allowsFractions ? 'w-16' : 'w-11'} h-7 text-center border border-line rounded-md text-sm font-bold outline-none focus:border-brand`}
       title={item.allowsFractions ? 'Admite decimales (hasta 3)' : undefined}
     />
   );
 }
 
-const TOAST_COLORS = { error: 'bg-red-600', exito: 'bg-emerald-600', info: 'bg-slate-800' };
-
 export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'DIRECT', deliveriesEnabled = false, maxDiscountPercent = 0 }) {
+  const aviso = useToast();
+  const confirmar = useConfirm();
   const isDirect = saleFlowMode === 'DIRECT';
 
   const [products, setProducts] = useState([]);
@@ -71,19 +72,15 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const [showQuotesModal, setShowQuotesModal] = useState(false);
   const [quotes, setQuotes] = useState([]);
 
-  const [toast, setToast] = useState(null);
-  const toastTimer = useRef(null);
   const searchRef = useRef(null);
   const customerPanelRef = useRef(null);
   const cartRef = useRef(null);
 
   const showToast = (message, type = 'info') => {
-    clearTimeout(toastTimer.current);
-    setToast({ message, type });
-    toastTimer.current = setTimeout(() => setToast(null), 3000);
+    if (type === 'error') aviso.error(message);
+    else if (type === 'exito') aviso.exito(message);
+    else aviso.info(message);
   };
-
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   useEffect(() => {
     loadInitialData();
@@ -220,9 +217,15 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
   const removeFromCart = (id) => setCart(prev => prev.filter(item => item.id !== id));
 
-  const clearCart = () => {
+  const clearCart = async () => {
     if (cart.length === 0) return;
-    if (window.confirm('¿Vaciar la venta actual?')) setCart([]);
+    const seguro = await confirmar({
+      title: 'Vaciar la venta',
+      description: 'Se quitarán todos los productos del carrito.',
+      confirmText: 'Vaciar',
+      tone: 'danger',
+    });
+    if (seguro) setCart([]);
   };
 
   const clearDiscount = () => {
@@ -441,8 +444,15 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     }
   };
 
-  const loadQuote = (quote) => {
-    if (cart.length > 0 && !window.confirm('Se reemplazarán los productos de la venta actual. ¿Continuar?')) return;
+  const loadQuote = async (quote) => {
+    if (cart.length > 0) {
+      const seguro = await confirmar({
+        title: 'Cargar la cotización',
+        description: 'Se reemplazarán los productos de la venta actual.',
+        confirmText: 'Cargar',
+      });
+      if (!seguro) return;
+    }
 
     setCart(quote.detalles.map(d => ({
       id: d.producto.id,
@@ -490,11 +500,11 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       <div className="flex-1 flex flex-col xl:flex-row gap-4 xl:overflow-hidden xl:min-h-0">
 
         {/* ===== CATÁLOGO ===== */}
-        <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 xl:h-full xl:overflow-hidden min-w-0">
-          <div className="p-3 sm:p-4 border-b border-gray-100 flex flex-col gap-3">
+        <div className="flex-1 flex flex-col bg-surface rounded-xl shadow-sm border border-line xl:h-full xl:overflow-hidden min-w-0">
+          <div className="p-3 sm:p-4 border-b border-line flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
-                <i className="fa-solid fa-barcode absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <i className="fa-solid fa-barcode absolute left-3 top-1/2 -translate-y-1/2 text-muted"></i>
                 <input
                   ref={searchRef}
                   type="text"
@@ -502,26 +512,26 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                   onChange={e => setSearch(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
                   placeholder="Escanee o busque por código o nombre…"
-                  className="w-full pl-10 pr-20 py-2.5 border border-gray-300 rounded-lg outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 text-sm transition"
+                  className="w-full pl-10 pr-20 py-2.5 border border-line rounded-lg outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 text-sm transition"
                 />
                 {search ? (
                   <button
                     onClick={() => { setSearch(''); searchRef.current?.focus(); }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 p-1"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-danger p-1"
                     title="Limpiar búsqueda"
                   >
                     <i className="fa-solid fa-xmark"></i>
                   </button>
                 ) : (
-                  <kbd className="hidden sm:block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 border border-slate-200 rounded px-1.5 py-0.5">F2</kbd>
+                  <kbd className="hidden sm:block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted border border-line rounded px-1.5 py-0.5">F2</kbd>
                 )}
               </div>
               <button
                 onClick={openQuotesModal}
                 disabled={processing}
-                className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold px-3 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 shrink-0 disabled:opacity-50"
+                className="bg-surface border border-line hover:bg-surface-muted text-ink-soft font-bold px-3 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 shrink-0 disabled:opacity-50"
               >
-                <i className="fa-solid fa-file-import text-orange-600"></i> Cargar cotización
+                <i className="fa-solid fa-file-import text-brand"></i> Cargar cotización
               </button>
             </div>
 
@@ -532,8 +542,8 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                   onClick={() => setSelectedCategory(cat)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 whitespace-nowrap border transition-colors ${
                     selectedCategory === cat
-                      ? 'bg-orange-600 text-white border-orange-600'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                      ? 'bg-brand text-brand-contrast border-brand'
+                      : 'bg-surface text-ink-soft border-line hover:bg-surface-muted'
                   }`}
                 >
                   {cat}
@@ -542,25 +552,23 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             </div>
           </div>
 
-          <div className="flex-1 p-3 sm:p-4 xl:overflow-y-auto bg-slate-50/60">
-            <p className="text-xs text-slate-500 mb-3">
+          <div className="flex-1 p-3 sm:p-4 xl:overflow-y-auto bg-surface-muted/60">
+            <p className="text-xs text-muted mb-3">
               {filteredProducts.length} producto{filteredProducts.length === 1 ? '' : 's'}
-              {search && <> para “<strong className="text-slate-700">{search}</strong>”</>}
-              {selectedCategory !== 'Todas' && <> en <strong className="text-slate-700">{selectedCategory}</strong></>}
+              {search && <> para “<strong className="text-ink-soft">{search}</strong>”</>}
+              {selectedCategory !== 'Todas' && <> en <strong className="text-ink-soft">{selectedCategory}</strong></>}
             </p>
 
             {loading && products.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 text-sm">
-                <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando productos…
-              </div>
+              <SkeletonCards count={8} />
             ) : filteredProducts.length === 0 ? (
-              <div className="text-center py-16 text-slate-400">
-                <i className="fa-solid fa-magnifying-glass text-3xl mb-3 text-slate-300"></i>
+              <div className="text-center py-16 text-muted">
+                <i className="fa-solid fa-magnifying-glass text-3xl mb-3 text-muted"></i>
                 <p className="text-sm font-semibold">No hay productos que coincidan</p>
                 {(search || selectedCategory !== 'Todas') && (
                   <button
                     onClick={() => { setSearch(''); setSelectedCategory('Todas'); }}
-                    className="mt-3 text-xs font-bold text-orange-600 hover:underline"
+                    className="mt-3 text-xs font-bold text-brand hover:underline"
                   >
                     Quitar filtros
                   </button>
@@ -579,27 +587,27 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                       key={product.id}
                       onClick={() => addToCart(product)}
                       disabled={soldOut}
-                      className={`relative text-left p-3 rounded-xl border bg-white transition-all flex flex-col gap-1.5 min-h-[118px] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
-                        inCart > 0 ? 'border-orange-400 ring-1 ring-orange-200' : 'border-gray-200 hover:border-orange-400 hover:shadow-md'
+                      className={`relative text-left p-3 rounded-xl border bg-surface transition-all flex flex-col gap-1.5 min-h-[118px] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
+                        inCart > 0 ? 'border-brand ring-1 ring-brand/30' : 'border-line hover:border-brand hover:shadow-md'
                       }`}
                     >
                       {inCart > 0 && (
-                        <span className="absolute top-2 right-2 bg-orange-600 text-white text-[11px] font-black rounded-full min-w-[22px] h-[22px] px-1.5 flex items-center justify-center shadow">
+                        <span className="absolute top-2 right-2 bg-brand text-brand-contrast text-[11px] font-black rounded-full min-w-[22px] h-[22px] px-1.5 flex items-center justify-center shadow">
                           {inCart}
                         </span>
                       )}
-                      <span className="text-[10px] font-mono text-slate-400 truncate pr-7">{product.code}</span>
-                      <h4 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2 flex-1">{product.name}</h4>
+                      <span className="text-[10px] font-mono text-muted truncate pr-7">{product.code}</span>
+                      <h4 className="font-semibold text-ink text-sm leading-snug line-clamp-2 flex-1">{product.name}</h4>
                       <div className="flex items-end justify-between gap-2">
-                        <span className="text-base font-black text-slate-900">
+                        <span className="text-base font-black text-ink">
                           {formatSoles(priceFor(product))}
                           {isWholesale && product.wholesalePrice != null && (
-                            <span className="block text-[9px] font-bold text-indigo-600 uppercase">Mayorista</span>
+                            <span className="block text-[9px] font-bold text-info uppercase">Mayorista</span>
                           )}
                         </span>
                         <span
                           className={`text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${
-                            soldOut ? 'bg-slate-200 text-slate-500' : lowStock ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-700'
+                            soldOut ? 'bg-surface-muted text-muted' : lowStock ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success'
                           }`}
                           title={product.reserved > 0 ? `${product.reserved} reservado(s) para pedidos` : undefined}
                         >
@@ -617,45 +625,45 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         {/* ===== VENTA ACTUAL ===== */}
         <div
           ref={cartRef}
-          className="w-full xl:w-[420px] flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 xl:h-full xl:overflow-hidden shrink-0"
+          className="w-full xl:w-[420px] flex flex-col bg-surface rounded-xl shadow-sm border border-line xl:h-full xl:overflow-hidden shrink-0"
         >
-          <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-              <i className="fa-solid fa-cart-shopping text-orange-600"></i> {isDirect ? 'Venta actual' : 'Pedido actual'}
+          <div className="px-4 py-3 border-b border-line flex justify-between items-center">
+            <h3 className="font-bold text-ink flex items-center gap-2">
+              <i className="fa-solid fa-cart-shopping text-brand"></i> {isDirect ? 'Venta actual' : 'Pedido actual'}
               {cart.length > 0 && (
-                <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-0.5 rounded-full">{cartUnits} prod.</span>
+                <span className="bg-surface-muted text-ink-soft text-xs font-bold px-2 py-0.5 rounded-full">{cartUnits} prod.</span>
               )}
             </h3>
             {cart.length > 0 && (
-              <button onClick={clearCart} className="text-xs font-semibold text-slate-400 hover:text-red-600 transition-colors">
+              <button onClick={clearCart} className="text-xs font-semibold text-muted hover:text-danger transition-colors">
                 <i className="fa-solid fa-trash-can mr-1"></i> Vaciar
               </button>
             )}
           </div>
 
           {cajaCerrada && (
-            <div className="px-4 py-2.5 bg-red-50 border-b border-red-200 text-xs text-red-700 flex items-center gap-2">
+            <div className="px-4 py-2.5 bg-danger-soft border-b border-danger/30 text-xs text-danger flex items-center gap-2">
               <i className="fa-solid fa-lock"></i>
               <span><strong>Sin turno de caja.</strong> Abra una caja o únase a un turno en "Arqueo de Caja" para poder cobrar.</span>
             </div>
           )}
 
           {isWholesale && !loadedQuote && (
-            <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-200 text-xs text-indigo-800">
+            <div className="px-4 py-2 bg-info-soft border-b border-info/30 text-xs text-info">
               <i className="fa-solid fa-tags mr-1.5"></i>
               <strong>Precios mayoristas</strong> de {selectedCustomer.name}.
             </div>
           )}
 
           {loadedQuote && (
-            <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-800 flex justify-between items-center gap-2">
+            <div className="px-4 py-2 bg-warning-soft border-b border-warning/30 text-xs text-warning flex justify-between items-center gap-2">
               <span>
                 <i className="fa-solid fa-file-invoice mr-1.5"></i>
                 Desde la cotización <strong>{loadedQuote.numDoc}</strong>
               </span>
               <button
                 onClick={() => setLoadedQuote(null)}
-                className="text-amber-700 hover:text-red-600 font-bold shrink-0 underline"
+                className="text-warning hover:text-danger font-bold shrink-0 underline"
                 title="Se registrará como venta normal y la cotización seguirá pendiente"
               >
                 Desvincular
@@ -665,26 +673,26 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
           <div className="flex-1 xl:overflow-y-auto px-4 min-h-[140px]">
             {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 py-10">
-                <i className="fa-solid fa-basket-shopping text-4xl mb-3 text-slate-200"></i>
-                <p className="text-sm font-semibold text-slate-500">Aún no hay productos</p>
+              <div className="h-full flex flex-col items-center justify-center text-center text-muted py-10">
+                <i className="fa-solid fa-basket-shopping text-4xl mb-3 text-nav-ink"></i>
+                <p className="text-sm font-semibold text-muted">Aún no hay productos</p>
                 <p className="text-xs mt-1">Toque un producto del catálogo o escanee su código.</p>
               </div>
             ) : (
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-line">
                 {cart.map(item => (
                   <li key={item.id} className="py-3 flex gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 leading-snug line-clamp-2">{item.name}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{formatSoles(item.price)} {perUnitLabel(item.unit)}</p>
+                      <p className="text-sm font-semibold text-ink leading-snug line-clamp-2">{item.name}</p>
+                      <p className="text-xs text-muted mt-0.5">{formatSoles(item.price)} {perUnitLabel(item.unit)}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1.5 shrink-0">
-                      <span className="text-sm font-black text-slate-900 tabular-nums">{formatSoles(item.price * item.qty)}</span>
+                      <span className="text-sm font-black text-ink tabular-nums">{formatSoles(item.price * item.qty)}</span>
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => setCartQty(item.id, roundQuantity(item.qty - 1))}
                           disabled={item.qty <= 1}
-                          className="w-7 h-7 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="w-7 h-7 rounded-md bg-surface-muted hover:bg-surface-muted text-ink-soft font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           title="Quitar uno"
                         >
                           −
@@ -692,14 +700,14 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                         <CartQtyInput item={item} onCommit={qty => setCartQty(item.id, qty)} />
                         <button
                           onClick={() => setCartQty(item.id, roundQuantity(item.qty + 1))}
-                          className="w-7 h-7 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                          className="w-7 h-7 rounded-md bg-surface-muted hover:bg-surface-muted text-ink-soft font-bold"
                           title="Agregar uno"
                         >
                           +
                         </button>
                         <button
                           onClick={() => removeFromCart(item.id)}
-                          className="w-7 h-7 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 ml-1"
+                          className="w-7 h-7 rounded-md text-muted hover:text-danger hover:bg-danger-soft ml-1"
                           title="Eliminar producto"
                         >
                           <i className="fa-solid fa-trash-can text-xs"></i>
@@ -712,9 +720,9 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             )}
           </div>
 
-          <div className="border-t border-gray-200 bg-slate-50 p-4 flex flex-col gap-3 shrink-0">
+          <div className="border-t border-line bg-surface-muted p-4 flex flex-col gap-3 shrink-0">
             <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1 block">
+              <label className="text-[11px] font-bold text-muted uppercase tracking-wide mb-1 block">
                 Cliente {!isDirect && <span className="normal-case font-normal">(opcional, también se puede elegir en caja)</span>}
               </label>
               <CustomerSelector
@@ -731,7 +739,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
               <button
                 type="button"
                 onClick={() => setShowDiscount(true)}
-                className="self-start text-xs font-semibold text-orange-700 hover:text-orange-800 hover:underline"
+                className="self-start text-xs font-semibold text-brand-text hover:text-brand-text hover:underline"
               >
                 <i className="fa-solid fa-percent mr-1.5"></i> Aplicar descuento
               </button>
@@ -740,14 +748,14 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             {canDiscount && cart.length > 0 && showDiscount && (
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Descuento</span>
-                  <div className="flex rounded-md border border-slate-300 overflow-hidden text-xs font-bold">
+                  <span className="text-[11px] font-bold text-muted uppercase tracking-wide">Descuento</span>
+                  <div className="flex rounded-md border border-line overflow-hidden text-xs font-bold">
                     {[['PERCENT', '%'], ['AMOUNT', 'S/']].map(([type, label]) => (
                       <button
                         key={type}
                         type="button"
                         onClick={() => setDiscountType(type)}
-                        className={`px-2.5 py-1 ${discountType === type ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
+                        className={`px-2.5 py-1 ${discountType === type ? 'bg-panel text-white' : 'bg-surface text-ink-soft hover:bg-surface-muted'}`}
                       >
                         {label}
                       </button>
@@ -761,49 +769,49 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                     value={discountValue}
                     onChange={e => setDiscountValue(e.target.value)}
                     placeholder="0"
-                    className={`w-20 px-2 py-1 border rounded-md text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-orange-500 ${discountError ? 'border-red-400' : 'border-slate-300'}`}
+                    className={`w-20 px-2 py-1 border rounded-md text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-brand ${discountError ? 'border-danger' : 'border-line'}`}
                   />
-                  <button type="button" onClick={clearDiscount} title="Quitar descuento" className="ml-auto text-slate-400 hover:text-red-600 px-1">
+                  <button type="button" onClick={clearDiscount} title="Quitar descuento" className="ml-auto text-muted hover:text-danger px-1">
                     <i className="fa-solid fa-xmark"></i>
                   </button>
                 </div>
                 {discountError
-                  ? <p className="text-xs text-red-600 mt-1">{discountError}</p>
-                  : !isAdmin && <p className="text-[11px] text-slate-500 mt-1">Hasta {maxDiscountPercent} % del total.</p>}
+                  ? <p className="text-xs text-danger mt-1">{discountError}</p>
+                  : !isAdmin && <p className="text-[11px] text-muted mt-1">Hasta {maxDiscountPercent} % del total.</p>}
               </div>
             )}
 
             {appliedDiscount > 0 && (
-              <div className="text-sm text-slate-500 flex flex-col gap-0.5">
+              <div className="text-sm text-muted flex flex-col gap-0.5">
                 <div className="flex justify-between"><span>Subtotal</span><span className="tabular-nums">{formatSoles(cartSubtotal)}</span></div>
-                <div className="flex justify-between text-emerald-700 font-semibold">
+                <div className="flex justify-between text-success font-semibold">
                   <span>Descuento</span><span className="tabular-nums">− {formatSoles(appliedDiscount)}</span>
                 </div>
               </div>
             )}
 
             <div className="flex justify-between items-end">
-              <span className="text-sm text-slate-500">Total</span>
-              <span className="text-3xl font-black text-slate-900 tabular-nums">{formatSoles(cartTotal)}</span>
+              <span className="text-sm text-muted">Total</span>
+              <span className="text-3xl font-black text-ink tabular-nums">{formatSoles(cartTotal)}</span>
             </div>
 
             <button
               onClick={primaryAction}
               disabled={processing || cart.length === 0 || cajaCerrada || Boolean(discountError)}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3.5 rounded-lg shadow-md transition-colors text-base disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-brand hover:bg-brand-strong text-brand-contrast font-bold py-3.5 rounded-lg shadow-md transition-colors text-base disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {processing && !isDirect
                 ? <><i className="fa-solid fa-spinner fa-spin"></i> Enviando…</>
                 : <><i className={`fa-solid ${isDirect ? 'fa-cash-register' : 'fa-paper-plane'}`}></i> {isDirect ? 'Cobrar' : 'Enviar a caja'}</>}
-              <kbd className="hidden sm:inline text-[10px] font-bold bg-orange-700/60 rounded px-1.5 py-0.5">F9</kbd>
+              <kbd className="hidden sm:inline text-[10px] font-bold bg-brand-strong/60 rounded px-1.5 py-0.5">F9</kbd>
             </button>
 
             <button
               onClick={handleCreateQuote}
               disabled={processing || cart.length === 0}
-              className="w-full bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-surface border border-line hover:bg-surface-muted text-ink-soft font-semibold py-2 rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <i className="fa-solid fa-file-pdf mr-1.5 text-slate-500"></i> Guardar como cotización
+              <i className="fa-solid fa-file-pdf mr-1.5 text-muted"></i> Guardar como cotización
             </button>
           </div>
         </div>
@@ -811,15 +819,15 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
       {/* Barra inferior en móvil/tablet para llegar al carrito */}
       {cart.length > 0 && !showCheckout && (
-        <div className="xl:hidden fixed bottom-0 inset-x-0 lg:left-64 z-20 p-3 bg-white/95 backdrop-blur border-t border-gray-200 shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+        <div className="xl:hidden fixed bottom-0 inset-x-0 lg:left-64 z-20 p-3 bg-surface/95 backdrop-blur border-t border-line shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
           <button
             onClick={() => cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            className="w-full bg-slate-900 text-white rounded-lg py-3 px-4 flex justify-between items-center font-bold"
+            className="w-full bg-panel text-white rounded-lg py-3 px-4 flex justify-between items-center font-bold"
           >
             <span className="flex items-center gap-2 text-sm">
-              <i className="fa-solid fa-cart-shopping text-orange-400"></i> Ver {isDirect ? 'venta' : 'pedido'} ({cartUnits})
+              <i className="fa-solid fa-cart-shopping text-brand"></i> Ver {isDirect ? 'venta' : 'pedido'} ({cartUnits})
             </span>
-            <span className="text-lg text-orange-400 tabular-nums">{formatSoles(cartTotal)}</span>
+            <span className="text-lg text-brand tabular-nums">{formatSoles(cartTotal)}</span>
           </button>
         </div>
       )}
@@ -841,20 +849,20 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
       {/* ===== MODAL: COTIZACIONES PENDIENTES ===== */}
       {showQuotesModal && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="px-5 py-4 bg-slate-900 text-white flex justify-between items-center">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="px-5 py-4 bg-panel text-white flex justify-between items-center">
               <h3 className="font-bold text-lg flex items-center gap-2">
-                <i className="fa-solid fa-file-import text-orange-400"></i> Cargar cotización
+                <i className="fa-solid fa-file-import text-brand"></i> Cargar cotización
               </h3>
-              <button onClick={() => setShowQuotesModal(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setShowQuotesModal(false)} className="text-muted hover:text-white">
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
             <div className="p-4 flex-1 overflow-y-auto">
               {quotes.length === 0 ? (
-                <div className="text-center py-12 text-slate-400">
-                  <i className="fa-solid fa-file-circle-check text-4xl mb-3 text-slate-300"></i>
+                <div className="text-center py-12 text-muted">
+                  <i className="fa-solid fa-file-circle-check text-4xl mb-3 text-muted"></i>
                   <p className="text-sm font-semibold">No hay cotizaciones pendientes</p>
                 </div>
               ) : (
@@ -862,21 +870,21 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                   {quotes.map(q => (
                     <li
                       key={q.id}
-                      className="border border-slate-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-3 hover:border-orange-300 transition-colors"
+                      className="border border-line rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-3 hover:border-brand/40 transition-colors"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-sm text-slate-800">{q.numDoc}</span>
-                          <span className="text-xs text-slate-400">{q.date}</span>
+                          <span className="font-mono font-bold text-sm text-ink">{q.numDoc}</span>
+                          <span className="text-xs text-muted">{q.date}</span>
                         </div>
-                        <p className="text-sm text-slate-600 truncate">{q.customer}</p>
-                        <p className="text-xs text-slate-400">{q.detalles.length} producto{q.detalles.length === 1 ? '' : 's'}</p>
+                        <p className="text-sm text-ink-soft truncate">{q.customer}</p>
+                        <p className="text-xs text-muted">{q.detalles.length} producto{q.detalles.length === 1 ? '' : 's'}</p>
                       </div>
                       <div className="flex items-center justify-between sm:justify-end gap-3">
-                        <span className="font-black text-slate-900 tabular-nums">{formatSoles(q.total)}</span>
+                        <span className="font-black text-ink tabular-nums">{formatSoles(q.total)}</span>
                         <button
                           onClick={() => loadQuote(q)}
-                          className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded-lg text-sm shadow-sm"
+                          className="bg-brand hover:bg-brand-strong text-brand-contrast font-bold px-4 py-2 rounded-lg text-sm shadow-sm"
                         >
                           Cargar
                         </button>
@@ -890,14 +898,6 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         </div>
       )}
 
-      {toast && (
-        <div className="fixed z-[60] bottom-24 xl:bottom-6 left-1/2 -translate-x-1/2 xl:left-auto xl:right-6 xl:translate-x-0 max-w-[90vw]">
-          <div className={`${TOAST_COLORS[toast.type] || TOAST_COLORS.info} text-white text-sm font-semibold px-4 py-3 rounded-lg shadow-lg flex items-center gap-2`}>
-            <i className={`fa-solid ${toast.type === 'error' ? 'fa-circle-exclamation' : toast.type === 'exito' ? 'fa-circle-check' : 'fa-circle-info'}`}></i>
-            {toast.message}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

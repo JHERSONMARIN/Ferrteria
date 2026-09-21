@@ -99,31 +99,31 @@ export default function TransfersPage({ currentUser }) {
     }
   };
 
-  const inputClass = 'w-full border border-gray-300 px-3 py-2 rounded-lg text-sm bg-white focus:outline-none focus:border-orange-500';
+  const inputClass = 'w-full border border-line px-3 py-2 rounded-lg text-sm bg-surface focus:outline-none focus:border-brand';
 
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-5 items-start">
-        <section className="xl:col-span-3 bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-4">
+        <section className="xl:col-span-3 bg-surface rounded-xl shadow-sm border border-line p-5 flex flex-col gap-4">
           <div>
-            <h3 className="font-bold text-slate-800 text-lg">Nueva transferencia</h3>
-            <p className="text-xs text-slate-500">
+            <h3 className="font-bold text-ink text-lg">Nueva transferencia</h3>
+            <p className="text-xs text-muted">
               El stock sale del disponible del origen y entra al destino en un solo paso. Lo reservado para pedidos no se puede transferir.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="text-xs font-bold text-slate-600">
+            <label className="text-xs font-bold text-ink-soft">
               Desde
               {isAdmin ? (
                 <select value={fromBranchId ?? ''} onChange={e => changeOrigin(e.target.value)} className={`${inputClass} mt-1`}>
                   {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               ) : (
-                <p className="mt-1 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-700">{originName}</p>
+                <p className="mt-1 px-3 py-2 rounded-lg bg-surface-muted border border-line text-sm font-semibold text-ink-soft">{originName}</p>
               )}
             </label>
-            <label className="text-xs font-bold text-slate-600">
+            <label className="text-xs font-bold text-ink-soft">
               Hacia
               <select value={toBranchId} onChange={e => setToBranchId(e.target.value)} className={`${inputClass} mt-1`}>
                 <option value="">Elija la sucursal de destino</option>
@@ -140,18 +140,18 @@ export default function TransfersPage({ currentUser }) {
               className={inputClass}
             />
             {results.length > 0 && (
-              <ul className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-auto">
+              <ul className="absolute z-10 mt-1 w-full bg-surface border border-line rounded-lg shadow-lg max-h-72 overflow-auto">
                 {results.map(p => (
                   <li key={p.id}>
                     <button
                       type="button"
                       onClick={() => addLine(p)}
-                      className="w-full text-left px-3 py-2 hover:bg-orange-50 flex justify-between gap-3 text-sm"
+                      className="w-full text-left px-3 py-2 hover:bg-brand-soft flex justify-between gap-3 text-sm"
                     >
-                      <span className="text-slate-700 min-w-0 truncate">
-                        <span className="font-mono text-[11px] text-slate-400 mr-2">{p.code}</span>{p.name}
+                      <span className="text-ink-soft min-w-0 truncate">
+                        <span className="font-mono text-[11px] text-muted mr-2">{p.code}</span>{p.name}
                       </span>
-                      <span className="text-xs text-slate-500 shrink-0">{formatQuantity(availableIn(p, fromBranchId))} {p.unit} disp.</span>
+                      <span className="text-xs text-muted shrink-0">{formatQuantity(availableIn(p, fromBranchId))} {p.unit} disp.</span>
                     </button>
                   </li>
                 ))}
@@ -160,22 +160,22 @@ export default function TransfersPage({ currentUser }) {
           </div>
 
           {lines.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-6 border border-dashed border-slate-200 rounded-lg">
+            <p className="text-sm text-muted text-center py-6 border border-dashed border-line rounded-lg">
               Busque y agregue los productos a transferir.
             </p>
           ) : (
-            <ul className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
+            <ul className="divide-y divide-line border border-line rounded-lg">
               {lines.map(line => {
                 const product = productById.get(line.id);
                 const error = line.qty !== '' ? lineError(line) : '';
                 return (
                   <li key={line.id} className="px-3 py-2 flex flex-wrap items-center gap-2">
                     <div className="flex-1 min-w-[10rem]">
-                      <p className="text-sm font-semibold text-slate-800">{product.name}</p>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-sm font-semibold text-ink">{product.name}</p>
+                      <p className="text-[11px] text-muted">
                         {product.code} · disponible en {originName}: {formatQuantity(availableIn(product, fromBranchId))} {product.unit}
                       </p>
-                      {error && <p className="text-[11px] text-red-600">{error}</p>}
+                      {error && <p className="text-[11px] text-danger">{error}</p>}
                     </div>
                     <input
                       type="number"
@@ -185,14 +185,14 @@ export default function TransfersPage({ currentUser }) {
                       onChange={e => setLines(prev => prev.map(l => (l.id === line.id ? { ...l, qty: e.target.value } : l)))}
                       aria-label={`Cantidad de ${product.name}`}
                       placeholder="0"
-                      className={`w-24 border px-2 py-1.5 rounded-md text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-orange-500 ${error ? 'border-red-400' : 'border-slate-300'}`}
+                      className={`w-24 border px-2 py-1.5 rounded-md text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-brand ${error ? 'border-danger' : 'border-line'}`}
                     />
-                    <span className="text-xs text-slate-500 w-14">{product.unit}</span>
+                    <span className="text-xs text-muted w-14">{product.unit}</span>
                     <button
                       type="button"
                       onClick={() => setLines(prev => prev.filter(l => l.id !== line.id))}
                       title="Quitar"
-                      className="text-slate-400 hover:text-red-600 px-1"
+                      className="text-muted hover:text-danger px-1"
                     >
                       <i className="fa-solid fa-trash"></i>
                     </button>
@@ -204,39 +204,39 @@ export default function TransfersPage({ currentUser }) {
 
           <input value={notes} onChange={e => setNotes(e.target.value)} maxLength={200} placeholder="Nota (opcional): motivo, guía de remisión…" className={inputClass} />
 
-          {message && <p className={`text-sm ${message.type === 'error' ? 'text-red-600' : 'text-emerald-700'}`}>{message.text}</p>}
+          {message && <p className={`text-sm ${message.type === 'error' ? 'text-danger' : 'text-success'}`}>{message.text}</p>}
 
           <button
             type="button"
             onClick={submit}
             disabled={!canSubmit}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-brand hover:bg-brand-strong text-brand-contrast font-bold py-3 rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>Transfiriendo…</> : <><i className="fa-solid fa-right-left mr-2"></i>Transferir</>}
           </button>
         </section>
 
-        <section className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 bg-slate-50">
-            <h3 className="font-bold text-slate-800 text-sm">Últimas transferencias</h3>
+        <section className="xl:col-span-2 bg-surface rounded-xl shadow-sm border border-line overflow-hidden">
+          <div className="p-4 border-b border-line bg-surface-muted">
+            <h3 className="font-bold text-ink text-sm">Últimas transferencias</h3>
           </div>
           {history.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-slate-400">Todavía no hay transferencias.</p>
+            <p className="px-4 py-8 text-center text-sm text-muted">Todavía no hay transferencias.</p>
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-line">
               {history.map(t => (
                 <li key={t.id} className="px-4 py-3">
                   <div className="flex justify-between gap-2 text-sm">
-                    <span className="font-mono font-bold text-slate-700">{t.number}</span>
-                    <span className="text-xs text-slate-500">{formatDateTime(t.createdAt)}</span>
+                    <span className="font-mono font-bold text-ink-soft">{t.number}</span>
+                    <span className="text-xs text-muted">{formatDateTime(t.createdAt)}</span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-0.5">
-                    {t.from.name} <i className="fa-solid fa-arrow-right text-[10px] mx-1 text-orange-500"></i> {t.to.name} · {t.createdBy}
+                  <p className="text-xs text-ink-soft mt-0.5">
+                    {t.from.name} <i className="fa-solid fa-arrow-right text-[10px] mx-1 text-brand"></i> {t.to.name} · {t.createdBy}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-muted mt-1">
                     {t.items.map(i => `${formatQuantity(i.qty)} ${i.unit} ${i.name}`).join(' · ')}
                   </p>
-                  {t.notes && <p className="text-[11px] text-slate-400 italic mt-0.5">{t.notes}</p>}
+                  {t.notes && <p className="text-[11px] text-muted italic mt-0.5">{t.notes}</p>}
                 </li>
               ))}
             </ul>

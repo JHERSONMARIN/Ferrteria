@@ -5,6 +5,7 @@ import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
 import { formatSoles } from '../utils/currency.js';
 import { customerOptionLabel } from '../utils/customers.js';
 import { buildSaleTicket } from '../utils/tickets.js';
+import { useConfirm } from '../components/ui/index.js';
 
 const REFRESH_MS = 5000;
 
@@ -17,6 +18,7 @@ function minutesAgo(date) {
 
 // Cola de pedidos que los vendedores enviaron a caja.
 export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlowMode, deliveriesEnabled = false }) {
+  const confirmar = useConfirm();
   const [orders, setOrders] = useState([]);
   const [clients, setClients] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -130,7 +132,14 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
   };
 
   const cancelSelected = async () => {
-    if (!selected || !window.confirm(`¿Anular el pedido N° ${selected.id}? Sus productos vuelven a estar disponibles.`)) return;
+    if (!selected) return;
+    const seguro = await confirmar({
+      title: `Anular el pedido N° ${selected.id}`,
+      description: 'Sus productos vuelven a estar disponibles para vender.',
+      confirmText: 'Anular pedido',
+      tone: 'danger',
+    });
+    if (!seguro) return;
     try {
       setCancelling(true);
       await api.post(`/pedidos/${selected.id}/anular`, { reason: `Anulado en caja por ${currentUser?.name}` });
@@ -152,7 +161,7 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
   return (
     <div className="tab-content active h-full p-3 sm:p-4 overflow-y-auto lg:overflow-hidden flex flex-col gap-3">
       {cajaAbierta === false && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+        <div className="bg-danger-soft border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 flex items-center gap-2">
           <i className="fa-solid fa-lock"></i>
           <span><strong>No está en un turno de caja.</strong> Abra una caja o únase a un turno en "Arqueo de Caja" para cobrar pedidos.</span>
         </div>
@@ -160,16 +169,16 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
 
       <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:min-h-0">
         {/* ===== COLA ===== */}
-        <div className="lg:w-[400px] flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 lg:overflow-hidden shrink-0">
-          <div className="p-4 border-b border-gray-100 flex flex-col gap-3">
+        <div className="lg:w-[400px] flex flex-col bg-surface rounded-xl shadow-sm border border-line lg:overflow-hidden shrink-0">
+          <div className="p-4 border-b border-line flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                <i className="fa-solid fa-hand-holding-dollar text-orange-600"></i> Pedidos por cobrar
+              <h3 className="font-bold text-ink flex items-center gap-2">
+                <i className="fa-solid fa-hand-holding-dollar text-brand"></i> Pedidos por cobrar
               </h3>
-              <span className="bg-orange-100 text-orange-700 text-xs font-bold px-2.5 py-1 rounded-full">{orders.length}</span>
+              <span className="bg-brand-soft text-brand-text text-xs font-bold px-2.5 py-1 rounded-full">{orders.length}</span>
             </div>
             <div className="relative">
-              <i className="fa-solid fa-hashtag absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+              <i className="fa-solid fa-hashtag absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm"></i>
               <input
                 ref={searchRef}
                 autoFocus
@@ -177,17 +186,17 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
                 onChange={e => setSearch(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder="N° de pedido, cliente o vendedor"
-                className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg outline-none focus:border-orange-500 text-sm"
+                className="w-full pl-9 pr-3 py-2.5 border border-line rounded-lg outline-none focus:border-brand text-sm"
               />
             </div>
           </div>
 
           <div className="flex-1 lg:overflow-y-auto p-3 flex flex-col gap-2 min-h-[160px]">
             {loadError ? (
-              <p className="text-sm text-red-600 text-center py-8">{loadError}</p>
+              <p className="text-sm text-danger text-center py-8">{loadError}</p>
             ) : filtered.length === 0 ? (
-              <div className="text-center text-slate-400 py-12">
-                <i className="fa-solid fa-mug-hot text-3xl mb-2 text-slate-300"></i>
+              <div className="text-center text-muted py-12">
+                <i className="fa-solid fa-mug-hot text-3xl mb-2 text-muted"></i>
                 <p className="text-sm font-semibold">{orders.length === 0 ? 'No hay pedidos esperando' : 'Ningún pedido coincide'}</p>
               </div>
             ) : filtered.map(order => (
@@ -195,68 +204,68 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
                 key={order.id}
                 onClick={() => selectOrder(order)}
                 className={`text-left rounded-lg border p-3 transition-colors ${
-                  order.id === selectedId ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200 hover:border-orange-300'
+                  order.id === selectedId ? 'border-brand bg-brand-soft ring-1 ring-brand' : 'border-line hover:border-brand/40'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-lg font-black text-slate-900">N° {order.id}</span>
-                  <span className="font-black text-slate-900 tabular-nums">{formatSoles(order.total)}</span>
+                  <span className="text-lg font-black text-ink">N° {order.id}</span>
+                  <span className="font-black text-ink tabular-nums">{formatSoles(order.total)}</span>
                 </div>
-                <div className="flex items-center justify-between text-xs text-slate-500 mt-0.5">
+                <div className="flex items-center justify-between text-xs text-muted mt-0.5">
                   <span className="truncate">{order.customer} · {order.items.length} prod.</span>
                   <span className="shrink-0">{minutesAgo(order.createdAt)}</span>
                 </div>
-                <p className="text-[11px] text-slate-400">Vendedor: {order.seller}</p>
+                <p className="text-[11px] text-muted">Vendedor: {order.seller}</p>
               </button>
             ))}
           </div>
         </div>
 
         {/* ===== DETALLE ===== */}
-        <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 lg:overflow-hidden min-h-[300px]">
+        <div className="flex-1 flex flex-col bg-surface rounded-xl shadow-sm border border-line lg:overflow-hidden min-h-[300px]">
           {notice && (
-            <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 text-sm text-amber-800 flex justify-between gap-2">
+            <div className="px-4 py-2.5 bg-warning-soft border-b border-warning/30 text-sm text-warning flex justify-between gap-2">
               <span><i className="fa-solid fa-circle-info mr-1.5"></i>{notice}</span>
-              <button onClick={() => setNotice('')} className="text-amber-600 hover:text-amber-800"><i className="fa-solid fa-xmark"></i></button>
+              <button onClick={() => setNotice('')} className="text-warning hover:text-warning"><i className="fa-solid fa-xmark"></i></button>
             </div>
           )}
 
           {!selected ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-400 p-8">
-              <i className="fa-solid fa-receipt text-4xl mb-3 text-slate-200"></i>
-              <p className="text-sm font-semibold text-slate-500">Elija un pedido de la cola</p>
+            <div className="flex-1 flex flex-col items-center justify-center text-center text-muted p-8">
+              <i className="fa-solid fa-receipt text-4xl mb-3 text-nav-ink"></i>
+              <p className="text-sm font-semibold text-muted">Elija un pedido de la cola</p>
               <p className="text-xs mt-1">o escriba el número que trae el cliente y presione Enter.</p>
             </div>
           ) : (
             <>
-              <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-start justify-between gap-3">
+              <div className="px-5 py-4 border-b border-line flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs text-slate-500">Pedido</p>
-                  <p className="text-3xl font-black text-slate-900">N° {selected.id}</p>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-muted">Pedido</p>
+                  <p className="text-3xl font-black text-ink">N° {selected.id}</p>
+                  <p className="text-xs text-muted mt-1">
                     {selected.customer} · Vendedor: {selected.seller} · {minutesAgo(selected.createdAt)}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-500">Total</p>
-                  <p className="text-3xl font-black text-slate-900 tabular-nums">{formatSoles(selected.total)}</p>
+                  <p className="text-xs text-muted">Total</p>
+                  <p className="text-3xl font-black text-ink tabular-nums">{formatSoles(selected.total)}</p>
                 </div>
               </div>
 
               <div className="flex-1 lg:overflow-y-auto px-5">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
+                    <tr className="text-left text-xs text-muted border-b border-line">
                       <th className="py-2">Producto</th>
                       <th className="py-2 text-right">Cant.</th>
                       <th className="py-2 text-right">P. unit.</th>
                       <th className="py-2 text-right">Subtotal</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-line">
                     {selected.items.map(item => (
                       <tr key={item.id}>
-                        <td className="py-2.5 text-slate-800">{item.name}<span className="block text-[10px] font-mono text-slate-400">{item.code}</span></td>
+                        <td className="py-2.5 text-ink">{item.name}<span className="block text-[10px] font-mono text-muted">{item.code}</span></td>
                         <td className="py-2.5 text-right font-bold">{item.qty}</td>
                         <td className="py-2.5 text-right tabular-nums">{formatSoles(item.price)}</td>
                         <td className="py-2.5 text-right font-bold tabular-nums">{formatSoles(item.subtotal)}</td>
@@ -265,11 +274,11 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
                   </tbody>
                   {selected.discount > 0 && (
                     <tfoot>
-                      <tr className="border-t border-slate-200 text-slate-500">
+                      <tr className="border-t border-line text-muted">
                         <td colSpan={3} className="py-2 text-right">Subtotal</td>
                         <td className="py-2 text-right tabular-nums">{formatSoles(selected.subtotal)}</td>
                       </tr>
-                      <tr className="text-emerald-700 font-semibold">
+                      <tr className="text-success font-semibold">
                         <td colSpan={3} className="pb-2 text-right">Descuento</td>
                         <td className="pb-2 text-right tabular-nums">− {formatSoles(selected.discount)}</td>
                       </tr>
@@ -278,18 +287,18 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
                 </table>
               </div>
 
-              <div className="p-4 border-t border-gray-200 bg-slate-50 flex flex-col sm:flex-row gap-2">
+              <div className="p-4 border-t border-line bg-surface-muted flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={cancelSelected}
                   disabled={cancelling}
-                  className="px-4 py-3 font-bold text-red-600 bg-white border border-red-200 hover:bg-red-50 rounded-lg text-sm disabled:opacity-50"
+                  className="px-4 py-3 font-bold text-danger bg-surface border border-danger/30 hover:bg-danger-soft rounded-lg text-sm disabled:opacity-50"
                 >
                   <i className="fa-solid fa-ban mr-1.5"></i> Anular pedido
                 </button>
                 <button
                   onClick={() => setShowCheckout(true)}
                   disabled={cajaAbierta === false}
-                  className="flex-1 py-3 font-bold text-white bg-orange-600 hover:bg-orange-700 rounded-lg text-base shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-3 font-bold text-brand-contrast bg-brand hover:bg-brand-strong rounded-lg text-base shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <i className="fa-solid fa-cash-register mr-2"></i> Cobrar {formatSoles(selected.total)}
                 </button>
