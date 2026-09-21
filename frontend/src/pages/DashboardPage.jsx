@@ -165,86 +165,71 @@ export default function DashboardPage({ periodReports = true }) {
         </div>
       </div>
 
-      {/* Eficiencia de Vendedores */}
-      <div className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden mb-6">
-        <div className="p-4 border-b border-line bg-surface-muted flex justify-between items-center">
-          <h3 className="font-bold text-ink text-sm">Eficiencia de Personal (Ventas y Despachos)</h3>
-          <span className="text-xs text-muted">Rendimiento acumulado</span>
-        </div>
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-surface-muted text-muted text-xs uppercase shadow-sm">
-            <tr>
-              <th className="px-4 py-3">Personal</th>
-              <th className="px-4 py-3 text-center">Ventas Realizadas</th>
-              <th className="px-4 py-3 text-right">Monto Total Vendido</th>
-              <th className="px-4 py-3 text-center">Entregas Asignadas / Completadas</th>
-            </tr>
-          </thead>
-          <tbody className="text-sm divide-y divide-line">
-            {stats.vendedores.length === 0 ? (
-              <tr>
-                <td colSpan="4" className="px-4 py-4 text-center text-muted">
-                  No hay vendedores registrados.
-                </td>
-              </tr>
-            ) : (
-              stats.vendedores.map((v) => (
-                <tr key={v.id} className="hover:bg-surface-muted transition-colors">
-                  <td className="px-4 py-3 font-bold text-ink-soft">
-                    {v.name} <span className="text-xs text-muted font-normal">({roleLabel(v.role)})</span>
-                  </td>
-                  <td className="px-4 py-3 text-center font-semibold text-ink-soft">{v.ventasCount}</td>
-                  <td className="px-4 py-3 text-right font-black text-ink">
-                    S/ {(v.totalVendido || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="bg-info-soft text-info px-2.5 py-1 rounded-full text-xs font-bold">
-                      {v.entregasAsignadas} Asig. / {v.entregasCompletadas} Entregadas
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Listas: rendimiento del personal y últimas ventas, lado a lado en pantallas anchas.
+          Son listas (no tablas) para que se lean bien también en el celular, sin scroll interno. */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+        <section className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden">
+          <header className="px-4 py-3 border-b border-line flex justify-between items-center gap-2">
+            <h3 className="font-bold text-ink text-sm"><i className="fa-solid fa-users mr-2 text-muted"></i>Rendimiento del personal</h3>
+            <span className="text-[11px] text-muted">Acumulado</span>
+          </header>
+          {stats.vendedores.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-muted">Todavía no hay ventas registradas.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {[...stats.vendedores].sort((a, b) => (b.totalVendido || 0) - (a.totalVendido || 0)).map((v) => {
+                const top = Math.max(...stats.vendedores.map(x => x.totalVendido || 0), 1);
+                const share = Math.round(((v.totalVendido || 0) / top) * 100);
+                return (
+                  <li key={v.id} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-ink truncate">{v.name}</p>
+                        <p className="text-[11px] text-muted">
+                          {roleLabel(v.role)} · {v.ventasCount} venta{v.ventasCount === 1 ? '' : 's'}
+                          {(v.entregasAsignadas > 0 || v.entregasCompletadas > 0) && (
+                            <> · {v.entregasCompletadas}/{v.entregasAsignadas} envíos entregados</>
+                          )}
+                        </p>
+                      </div>
+                      <span className="text-sm font-black text-ink tabular-nums whitespace-nowrap">
+                        S/ {(v.totalVendido || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 rounded-full bg-surface-muted overflow-hidden">
+                      <div className="h-full rounded-full bg-brand" style={{ width: `${share}%` }} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
 
-      {/* Últimas Transacciones */}
-      <div className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden">
-        <div className="p-4 border-b border-line bg-surface-muted flex justify-between items-center">
-          <h3 className="font-bold text-ink text-sm">Últimas 10 Transacciones de Venta</h3>
-          <span className="text-xs text-muted">Historial reciente</span>
-        </div>
-        <div className="overflow-y-auto max-h-[25vh]">
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-surface-muted text-muted text-xs uppercase sticky top-0 z-10 shadow-sm">
-              <tr>
-                <th className="px-4 py-3">Documento</th>
-                <th className="px-4 py-3">Cliente</th>
-                <th className="px-4 py-3">Vendedor</th>
-                <th className="px-4 py-3">Método</th>
-                <th className="px-4 py-3 text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody className="text-sm divide-y divide-line">
+        <section className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden">
+          <header className="px-4 py-3 border-b border-line flex justify-between items-center gap-2">
+            <h3 className="font-bold text-ink text-sm"><i className="fa-solid fa-receipt mr-2 text-muted"></i>Últimas ventas</h3>
+            <span className="text-[11px] text-muted">Las 10 más recientes</span>
+          </header>
+          {stats.recentSales.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-muted">Todavía no hay ventas registradas.</p>
+          ) : (
+            <ul className="divide-y divide-line">
               {stats.recentSales.map((s, idx) => (
-                <tr key={idx} className="hover:bg-surface-muted transition-colors">
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-bold bg-surface-muted px-2 py-1 rounded">{s.doc}</span>
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-ink-soft">{s.customer}</td>
-                  <td className="px-4 py-3 text-xs text-muted">{s.seller}</td>
-                  <td className="px-4 py-3 text-xs">
-                    <span className="bg-surface-muted px-2 py-1 rounded text-ink-soft font-bold">{s.method}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right font-black text-brand">
+                <li key={idx} className="px-4 py-2.5 flex items-center gap-3">
+                  <span className="text-[11px] font-bold bg-surface-muted text-ink-soft px-2 py-1 rounded shrink-0">{s.doc}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-ink truncate">{s.customer}</p>
+                    <p className="text-[11px] text-muted truncate">{s.seller} · {s.method}</p>
+                  </div>
+                  <span className="text-sm font-black text-ink tabular-nums whitespace-nowrap">
                     S/ {(s.total || 0).toLocaleString('es-PE', { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
+                  </span>
+                </li>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </ul>
+          )}
+        </section>
       </div>
       </>}
     </div>
