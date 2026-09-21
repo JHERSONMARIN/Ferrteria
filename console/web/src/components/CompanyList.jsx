@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { urlEmpresa } from '../urls.js';
 
 const ESTADO_BADGE = {
   activa: 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -75,7 +76,11 @@ export default function CompanyList({ companies, plans, onSelect, onNew }) {
                     <p className="font-semibold text-slate-800">{c.name}</p>
                     <p className="text-[11px] text-slate-400 font-mono">
                       {c.slug}
-                      {c.url && <a href={c.url} target="_blank" rel="noreferrer" className="ml-2 text-orange-600 hover:underline">{c.url}</a>}
+                      {urlEmpresa(c) && (
+                        <a href={urlEmpresa(c)} target="_blank" rel="noreferrer" className="ml-2 text-orange-600 hover:underline">
+                          {urlEmpresa(c)}
+                        </a>
+                      )}
                     </p>
                   </td>
                   <td className="px-4 py-2">
