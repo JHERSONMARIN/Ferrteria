@@ -4,14 +4,14 @@ import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
 
 const STATUS_STYLE = {
   PENDIENTE: { label: 'Pendiente', badge: 'bg-warning-soft text-warning border-warning/30' },
-  CONVERTIDO: { label: 'Convertida', badge: 'bg-success-soft text-success border-success/30' },
+  CONVERTIDO: { label: 'Terminada', badge: 'bg-success-soft text-success border-success/30' },
   CANCELADO: { label: 'Cancelada', badge: 'bg-surface-muted text-ink-soft border-line' },
 };
 
+// Terminadas son las que ya se vendieron. Modificar una cotización genera otra nueva.
 const FILTER_TABS = [
-  { id: 'ACTIVAS', label: 'Activas' },
   { id: 'PENDIENTE', label: 'Pendientes' },
-  { id: 'CONVERTIDO', label: 'Convertidas' },
+  { id: 'CONVERTIDO', label: 'Terminadas' },
   { id: 'CANCELADO', label: 'Canceladas' },
   { id: 'TODAS', label: 'Todas' },
 ];
@@ -21,7 +21,7 @@ export default function CotizacionesPage() {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ACTIVAS');
+  const [statusFilter, setStatusFilter] = useState('PENDIENTE');
   const [sortDir, setSortDir] = useState('desc'); // desc = más recientes primero
 
   const [detailTarget, setDetailTarget] = useState(null);
@@ -48,9 +48,7 @@ export default function CotizacionesPage() {
   const filteredCotizaciones = useMemo(() => {
     let list = cotizaciones;
 
-    if (statusFilter === 'ACTIVAS') {
-      list = list.filter(c => c.status !== 'CANCELADO');
-    } else if (statusFilter !== 'TODAS') {
+    if (statusFilter !== 'TODAS') {
       list = list.filter(c => c.status === statusFilter);
     }
 
