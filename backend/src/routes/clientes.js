@@ -1,6 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
-import { recordAudit } from '../services/audit.js';
+import { recordAudit, changedFields } from '../services/audit.js';
 import { requireFeature, respondIfLicenseError } from '../services/license.js';
 
 const router = express.Router();
@@ -70,6 +70,59 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Un cliente con este documento ya está registrado.' });
     }
     res.status(500).json({ error: 'Error al registrar cliente.' });
+  }
+});
+
+// PUT /api/clientes/:id  { type, doc, name, phone, email, address }: datos del cliente.
+// El crédito y la lista de precios se cambian por sus propias rutas (quedan auditados aparte).
+router.put('/:id', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) return res.status(400).json({ error: 'Cliente no válido.' });
+    const { type, doc, name, phone, email, address } = req.body;
+
+    const clientType = type === 'Empresa' || type === 'EMPRESA' ? 'EMPRESA' : 'NATURAL';
+    const cleanDoc = String(doc ?? '').trim();
+    const cleanName = String(name ?? '').trim();
+    if (clientType === 'EMPRESA' && !/^\d{11}$/.test(cleanDoc)) return res.status(400).json({ error: 'El RUC debe tener 11 dígitos.' });
+    if (clientType === 'NATURAL' && !/^\d{8}$/.test(cleanDoc)) return res.status(400).json({ error: 'El DNI debe tener 8 dígitos.' });
+    if (cleanName.length < 3) return res.status(400).json({ error: 'El nombre debe tener al menos 3 caracteres.' });
+
+    const current = await prisma.cliente.findUnique({
+      where: { id },
+      select: { type: true, doc: true, name: true, phone: true, email: true, address: true },
+    });
+    if (!current) return res.status(404).json({ error: 'Cliente no encontrado.' });
+
+    const data = {
+      type: clientType,
+      doc: cleanDoc,
+      name: cleanName.slice(0, 120),
+      phone: phone ? String(phone).trim().slice(0, 30) : null,
+      email: email ? String(email).trim().slice(0, 120) : null,
+      address: address ? String(address).trim().slice(0, 250) : null,
+    };
+    const changes = changedFields(current, data, Object.keys(data));
+    if (!changes) return res.json({ success: true });
+
+    const client = await prisma.$transaction(async (tx) => {
+      const updated = await tx.cliente.update({ where: { id }, data });
+      await recordAudit(tx, {
+        action: 'CLIENT_UPDATED',
+        entity: 'Cliente',
+        entityId: id,
+        summary: `${current.name}: se modificaron ${Object.keys(changes).join(', ')}`,
+        details: changes,
+        user: req.user,
+      });
+      return updated;
+    });
+    res.json({ success: true, client });
+  } catch (error) {
+    if (error.code === 'P2002') return res.status(400).json({ error: 'Otro cliente ya tiene ese documento.' });
+    if (error.code === 'P2025') return res.status(404).json({ error: 'Cliente no encontrado.' });
+    console.error('[clientes.js] Error al modificar cliente:', error);
+    res.status(500).json({ error: 'No se pudo modificar el cliente.' });
   }
 });
 
