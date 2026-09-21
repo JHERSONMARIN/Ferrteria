@@ -11,3 +11,4 @@ export { Table, THead, TBody, Th, Tr, Td } from './Table.jsx';
 export { Skeleton, SkeletonTable, SkeletonCards } from './Skeleton.jsx';
 export { ToastProvider, useToast } from './Toaster.jsx';
 export { ConfirmProvider, useConfirm } from './ConfirmDialog.jsx';
+export { default as Pagination, usePagination, PAGE_SIZE } from './Pagination.jsx';

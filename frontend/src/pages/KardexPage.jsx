@@ -4,7 +4,7 @@ import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { quantityProblem, roundQuantity, formatQuantity } from '../utils/quantities.js';
-import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
+import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../components/ui/index.js';
 
 const COMMON_REASONS = {
   ENTRADA: [
@@ -36,7 +36,7 @@ export default function KardexPage({ currentUser }) {
   const [loading, setLoading] = useState(false);
 
   // Filtros
-  const [period, setPeriod] = useState('month'); // 'today' | 'week' | 'month' | 'all' | 'custom'
+  const [period, setPeriod] = useState('month'); // 'today' | 'week' | 'month' | 'custom'
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [filterCode, setFilterCode] = useState('');
@@ -102,6 +102,8 @@ export default function KardexPage({ currentUser }) {
       setLoading(false);
     }
   };
+
+  const pagination = usePagination(kardexRecords);
 
   const clearError = (field) => setErrors((prev) => ({ ...prev, [field]: '' }));
 
@@ -289,7 +291,6 @@ export default function KardexPage({ currentUser }) {
                 { id: 'today', label: 'Hoy' },
                 { id: 'week', label: 'Esta Semana' },
                 { id: 'month', label: 'Este Mes' },
-                { id: 'all', label: 'Todo el Historial' },
                 { id: 'custom', label: 'Personalizado' },
               ].map((btn) => (
                 <button
@@ -342,7 +343,7 @@ export default function KardexPage({ currentUser }) {
           )}
 
           {/* Selector de Producto */}
-          <div className="flex items-center gap-2 pt-2 border-t border-line/60">
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-line/60">
             <label className="text-xs font-bold text-muted whitespace-nowrap">
               <i className="fa-solid fa-box mr-1"></i> Filtrar Producto:
             </label>
@@ -380,10 +381,36 @@ export default function KardexPage({ currentUser }) {
           </div>
         </div>
 
-        {/* Tabla de Movimientos */}
-        <div className="flex-1 overflow-auto">
+        {/* Movimientos: tarjetas en pantallas chicas, tabla desde md. Máximo 10 por página. */}
+        {!loading && kardexRecords.length > 0 && (
+          <ul className="md:hidden divide-y divide-line">
+            {pagination.pageItems.map((k) => {
+              const isEntrada = k.type === 'ENTRADA';
+              return (
+                <li key={k.id} className="px-4 py-3 flex flex-col gap-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-ink text-sm leading-snug">{k.name}</p>
+                      <p className="text-[11px] text-muted font-mono">{k.code} · {k.date}</p>
+                    </div>
+                    <span className={`shrink-0 text-right font-black ${isEntrada ? 'text-success' : 'text-danger'}`}>
+                      {isEntrada ? '+' : '-'}{k.qty} <span className="text-[10px] font-normal text-muted">{k.unit || 'un.'}</span>
+                      <span className="block text-[10px] font-semibold text-muted">Queda {k.stockAfter}</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink-soft">{k.ref}</p>
+                  <p className="text-[11px] text-muted">
+                    <i className="fa-solid fa-user-check mr-1"></i>{k.user || 'Sistema'}
+                    {multiBranch && k.branch && <> · <i className="fa-solid fa-store mr-1"></i>{k.branch.name}</>}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <div className={`overflow-x-auto ${!loading && kardexRecords.length > 0 ? 'hidden md:block' : ''}`}>
           <table className="w-full text-left border-collapse">
-            <thead className="bg-surface-muted text-muted text-xs uppercase sticky top-0 z-10 shadow-sm">
+            <thead className="bg-surface-muted text-muted text-xs uppercase shadow-sm">
               <tr>
                 <th className="px-4 py-3">Fecha / Hora</th>
                 <th className="px-4 py-3">Código</th>
@@ -411,7 +438,7 @@ export default function KardexPage({ currentUser }) {
                   </td>
                 </tr>
               ) : (
-                kardexRecords.map((k) => {
+                pagination.pageItems.map((k) => {
                   const isEntrada = k.type === 'ENTRADA';
                   return (
                     <tr key={k.id} className="hover:bg-surface-muted transition-colors">
@@ -460,6 +487,7 @@ export default function KardexPage({ currentUser }) {
             </tbody>
           </table>
         </div>
+        <Pagination {...pagination} />
       </div>
 
       {/* Modal Ajuste Manual de Kardex */}
