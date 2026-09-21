@@ -12,6 +12,7 @@ export default function TicketPrint({ data, business }) {
     docTitle = 'NOTA DE VENTA',
     numDoc = 'T001-000001',
     dateStr = new Date().toLocaleString(),
+    issueDate = new Date().toISOString().slice(0, 10),
     customerName = 'Público General',
     customerDoc = '00000000',
     docLabelTitle = 'DNI',
@@ -26,14 +27,15 @@ export default function TicketPrint({ data, business }) {
   const subtotal = total / (1 + taxRate / 100);
   const igv = total - subtotal;
 
-  // SUNAT QR Code Trama Oficial
+  // QR de la representación impresa (SUNAT): RUC|tipo|serie|número|IGV|total|fecha|tipo doc.|n° doc.
+  // Sirve para que el cliente o SUNAT consulten el comprobante escaneándolo; la fecha va en AAAA-MM-DD.
   const parts = numDoc.split('-');
   const serie = parts[0] || 'B001';
   const numero = parts[1] || '000001';
   const tipoDocCod = docTitle.includes('FACTURA') ? '01' : '03';
   const tipoDocClienteCod = docLabelTitle === 'RUC' ? '6' : '1';
 
-  const qrData = `${businessRuc}|${tipoDocCod}|${serie}|${numero}|${igv.toFixed(2)}|${total.toFixed(2)}|${dateStr}|${tipoDocClienteCod}|${customerDoc}`;
+  const qrData = `${businessRuc}|${tipoDocCod}|${serie}|${numero}|${igv.toFixed(2)}|${total.toFixed(2)}|${issueDate}|${tipoDocClienteCod}|${customerDoc}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(qrData)}`;
 
   return (
