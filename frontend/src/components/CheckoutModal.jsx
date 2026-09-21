@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import FieldError from './FieldError.jsx';
 import CustomerSelector from './CustomerSelector.jsx';
 import { borderClass } from '../utils/validators.js';
@@ -20,6 +20,9 @@ const PAYMENT_METHODS = [
   { id: 'Fiado', label: 'Fiado', icon: 'fa-book' },
 ];
 
+// Billetes que el cliente suele entregar; tocar uno varias veces los acumula.
+const BILLS = [10, 20, 50, 100, 200];
+
 function Section({ title, children }) {
   return (
     <section>
@@ -38,6 +41,8 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
   const [mixCash, setMixCash] = useState('');
   const [mixDigital, setMixDigital] = useState('');
   const [receivedCash, setReceivedCash] = useState('');
+  // Billetes entregados por el cliente: { 50: 2 } = dos billetes de 50. Se suman al tocar.
+  const [bills, setBills] = useState({});
   const [customerName, setCustomerName] = useState('');
   const [customerDni, setCustomerDni] = useState('');
   const [customerRuc, setCustomerRuc] = useState('');
@@ -53,17 +58,30 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
   const customer = findCustomerByInput(clients, customerInput);
   const received = parseFloat(receivedCash);
   const change = !isNaN(received) ? received - total : null;
-  const digitalRemainder = total - (parseFloat(mixCash) || 0);
+  const billCount = Object.values(bills).reduce((sum, n) => sum + n, 0);
 
-  const quickAmounts = useMemo(() => {
-    if (total <= 0) return [];
-    const roundUpTo = (step) => Math.ceil(total / step) * step;
-    const candidates = [roundUpTo(5), roundUpTo(10), roundUpTo(50), roundUpTo(100), 200];
-    return [...new Set(candidates.map(n => Math.round(n * 100) / 100))]
-      .filter(n => n > total + 0.001)
-      .sort((a, b) => a - b)
-      .slice(0, 4);
-  }, [total]);
+  // Cada toque suma un billete a lo recibido. Escribir el monto a mano descarta los billetes.
+  const addBill = (value) => {
+    const next = { ...bills, [value]: (bills[value] || 0) + 1 };
+    setBills(next);
+    setReceivedCash(Object.entries(next).reduce((sum, [v, n]) => sum + Number(v) * n, 0).toFixed(2));
+    clearError('receivedCash');
+  };
+  const setExact = () => { setBills({}); setReceivedCash(total.toFixed(2)); clearError('receivedCash'); };
+  const clearReceived = () => { setBills({}); setReceivedCash(''); clearError('receivedCash'); };
+
+  // Pago mixto: lo que falta del total se completa solo en el otro campo.
+  const remainderOf = (value) => {
+    const n = parseFloat(value);
+    if (value === '' || isNaN(n)) return '';
+    return Math.max(0, Math.round((total - n) * 100) / 100).toFixed(2);
+  };
+  const changeMix = (field, value) => {
+    if (field === 'cash') { setMixCash(value); setMixDigital(remainderOf(value)); }
+    else { setMixDigital(value); setMixCash(remainderOf(value)); }
+    clearError('mixCash');
+    clearError('mixDigital');
+  };
 
   const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
 
@@ -112,6 +130,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
       const cash = parseFloat(mixCash);
       const digital = parseFloat(mixDigital);
       if (mixCash === '' || isNaN(cash) || cash < 0) e.mixCash = 'Monto en efectivo inválido.';
+      else if (cash > total + 0.001) e.mixCash = `El efectivo no puede superar el total (${formatSoles(total)}).`;
       if (mixDigital === '' || isNaN(digital) || digital < 0) e.mixDigital = 'Monto digital inválido.';
       if (!e.mixCash && !e.mixDigital && Math.abs(cash + digital - total) > 0.01) {
         e.mixDigital = `La suma de ambos montos debe ser ${formatSoles(total)}.`;
@@ -155,278 +174,288 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
     }
   };
 
-  const tile = (active) => `rounded-lg border text-center transition-colors ${
+  const chip = (active) => `rounded-lg border text-xs font-bold transition-colors ${
     active ? 'border-brand bg-brand-soft text-brand-text ring-1 ring-brand' : 'border-line text-ink-soft hover:bg-surface-muted'
   }`;
+  const inputCls = (error) => `w-full px-3 py-2 border rounded-lg outline-none text-sm bg-surface focus:border-brand ${borderClass(error)}`;
 
   return (
     <div className="fixed inset-0 bg-panel/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm sm:p-4">
-      <div className="bg-surface sm:rounded-xl rounded-t-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
-        <div className="px-5 py-4 bg-panel text-white flex justify-between items-center shrink-0">
+      <div className="bg-surface sm:rounded-xl rounded-t-2xl shadow-xl w-full max-w-3xl flex flex-col max-h-[95vh] sm:max-h-[90vh] overflow-hidden">
+        <div className="px-5 py-3 border-b border-line flex justify-between items-center shrink-0">
           <div>
             <p className="text-xs text-muted font-semibold">{title || 'Total a cobrar'} · {units} {units === 1 ? 'producto' : 'productos'}</p>
-            <p className="text-3xl font-black text-brand tabular-nums">{formatSoles(total)}</p>
+            <p className="text-2xl font-black text-ink tabular-nums">{formatSoles(total)}</p>
           </div>
-          <button onClick={close} className="text-muted hover:text-white p-1" title="Cerrar (Esc)">
+          <button onClick={close} className="text-muted hover:text-ink p-1" title="Cerrar (Esc)">
             <i className="fa-solid fa-xmark text-xl"></i>
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
+        <div className="flex-1 overflow-y-auto">
           {serverError && (
-            <div className="bg-danger-soft border border-danger/30 text-danger text-sm rounded-lg p-3 flex gap-2">
+            <div className="m-5 mb-0 bg-danger-soft border border-danger/30 text-danger text-sm rounded-lg p-3 flex gap-2">
               <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
               <span>{serverError}</span>
             </div>
           )}
 
-          <Section title="1. Comprobante">
-            <div className="grid grid-cols-3 gap-2">
-              {DOCUMENT_TYPES.map(d => (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => { setDocType(d.id); clearError('customerName'); clearError('customerDoc'); }}
-                  className={`${tile(docType === d.id)} p-2.5`}
-                >
-                  <i className={`fa-solid ${d.icon} text-base`}></i>
-                  <p className="text-xs font-bold mt-1">{d.id}</p>
-                  <p className="text-[10px] opacity-70">{d.hint}</p>
-                </button>
-              ))}
-            </div>
-          </Section>
-
-          <Section title="2. Cliente">
-            <CustomerSelector
-              clients={clients}
-              value={customerInput}
-              onChange={v => { onCustomerInputChange(v); clearError('customer'); }}
-              customer={customer}
-              error={errors.customer}
-            />
-            {!customer && docType !== 'Nota de Venta' && (
-              <div className="mt-3 p-3 rounded-lg bg-surface-muted border border-line">
-                <p className="text-xs text-muted mb-2">
-                  Cliente no registrado: ingrese sus datos para la {docType.toLowerCase()}.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-                  <input
-                    type="text"
-                    maxLength={120}
-                    value={customerName}
-                    onChange={e => { setCustomerName(e.target.value); clearError('customerName'); }}
-                    placeholder={docType === 'Factura' ? 'Razón social' : 'Nombres y apellidos'}
-                    className={`sm:col-span-3 w-full px-3 py-2 border rounded-lg outline-none text-sm ${borderClass(errors.customerName)}`}
-                  />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={docType === 'Boleta' ? 8 : 11}
-                    value={docType === 'Boleta' ? customerDni : customerRuc}
-                    onChange={e => {
-                      const digits = e.target.value.replace(/\D/g, '');
-                      if (docType === 'Boleta') setCustomerDni(digits); else setCustomerRuc(digits);
-                      clearError('customerDoc');
-                    }}
-                    placeholder={docType === 'Boleta' ? 'DNI (8)' : 'RUC (11)'}
-                    className={`sm:col-span-2 w-full px-3 py-2 border rounded-lg outline-none text-sm font-mono ${borderClass(errors.customerDoc)}`}
-                  />
-                </div>
-                <FieldError msg={errors.customerName || errors.customerDoc} />
-              </div>
-            )}
-          </Section>
-
-          <Section title="3. Método de pago">
-            <div className="grid grid-cols-3 gap-2">
-              {PAYMENT_METHODS.map(m => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => { setPayMethod(m.id); setErrors(prev => ({ customer: prev.customer, customerName: prev.customerName, customerDoc: prev.customerDoc })); }}
-                  className={`${tile(payMethod === m.id)} py-2.5 px-1`}
-                >
-                  <i className={`fa-solid ${m.icon} text-base`}></i>
-                  <p className="text-xs font-bold mt-1">{m.label}</p>
-                </button>
-              ))}
-            </div>
-
-            {payMethod === 'Efectivo' && (
-              <div className="mt-3 flex flex-col gap-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-muted mb-1 block">Recibido (opcional)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.10"
-                      value={receivedCash}
-                      onChange={e => { setReceivedCash(e.target.value); clearError('receivedCash'); }}
-                      onKeyDown={e => e.key === 'Enter' && handleConfirm()}
-                      placeholder="0.00"
-                      className={`w-full px-3 py-2.5 border rounded-lg outline-none text-lg font-bold ${borderClass(errors.receivedCash)}`}
-                    />
-                  </div>
-                  <div className={`rounded-lg border px-3 py-2 flex flex-col justify-center ${
-                    change === null
-                      ? 'bg-surface-muted border-line text-muted'
-                      : change < 0 ? 'bg-danger-soft border-danger/30 text-danger' : 'bg-success-soft border-success/30 text-success'
-                  }`}>
-                    <span className="text-xs font-semibold">{change !== null && change < 0 ? 'Falta' : 'Vuelto'}</span>
-                    <span className="text-2xl font-black tabular-nums">{change === null ? '—' : formatSoles(Math.abs(change))}</span>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {[{ label: 'Exacto', value: total }, ...quickAmounts.map(v => ({ label: formatSoles(v), value: v }))].map(q => (
+          <div className="grid grid-cols-1 md:grid-cols-2 md:divide-x divide-line">
+            {/* Izquierda: a quién y con qué comprobante */}
+            <div className="p-5 flex flex-col gap-4">
+              <Section title="Comprobante">
+                <div className="grid grid-cols-3 gap-1.5">
+                  {DOCUMENT_TYPES.map(d => (
                     <button
-                      key={q.label}
+                      key={d.id}
                       type="button"
-                      onClick={() => { setReceivedCash(q.value.toFixed(2)); clearError('receivedCash'); }}
-                      className="px-3 py-1.5 rounded-full text-xs font-bold border border-line bg-surface hover:bg-surface-muted text-ink-soft"
+                      title={d.hint}
+                      onClick={() => { setDocType(d.id); clearError('customerName'); clearError('customerDoc'); }}
+                      className={`${chip(docType === d.id)} py-2 px-1 flex items-center justify-center gap-1.5`}
                     >
-                      {q.label}
+                      <i className={`fa-solid ${d.icon}`}></i> {d.id}
                     </button>
                   ))}
                 </div>
-                <FieldError msg={errors.receivedCash} />
-              </div>
-            )}
+              </Section>
 
-            {payMethod === 'Yape/Plin' && (
-              <div className="mt-3">
-                <label className="text-xs text-muted mb-1 block">N° de operación</label>
-                <input
-                  type="text"
-                  maxLength={40}
-                  value={payCode}
-                  onChange={e => { setPayCode(e.target.value); clearError('payCode'); }}
-                  placeholder="Ej. 12345678"
-                  className={`w-full px-3 py-2.5 border rounded-lg outline-none text-sm font-mono ${borderClass(errors.payCode)}`}
+              <Section title="Cliente">
+                <CustomerSelector
+                  clients={clients}
+                  value={customerInput}
+                  onChange={v => { onCustomerInputChange(v); clearError('customer'); }}
+                  customer={customer}
+                  error={errors.customer}
                 />
-                <FieldError msg={errors.payCode} />
-              </div>
-            )}
-
-            {payMethod === 'Pago Mixto' && (
-              <div className="mt-3">
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: 'Efectivo', value: mixCash, set: setMixCash, error: errors.mixCash },
-                    { label: 'Digital', value: mixDigital, set: setMixDigital, error: errors.mixDigital },
-                  ].map(field => (
-                    <div key={field.label}>
-                      <label className="text-xs text-muted mb-1 block">{field.label}</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.10"
-                        value={field.value}
-                        onChange={e => { field.set(e.target.value); clearError('mixCash'); clearError('mixDigital'); }}
-                        placeholder="0.00"
-                        className={`w-full px-3 py-2.5 border rounded-lg outline-none text-sm font-bold ${borderClass(field.error)}`}
-                      />
-                    </div>
-                  ))}
-                </div>
-                {mixCash !== '' && digitalRemainder >= 0 && Math.abs((parseFloat(mixDigital) || 0) - digitalRemainder) > 0.001 && (
-                  <button
-                    type="button"
-                    onClick={() => { setMixDigital(digitalRemainder.toFixed(2)); clearError('mixDigital'); }}
-                    className="mt-2 text-xs font-bold text-brand hover:underline"
-                  >
-                    Completar digital con {formatSoles(digitalRemainder)}
-                  </button>
-                )}
-                <FieldError msg={errors.mixCash || errors.mixDigital} />
-              </div>
-            )}
-
-            {payMethod === 'Fiado' && (
-              <p className="mt-3 text-xs text-ink-soft bg-warning-soft border border-warning/30 rounded-lg p-3">
-                <i className="fa-solid fa-circle-info text-warning mr-1"></i>
-                Se cargará a la cuenta del cliente. Requiere un cliente registrado con crédito disponible.
-              </p>
-            )}
-          </Section>
-
-          {allowDelivery && (
-            <Section title="4. Entrega">
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: 'PICKUP', label: 'Se lleva ahora', icon: 'fa-bag-shopping' },
-                  { id: 'DELIVERY', label: 'Envío a domicilio', icon: 'fa-truck-fast' },
-                ].map(option => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => chooseDelivery(option.id)}
-                    className={`${tile(deliveryType === option.id)} py-2.5 px-2 flex items-center justify-center gap-2`}
-                  >
-                    <i className={`fa-solid ${option.icon}`}></i>
-                    <span className="text-xs font-bold">{option.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              {deliveryType === 'DELIVERY' && (
-                <div className="mt-3 flex flex-col gap-2">
-                  <div>
-                    <label className="text-xs text-muted mb-1 block">Dirección de entrega</label>
+                {!customer && docType !== 'Nota de Venta' && (
+                  <div className="mt-2 grid grid-cols-5 gap-2">
                     <input
                       type="text"
-                      maxLength={250}
-                      value={deliveryAddress}
-                      onChange={e => { setDeliveryAddress(e.target.value); clearError('deliveryAddress'); }}
-                      placeholder="Calle, número, referencia"
-                      className={`w-full px-3 py-2 border rounded-lg outline-none text-sm ${borderClass(errors.deliveryAddress)}`}
+                      maxLength={120}
+                      value={customerName}
+                      onChange={e => { setCustomerName(e.target.value); clearError('customerName'); }}
+                      placeholder={docType === 'Factura' ? 'Razón social' : 'Nombres y apellidos'}
+                      className={`col-span-3 ${inputCls(errors.customerName)}`}
                     />
-                    <FieldError msg={errors.deliveryAddress} />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={docType === 'Boleta' ? 8 : 11}
+                      value={docType === 'Boleta' ? customerDni : customerRuc}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/\D/g, '');
+                        if (docType === 'Boleta') setCustomerDni(digits); else setCustomerRuc(digits);
+                        clearError('customerDoc');
+                      }}
+                      placeholder={docType === 'Boleta' ? 'DNI' : 'RUC'}
+                      className={`col-span-2 font-mono ${inputCls(errors.customerDoc)}`}
+                    />
+                    <div className="col-span-5"><FieldError msg={errors.customerName || errors.customerDoc} /></div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs text-muted mb-1 block">Recibe</label>
+                )}
+              </Section>
+
+              {allowDelivery && (
+                <Section title="Entrega">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { id: 'PICKUP', label: 'Se lleva ahora', icon: 'fa-bag-shopping' },
+                      { id: 'DELIVERY', label: 'Envío a domicilio', icon: 'fa-truck-fast' },
+                    ].map(option => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => chooseDelivery(option.id)}
+                        className={`${chip(deliveryType === option.id)} py-2 px-2 flex items-center justify-center gap-2`}
+                      >
+                        <i className={`fa-solid ${option.icon}`}></i> {option.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {deliveryType === 'DELIVERY' && (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="col-span-2">
+                        <input
+                          type="text"
+                          maxLength={250}
+                          value={deliveryAddress}
+                          onChange={e => { setDeliveryAddress(e.target.value); clearError('deliveryAddress'); }}
+                          placeholder="Dirección: calle, número, referencia"
+                          className={inputCls(errors.deliveryAddress)}
+                        />
+                        <FieldError msg={errors.deliveryAddress} />
+                      </div>
                       <input
                         type="text"
                         maxLength={120}
                         value={deliveryRecipient}
                         onChange={e => setDeliveryRecipient(e.target.value)}
-                        placeholder="Nombre de quien recibe"
-                        className="w-full px-3 py-2 border border-line rounded-lg outline-none text-sm"
+                        placeholder="Quién recibe"
+                        className={inputCls()}
                       />
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted mb-1 block">Teléfono de contacto</label>
-                      <input
-                        type="tel"
-                        maxLength={30}
-                        value={deliveryPhone}
-                        onChange={e => { setDeliveryPhone(e.target.value); clearError('deliveryPhone'); }}
-                        placeholder="Opcional"
-                        className={`w-full px-3 py-2 border rounded-lg outline-none text-sm ${borderClass(errors.deliveryPhone)}`}
-                      />
-                      <FieldError msg={errors.deliveryPhone} />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="text-xs text-muted mb-1 block">Indicaciones</label>
+                      <div>
+                        <input
+                          type="tel"
+                          maxLength={30}
+                          value={deliveryPhone}
+                          onChange={e => { setDeliveryPhone(e.target.value); clearError('deliveryPhone'); }}
+                          placeholder="Teléfono (opcional)"
+                          className={inputCls(errors.deliveryPhone)}
+                        />
+                        <FieldError msg={errors.deliveryPhone} />
+                      </div>
                       <input
                         type="text"
                         maxLength={300}
                         value={deliveryNotes}
                         onChange={e => setDeliveryNotes(e.target.value)}
-                        placeholder="Ej. dejar en portería"
-                        className="w-full px-3 py-2 border border-line rounded-lg outline-none text-sm"
+                        placeholder="Indicaciones (ej. dejar en portería)"
+                        className={`col-span-2 ${inputCls()}`}
                       />
                     </div>
+                  )}
+                </Section>
+              )}
+            </div>
+
+            {/* Derecha: cómo paga */}
+            <div className="p-5 flex flex-col gap-4 bg-surface-muted/40">
+              <Section title="Método de pago">
+                <div className="grid grid-cols-3 gap-1.5">
+                  {PAYMENT_METHODS.map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => { setPayMethod(m.id); setErrors(prev => ({ customer: prev.customer, customerName: prev.customerName, customerDoc: prev.customerDoc })); }}
+                      className={`${chip(payMethod === m.id)} py-2 px-1 flex flex-col items-center gap-0.5`}
+                    >
+                      <i className={`fa-solid ${m.icon} text-sm`}></i> {m.label}
+                    </button>
+                  ))}
+                </div>
+              </Section>
+
+              {payMethod === 'Efectivo' && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-muted uppercase tracking-wide">Billetes recibidos</span>
+                    <button type="button" onClick={setExact} className="text-xs font-bold text-brand hover:underline">
+                      Pago exacto
+                    </button>
                   </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {BILLS.map(value => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => addBill(value)}
+                        className={`relative py-2.5 rounded-lg border text-sm font-black tabular-nums transition-colors ${
+                          bills[value] ? 'border-success bg-success-soft text-success' : 'border-line bg-surface text-ink-soft hover:bg-surface-muted'
+                        }`}
+                      >
+                        {value}
+                        {bills[value] > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 bg-success text-white text-[10px] rounded-full min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center">
+                            ×{bills[value]}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted mb-1 flex justify-between">
+                        <span>Recibido</span>
+                        {receivedCash !== '' && (
+                          <button type="button" onClick={clearReceived} className="text-muted hover:text-danger" title="Borrar">
+                            <i className="fa-solid fa-eraser"></i>
+                          </button>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.10"
+                        value={receivedCash}
+                        onChange={e => { setBills({}); setReceivedCash(e.target.value); clearError('receivedCash'); }}
+                        onKeyDown={e => e.key === 'Enter' && handleConfirm()}
+                        placeholder="Opcional"
+                        className={`w-full px-3 py-2 border rounded-lg outline-none text-lg font-bold bg-surface ${borderClass(errors.receivedCash)}`}
+                      />
+                      {billCount > 0 && (
+                        <p className="text-[11px] text-muted mt-1">
+                          {Object.entries(bills).filter(([, n]) => n > 0).map(([v, n]) => `${n} × S/ ${v}`).join(' + ')}
+                        </p>
+                      )}
+                    </div>
+                    <div className={`rounded-lg border px-3 py-2 flex flex-col justify-center ${
+                      change === null
+                        ? 'bg-surface border-line text-muted'
+                        : change < 0 ? 'bg-danger-soft border-danger/30 text-danger' : 'bg-success-soft border-success/30 text-success'
+                    }`}>
+                      <span className="text-xs font-semibold">{change !== null && change < 0 ? 'Falta' : 'Vuelto'}</span>
+                      <span className="text-2xl font-black tabular-nums">{change === null ? '—' : formatSoles(Math.abs(change))}</span>
+                    </div>
+                  </div>
+                  <FieldError msg={errors.receivedCash} />
                 </div>
               )}
-            </Section>
-          )}
+
+              {payMethod === 'Yape/Plin' && (
+                <div>
+                  <label className="text-xs text-muted mb-1 block">N° de operación</label>
+                  <input
+                    type="text"
+                    maxLength={40}
+                    value={payCode}
+                    onChange={e => { setPayCode(e.target.value); clearError('payCode'); }}
+                    placeholder="Ej. 12345678"
+                    className={`font-mono ${inputCls(errors.payCode)}`}
+                  />
+                  <FieldError msg={errors.payCode} />
+                </div>
+              )}
+
+              {payMethod === 'Pago Mixto' && (
+                <div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'cash', label: 'Efectivo', value: mixCash, error: errors.mixCash },
+                      { id: 'digital', label: 'Digital', value: mixDigital, error: errors.mixDigital },
+                    ].map(field => (
+                      <div key={field.id}>
+                        <label className="text-xs text-muted mb-1 block">{field.label}</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max={total}
+                          step="0.10"
+                          value={field.value}
+                          onChange={e => changeMix(field.id, e.target.value)}
+                          placeholder="0.00"
+                          className={`font-bold ${inputCls(field.error)}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted mt-1">Escriba uno de los dos montos: el otro se completa con lo que falta.</p>
+                  <FieldError msg={errors.mixCash || errors.mixDigital} />
+                </div>
+              )}
+
+              {payMethod === 'Fiado' && (
+                <p className="text-xs text-ink-soft bg-warning-soft border border-warning/30 rounded-lg p-3">
+                  <i className="fa-solid fa-circle-info text-warning mr-1"></i>
+                  Se cargará a la cuenta del cliente. Requiere un cliente registrado con crédito disponible.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="p-4 border-t border-line bg-surface-muted flex gap-2 shrink-0">
+        <div className="p-4 border-t border-line flex gap-2 shrink-0">
           <button
             onClick={close}
             disabled={processing}
