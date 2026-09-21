@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
-import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
+import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../components/ui/index.js';
 
 const STATUS_STYLE = {
   PENDIENTE: { label: 'Pendiente', badge: 'bg-warning-soft text-warning border-warning/30' },
@@ -91,6 +91,9 @@ export default function CotizacionesPage() {
       setDeleting(false);
     }
   };
+
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(filteredCotizaciones);
 
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
@@ -184,7 +187,7 @@ export default function CotizacionesPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredCotizaciones.map(cot => {
+                  pg.pageItems.map(cot => {
                     const style = STATUS_STYLE[cot.status] || STATUS_STYLE.PENDIENTE;
                     return (
                       <tr key={cot.id} className="border-b border-line hover:bg-surface-muted transition-colors">
@@ -226,6 +229,7 @@ export default function CotizacionesPage() {
                 )}
               </tbody>
             </table>
+            <Pagination {...pg} className="px-0" />
           </div>
         </div>
       </div>

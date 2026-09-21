@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
-import { useToast, useConfirm } from '../components/ui/index.js';
+import { useToast, useConfirm, Pagination, usePagination } from '../components/ui/index.js';
 
 export default function CreditosPage() {
   const aviso = useToast();
@@ -84,6 +84,9 @@ export default function CreditosPage() {
     }
   };
 
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(creditos);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
@@ -113,7 +116,7 @@ export default function CreditosPage() {
                   </td>
                 </tr>
               ) : (
-                creditos.map(c => (
+                pg.pageItems.map(c => (
                   <tr key={c.id} className="hover:bg-surface-muted border-b border-line">
                     <td className="px-4 py-4 font-bold text-ink-soft">{c.name}</td>
                     <td className="px-4 py-4 text-xs text-muted">{c.lastPurchase}</td>
@@ -134,6 +137,7 @@ export default function CreditosPage() {
             </tbody>
           </table>
         </div>
+        <Pagination {...pg} />
       </div>
 
       {/* Modal Estado de Cuenta */}

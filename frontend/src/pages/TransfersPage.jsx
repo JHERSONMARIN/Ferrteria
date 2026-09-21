@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
+import { Pagination, usePagination } from '../components/ui/index.js';
 import { formatQuantity, quantityProblem } from '../utils/quantities.js';
 
 const formatDateTime = (value) => new Date(value).toLocaleString('es-PE', {
@@ -100,6 +101,9 @@ export default function TransfersPage({ currentUser }) {
   };
 
   const inputClass = 'w-full border border-line px-3 py-2 rounded-lg text-sm bg-surface focus:outline-none focus:border-brand';
+
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(history);
 
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
@@ -224,7 +228,7 @@ export default function TransfersPage({ currentUser }) {
             <p className="px-4 py-8 text-center text-sm text-muted">Todavía no hay transferencias.</p>
           ) : (
             <ul className="divide-y divide-line">
-              {history.map(t => (
+              {pg.pageItems.map(t => (
                 <li key={t.id} className="px-4 py-3">
                   <div className="flex justify-between gap-2 text-sm">
                     <span className="font-mono font-bold text-ink-soft">{t.number}</span>
@@ -241,6 +245,7 @@ export default function TransfersPage({ currentUser }) {
               ))}
             </ul>
           )}
+          <Pagination {...pg} />
         </section>
       </div>
     </div>

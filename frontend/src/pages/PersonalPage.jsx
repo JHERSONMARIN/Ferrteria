@@ -5,7 +5,7 @@ import { borderClass } from '../utils/validators.js';
 import { MODULE_OPTIONS as moduleOptions } from '../constants/modules.js';
 import { effectiveDispatchRole } from '../constants/dispatch.js';
 import { ROLE_OPTIONS, rolesForModules, roleLabel, presetModules, describeDuties } from '../constants/roles.js';
-import { useToast, useConfirm } from '../components/ui/index.js';
+import { useToast, useConfirm, Pagination, usePagination } from '../components/ui/index.js';
 
 export default function PersonalPage({ currentUser }) {
   const aviso = useToast();
@@ -223,6 +223,9 @@ export default function PersonalPage({ currentUser }) {
     }
   };
 
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(staff);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto bg-surface-muted">
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
@@ -251,7 +254,7 @@ export default function PersonalPage({ currentUser }) {
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-line">
-              {staff.map(s => {
+              {pg.pageItems.map(s => {
                 const badgeColor = ROLE_OPTIONS.find(r => r.value === s.role)?.badge || 'bg-surface-muted text-ink-soft border-line';
                 const userModules = Array.isArray(s.modules) ? s.modules : [];
 
@@ -343,6 +346,7 @@ export default function PersonalPage({ currentUser }) {
             </tbody>
           </table>
         </div>
+        <Pagination {...pg} />
       </div>
 
       {/* Modal Crear / Modificar Personal */}

@@ -4,7 +4,7 @@ import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quantities.js';
-import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
+import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../components/ui/index.js';
 import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
 import ImportModal from '../components/ImportModal.jsx';
 import { downloadTemplate } from '../utils/spreadsheet.js';
@@ -337,6 +337,9 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
     exportToExcel(exportData, 'Inventario_Productos');
   };
 
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(filteredProducts);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
@@ -431,9 +434,9 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
         </div>
 
         {/* Tabla de Productos */}
-        <div className="flex-1 overflow-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-surface-muted text-muted text-xs uppercase sticky top-0 z-10 shadow-sm">
+            <thead className="bg-surface-muted text-muted text-xs uppercase shadow-sm">
               <tr>
                 <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Producto</th>
@@ -471,7 +474,7 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map(p => {
+                pg.pageItems.map(p => {
                   const isLowStock = p.stock <= (p.minStock ?? 10);
                   return (
                     <tr key={p.id} className="hover:bg-surface-muted transition-colors">
@@ -535,6 +538,7 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
             </tbody>
           </table>
         </div>
+        <Pagination {...pg} />
       </div>
 
       {/* Modal Nuevo / Editar Producto */}

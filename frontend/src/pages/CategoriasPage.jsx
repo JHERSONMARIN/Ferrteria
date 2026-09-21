@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
-import { useToast, EmptyState, SkeletonCards } from '../components/ui/index.js';
+import { useToast, EmptyState, SkeletonCards, Pagination, usePagination } from '../components/ui/index.js';
 import ImportModal from '../components/ImportModal.jsx';
 import { downloadTemplate } from '../utils/spreadsheet.js';
 
@@ -236,6 +236,9 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
     return { message: `Categorías importadas: ${parts.join(', ')}.` };
   };
 
+  // Máximo 12 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(filteredCategories, 12);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
@@ -324,7 +327,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
                 />
               </div>
             ) : (
-              filteredCategories.map(cat => {
+              pg.pageItems.map(cat => {
                 const style = COLOR_CLASSES[cat.color] || COLOR_CLASSES.orange;
                 return (
                   <div
@@ -402,6 +405,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
               })
             )}
           </div>
+          <Pagination {...pg} className="bg-surface" />
         </div>
       </div>
 

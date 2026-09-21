@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
-import { useToast, useConfirm, SearchInput, EmptyState, Modal, Button, Field, Input } from '../components/ui/index.js';
+import { useToast, useConfirm, SearchInput, EmptyState, Modal, Button, Field, Input, Pagination, usePagination } from '../components/ui/index.js';
 
 export default function ClientesPage({ initialSearch = '' }) {
   const aviso = useToast();
@@ -177,6 +177,9 @@ export default function ClientesPage({ initialSearch = '' }) {
     }
   };
 
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(clientesFiltrados);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
@@ -217,7 +220,7 @@ export default function ClientesPage({ initialSearch = '' }) {
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-line">
-              {clientesFiltrados.map(c => (
+              {pg.pageItems.map(c => (
                 <tr key={c.id} className="hover:bg-surface-muted border-b border-line">
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.type === 'EMPRESA' ? 'bg-info-soft text-info' : 'bg-info-soft text-info'}`}>
@@ -275,6 +278,7 @@ export default function ClientesPage({ initialSearch = '' }) {
             />
           )}
         </div>
+        <Pagination {...pg} />
       </div>
 
       {/* Registrar o editar cliente */}

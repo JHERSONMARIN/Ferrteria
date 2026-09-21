@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { quantityProblem, roundQuantity } from '../utils/quantities.js';
-import { useToast } from '../components/ui/index.js';
+import { useToast, Pagination, usePagination } from '../components/ui/index.js';
 
 export default function ComprasPage() {
   const aviso = useToast();
@@ -252,6 +252,9 @@ export default function ComprasPage() {
 
   const selectedCostProduct = costVariation.find(p => p.code === selectedCostCode) || null;
 
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(compras);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="flex justify-between items-center mb-6">
@@ -306,7 +309,7 @@ export default function ComprasPage() {
                     </td>
                   </tr>
                 ) : (
-                  compras.map(c => (
+                  pg.pageItems.map(c => (
                     <tr
                       key={c.id}
                       onClick={() => setSelectedCompra(c)}
@@ -329,6 +332,7 @@ export default function ComprasPage() {
                 )}
               </tbody>
             </table>
+            <Pagination {...pg} />
           </div>
         ) : (
           <div className="flex flex-col lg:flex-row h-[calc(100dvh-13rem)] lg:h-[calc(100vh-15rem)] min-h-[360px] lg:min-h-[400px] overflow-hidden">
