@@ -26,11 +26,13 @@ const deliveryId = (req, res) => {
   return id;
 };
 
-// GET /api/entregas?estado=activas|finalizadas&mias=1
+// GET /api/entregas?estado=activas|finalizadas
+// El repartidor ve todo lo que sigue en almacén (puede solicitarlo) y, ya despachado, solo lo suyo.
+// Quien atiende la tienda y el administrador ven todo.
 router.get('/', handle(async (req, res) => {
   res.json(await listDeliveries(prisma, {
     finished: req.query.estado === 'finalizadas',
-    onlyUserId: req.query.mias === '1' ? req.user.id : null,
+    ownUserId: req.user.role === 'REPARTIDOR' ? req.user.id : null,
     branchId: req.user.branchId,
   }));
 }));

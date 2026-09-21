@@ -4,6 +4,8 @@ import { formatSoles } from '../utils/currency.js';
 
 const REFRESH_MS = 5000;
 
+const formatHour = (date) => (date ? new Date(date).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '');
+
 function minutesAgo(date) {
   const minutes = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
   if (minutes < 1) return 'recién';
@@ -20,17 +22,42 @@ export default function DispatchQueuePage() {
   const [loadError, setLoadError] = useState('');
   const [notice, setNotice] = useState(null);
   const [dispatching, setDispatching] = useState(false);
+  // Con envío a domicilio hay que registrar a qué repartidor se le entrega la mercadería.
+  const [couriers, setCouriers] = useState([]);
+  const [courierId, setCourierId] = useState('');
+  const [dispatchedToday, setDispatchedToday] = useState([]);
+  const [view, setView] = useState('cola');
 
   const selected = orders.find(o => o.id === selectedId) || null;
 
   const loadOrders = async () => {
     try {
-      setOrders(await api.get('/pedidos?status=PAID'));
+      const [pendientes, hoy] = await Promise.all([
+        api.get('/pedidos?status=PAID'),
+        api.get('/pedidos/despachados-hoy').catch(() => []),
+      ]);
+      setOrders(pendientes);
+      setDispatchedToday(hoy);
       setLoadError('');
     } catch (err) {
       setLoadError(err.message || 'No se pudo cargar la cola de despacho.');
     }
   };
+
+  // Repartidores de la sucursal, para decir a quién se le entrega cada envío.
+  useEffect(() => {
+    api.get('/personal')
+      .then(staff => setCouriers(staff.filter(persona => persona.active !== false && (
+        persona.role === 'REPARTIDOR' || persona.role === 'ADMINISTRADOR'
+        || (Array.isArray(persona.modules) && persona.modules.includes('deliveries'))
+      ))))
+      .catch(() => setCouriers([]));
+  }, []);
+
+  // Al elegir un pedido se propone el repartidor que lo solicitó.
+  useEffect(() => {
+    setCourierId(selected?.delivery?.courier?.id ? String(selected.delivery.courier.id) : '');
+  }, [selectedId]);
 
   useEffect(() => {
     loadOrders();
@@ -61,8 +88,14 @@ export default function DispatchQueuePage() {
     if (!selected) return;
     try {
       setDispatching(true);
-      await api.post(`/pedidos/${selected.id}/despachar`, {});
-      setNotice({ type: 'success', text: `Pedido N° ${selected.id} entregado.` });
+      await api.post(`/pedidos/${selected.id}/despachar`,
+        selected.delivery ? { repartidorId: Number(courierId) } : {});
+      setNotice({
+        type: 'success',
+        text: selected.delivery
+          ? `Pedido N° ${selected.id} entregado a ${couriers.find(c => String(c.id) === courierId)?.name ?? 'el repartidor'}.`
+          : `Pedido N° ${selected.id} entregado.`,
+      });
       setSelectedId(null);
       loadOrders();
     } catch (err) {
@@ -80,13 +113,25 @@ export default function DispatchQueuePage() {
       {/* ===== COLA ===== */}
       <div className="lg:w-[400px] flex flex-col bg-surface rounded-xl shadow-sm border border-line lg:overflow-hidden shrink-0">
         <div className="p-4 border-b border-line flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-ink flex items-center gap-2">
-              <i className="fa-solid fa-dolly text-brand"></i> Pedidos por despachar
-            </h3>
-            <span className="bg-brand-soft text-brand-text text-xs font-bold px-2.5 py-1 rounded-full">{orders.length}</span>
+          <div className="flex items-center gap-1 bg-surface-muted rounded-xl p-1">
+            <button
+              onClick={() => setView('cola')}
+              className={`flex-1 text-sm font-semibold py-1.5 rounded-lg transition-colors ${
+                view === 'cola' ? 'bg-brand text-brand-contrast shadow-card' : 'text-ink-soft hover:bg-surface'
+              }`}
+            >
+              Por despachar ({orders.length})
+            </button>
+            <button
+              onClick={() => setView('hoy')}
+              className={`flex-1 text-sm font-semibold py-1.5 rounded-lg transition-colors ${
+                view === 'hoy' ? 'bg-brand text-brand-contrast shadow-card' : 'text-ink-soft hover:bg-surface'
+              }`}
+            >
+              Despachado hoy ({dispatchedToday.length})
+            </button>
           </div>
-          <div className="relative">
+          <div className={`relative ${view === 'cola' ? '' : 'hidden'}`}>
             <i className="fa-solid fa-hashtag absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm"></i>
             <input
               autoFocus
@@ -100,7 +145,38 @@ export default function DispatchQueuePage() {
         </div>
 
         <div className="flex-1 lg:overflow-y-auto p-3 flex flex-col gap-2 min-h-[160px]">
-          {loadError ? (
+          {view === 'hoy' ? (
+            dispatchedToday.length === 0 ? (
+              <div className="text-center text-muted py-12">
+                <i className="fa-solid fa-boxes-packing text-3xl mb-2"></i>
+                <p className="text-sm font-semibold">Todavía no salió nada hoy</p>
+              </div>
+            ) : dispatchedToday.map(order => (
+              <div key={order.id} className="rounded-lg border border-line p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-black text-ink">N° {order.id}</span>
+                  <span className="text-xs text-muted shrink-0">{formatHour(order.dispatchedAt)}</span>
+                </div>
+                <p className="text-xs text-muted truncate">{order.customer} · {order.items.length} prod.</p>
+                <p className="text-xs mt-1 flex items-center gap-1.5">
+                  {order.delivery ? (
+                    <>
+                      <i className="fa-solid fa-truck-fast text-info"></i>
+                      <span className="text-ink-soft">
+                        Se lo llevó <span className="font-semibold text-ink">{order.delivery.courier?.name ?? 'un repartidor'}</span>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-hand-holding-heart text-success"></i>
+                      <span className="text-ink-soft">Lo recogió el cliente en tienda</span>
+                    </>
+                  )}
+                </p>
+                {order.dispatchedBy && <p className="text-[11px] text-muted mt-0.5">Despachó {order.dispatchedBy}</p>}
+              </div>
+            ))
+          ) : loadError ? (
             <p className="text-sm text-danger text-center py-8">{loadError}</p>
           ) : filtered.length === 0 ? (
             <div className="text-center text-muted py-12">
@@ -167,9 +243,29 @@ export default function DispatchQueuePage() {
 
             <div className="flex-1 lg:overflow-y-auto p-5">
               {selected.delivery && (
-                <div className="mb-4 rounded-lg bg-info-soft border border-info/30 px-4 py-3 text-sm text-info">
-                  <p className="font-bold"><i className="fa-solid fa-truck-fast mr-1.5"></i>Envío a domicilio · {selected.delivery.ref}</p>
-                  <p className="text-xs mt-0.5">Entregue estos productos al repartidor, no al cliente. Destino: {selected.delivery.address}</p>
+                <div className="mb-4 flex flex-col gap-3">
+                  <div className="rounded-lg bg-info-soft border border-info/30 px-4 py-3 text-sm text-info">
+                    <p className="font-bold"><i className="fa-solid fa-truck-fast mr-1.5"></i>Envío a domicilio · {selected.delivery.ref}</p>
+                    <p className="text-xs mt-0.5">Entregue estos productos al repartidor, no al cliente. Destino: {selected.delivery.address}</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-muted uppercase tracking-wide mb-1 block">
+                      ¿A qué repartidor se lo entrega?
+                    </label>
+                    <select
+                      value={courierId}
+                      onChange={e => setCourierId(e.target.value)}
+                      className="w-full border border-line rounded-lg px-3 py-2.5 text-sm bg-surface outline-none focus:border-brand"
+                    >
+                      <option value="">Elija el repartidor</option>
+                      {couriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <p className="text-[11px] text-muted mt-1">
+                      {selected.delivery.courier
+                        ? `${selected.delivery.courier.name} solicitó este pedido.`
+                        : 'Nadie lo solicitó todavía: elija a quién se lleva la mercadería.'}
+                    </p>
+                  </div>
                 </div>
               )}
               <p className="text-[11px] font-bold text-muted uppercase tracking-wide mb-2">Productos a entregar</p>
@@ -191,7 +287,7 @@ export default function DispatchQueuePage() {
             <div className="p-4 border-t border-line bg-surface-muted">
               <button
                 onClick={dispatchSelected}
-                disabled={dispatching}
+                disabled={dispatching || (selected.delivery && !courierId)}
                 className="w-full py-3 font-bold text-white bg-success hover:brightness-95 rounded-lg text-base shadow-md transition-colors disabled:opacity-60"
               >
                 {dispatching

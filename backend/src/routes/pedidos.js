@@ -3,7 +3,7 @@ import { prisma } from '../db.js';
 import { allowModules } from '../middleware/authorize.js';
 import { responderErrorVenta } from '../services/ventas.js';
 import {
-  createOrder, payOrder, dispatchOrder, cancelOrder, listOrders, getOrder,
+  createOrder, payOrder, dispatchOrder, cancelOrder, listOrders, getOrder, listDispatchedToday,
 } from '../services/saleOrders.js';
 
 const router = express.Router();
@@ -34,6 +34,11 @@ router.get('/', allowModules({ default: ['caja', 'despacho', 'pos'] }), handle(a
   res.json(await listOrders(prisma, status, req.user));
 }));
 
+// GET /api/pedidos/despachados-hoy  (respaldo de lo que salió hoy del almacén)
+router.get('/despachados-hoy', allowModules({ default: ['despacho', 'pos', 'caja'] }), handle(async (req, res) => {
+  res.json(await listDispatchedToday(prisma, req.user));
+}));
+
 // GET /api/pedidos/:id
 router.get('/:id', allowModules({ default: ['caja', 'despacho', 'pos'] }), handle(async (req, res) => {
   const id = parseId(req, res);
@@ -55,7 +60,8 @@ router.post('/:id/cobrar', allowModules({ default: ['caja'] }), handle(async (re
 // Quién despacha lo decide la sucursal (config/dispatch.js); aquí solo se exige alguno de esos módulos.
 router.post('/:id/despachar', allowModules({ default: ['despacho', 'pos', 'caja'] }), handle(async (req, res) => {
   const id = parseId(req, res);
-  if (id !== null) res.json({ success: true, pedido: await dispatchOrder(prisma, id, req.user) });
+  const repartidorId = req.body?.repartidorId ? parseInt(req.body.repartidorId, 10) : null;
+  if (id !== null) res.json({ success: true, pedido: await dispatchOrder(prisma, id, req.user, repartidorId) });
 }));
 
 // POST /api/pedidos/:id/anular

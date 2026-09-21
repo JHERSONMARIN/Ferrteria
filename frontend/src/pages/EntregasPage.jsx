@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { formatSoles } from '../utils/currency.js';
-import { useConfirm } from '../components/ui/index.js';
+import { useConfirm, Modal, Textarea, Field } from '../components/ui/index.js';
 
 const REFRESH_MS = 5000;
 
@@ -15,7 +15,7 @@ const STATUS_BADGE = {
 const formatTime = (date) => (date ? new Date(date).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) : '');
 const mapsUrl = (address) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
-function DeliveryCard({ delivery, busy, onDepart, onDeliver, onCancel }) {
+function DeliveryCard({ delivery, busy, esRepartidor, userId, onClaim, onRelease, onDepart, onDeliver, onCancel }) {
   const active = delivery.status === 'PENDIENTE' || delivery.status === 'EN_CAMINO';
   const badge = STATUS_BADGE[delivery.status];
 
@@ -58,42 +58,74 @@ function DeliveryCard({ delivery, busy, onDepart, onDeliver, onCancel }) {
 
       {active ? (
         <>
-          {/* En camino: quien lo lleva es quien lo sacó a repartir. */}
-          {delivery.status === 'EN_CAMINO' && delivery.courier && (
-            <p className="text-xs text-ink-soft flex items-center gap-2">
-              <i className="fa-solid fa-truck-fast text-brand"></i>
-              Lleva: <span className="font-semibold text-ink">{delivery.courier.name}</span>
-            </p>
-          )}
-
+          {/* Esperando despacho: el pedido sigue en almacén y cualquier repartidor puede pedirlo. */}
           {delivery.waitingDispatch ? (
-            <p className="text-xs text-warning bg-warning-soft border border-warning/30 rounded-lg px-3 py-2">
-              <i className="fa-solid fa-hourglass-half mr-1.5"></i>Esperando que almacén despache los productos.
-            </p>
+            <>
+              <p className="text-xs text-warning bg-warning-soft border border-warning/30 rounded-lg px-3 py-2">
+                <i className="fa-solid fa-hourglass-half mr-1.5"></i>
+                {delivery.courier
+                  ? <>Lo pidió <span className="font-bold">{delivery.courier.name}</span>. Almacén todavía no lo despacha.</>
+                  : 'Esperando que almacén despache los productos.'}
+              </p>
+              {esRepartidor && (delivery.courier
+                ? delivery.courier.id === userId && (
+                  <button
+                    onClick={() => onRelease(delivery)}
+                    disabled={busy}
+                    className="text-xs font-semibold text-muted hover:text-danger"
+                  >
+                    Soltar el pedido (que lo tome otro)
+                  </button>
+                )
+                : (
+                  <button
+                    onClick={() => onClaim(delivery)}
+                    disabled={busy}
+                    className="w-full border border-brand text-brand hover:bg-brand-soft font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
+                  >
+                    <i className="fa-solid fa-hand mr-1.5"></i>Solicitar este pedido
+                  </button>
+                ))}
+            </>
           ) : delivery.status === 'PENDIENTE' ? (
-            // Por salir: el pedido está libre; se lo lleva el repartidor que lo saque.
-            <button
-              onClick={() => onDepart(delivery)}
-              disabled={busy}
-              className="w-full bg-panel hover:bg-panel-strong text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
-            >
-              <i className="fa-solid fa-truck-fast mr-1.5"></i>Salir a repartir
-            </button>
+            <>
+              {/* Ya despachado: almacén se lo entregó a este repartidor. */}
+              {delivery.courier && (
+                <p className="text-xs text-ink-soft flex items-center gap-2">
+                  <i className="fa-solid fa-box-open text-brand"></i>
+                  Despachado a: <span className="font-semibold text-ink">{delivery.courier.name}</span>
+                </p>
+              )}
+              <button
+                onClick={() => onDepart(delivery)}
+                disabled={busy}
+                className="w-full bg-panel hover:bg-panel-strong text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
+              >
+                <i className="fa-solid fa-truck-fast mr-1.5"></i>Salir a repartir
+              </button>
+            </>
           ) : (
-            // En camino: solo queda cerrarlo.
-            <button
-              onClick={() => onDeliver(delivery)}
-              disabled={busy}
-              className="w-full bg-success hover:brightness-95 text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
-            >
-              <i className="fa-solid fa-check mr-1.5"></i>Entregado
-            </button>
-          )}
-
-          {delivery.status === 'PENDIENTE' && !delivery.legacy && (
-            <button onClick={() => onCancel(delivery)} disabled={busy} className="text-xs font-semibold text-muted hover:text-danger">
-              Cancelar envío (el cliente recoge en tienda)
-            </button>
+            <>
+              {/* En camino: cerrarlo como entregado o devolverlo a la tienda. */}
+              {delivery.courier && (
+                <p className="text-xs text-ink-soft flex items-center gap-2">
+                  <i className="fa-solid fa-truck-fast text-brand"></i>
+                  Lleva: <span className="font-semibold text-ink">{delivery.courier.name}</span>
+                </p>
+              )}
+              <button
+                onClick={() => onDeliver(delivery)}
+                disabled={busy}
+                className="w-full bg-success hover:brightness-95 text-white font-bold py-2.5 rounded-lg text-sm disabled:opacity-50"
+              >
+                <i className="fa-solid fa-check mr-1.5"></i>Entregado
+              </button>
+              {!delivery.legacy && (
+                <button onClick={() => onCancel(delivery)} disabled={busy} className="text-xs font-semibold text-muted hover:text-danger">
+                  Cancelar envío: regresar los productos a la tienda
+                </button>
+              )}
+            </>
           )}
         </>
       ) : (
@@ -103,6 +135,48 @@ function DeliveryCard({ delivery, busy, onDepart, onDeliver, onCancel }) {
         </p>
       )}
     </div>
+  );
+}
+
+// Cancelar un envío que ya salió: el repartidor regresa los productos a la tienda.
+function CancelDeliveryModal({ delivery, busy, onClose, onConfirm }) {
+  const [motivo, setMotivo] = useState('');
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Cancelar el envío"
+      icon="fa-triangle-exclamation"
+      size="sm"
+      description={`${delivery.ref} · ${delivery.contactName}`}
+      footer={<>
+        <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-semibold text-ink-soft hover:bg-surface-muted">
+          Volver
+        </button>
+        <button
+          onClick={() => onConfirm(motivo.trim())}
+          disabled={busy}
+          className="px-4 py-2 rounded-xl text-sm font-semibold bg-danger text-white disabled:opacity-50"
+        >
+          Cancelar el envío
+        </button>
+      </>}
+    >
+      <p className="text-sm text-ink-soft mb-3">
+        El pedido deja de ser un envío a domicilio: el cliente lo recoge en la tienda.
+        {delivery.status === 'EN_CAMINO' && ' Los productos tienen que volver con el repartidor.'}
+      </p>
+      <Field label="Motivo (opcional)" hint="Queda guardado en Auditoría junto con su nombre.">
+        <Textarea
+          rows={2}
+          value={motivo}
+          onChange={e => setMotivo(e.target.value)}
+          placeholder="Ej. el cliente pasó a recogerlo"
+          maxLength={200}
+        />
+      </Field>
+    </Modal>
   );
 }
 
@@ -232,23 +306,22 @@ export default function EntregasPage({ currentUser }) {
   const confirmar = useConfirm();
   const isCourier = currentUser?.role === 'REPARTIDOR';
   const [view, setView] = useState('activas');
-  const [onlyMine, setOnlyMine] = useState(isCourier);
   const [deliveries, setDeliveries] = useState([]);
   const [loadError, setLoadError] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [notice, setNotice] = useState(null);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [cancelling, setCancelling] = useState(null);
   const wakeLockRef = useRef(null);
 
   const load = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ estado: view, ...(onlyMine ? { mias: '1' } : {}) });
-      setDeliveries(await api.get(`/entregas?${params}`));
+      setDeliveries(await api.get(`/entregas?estado=${view}`));
       setLoadError('');
     } catch (err) {
       setLoadError(err.message || 'No se pudieron cargar las entregas.');
     }
-  }, [view, onlyMine]);
+  }, [view]);
 
   useEffect(() => {
     load();
@@ -284,6 +357,12 @@ export default function EntregasPage({ currentUser }) {
   };
 
   const cardProps = {
+    esRepartidor: isCourier,
+    userId: currentUser?.id ?? null,
+    onClaim: (d) => run(d, () => api.patch(`/entregas/${d.id}/repartidor`, { repartidorId: currentUser.id }),
+      `${d.ref} queda a su nombre: almacén se lo entregará a usted.`),
+    onRelease: (d) => run(d, () => api.patch(`/entregas/${d.id}/repartidor`, { repartidorId: null }),
+      `${d.ref} quedó libre para otro repartidor.`),
     onDepart: (d) => run(d, () => api.post(`/entregas/${d.id}/salir`, {}), `${d.ref} en camino.`),
     onDeliver: async (d) => {
       const seguro = await confirmar({
@@ -295,10 +374,7 @@ export default function EntregasPage({ currentUser }) {
         run(d, () => api.post(`/entregas/${d.id}/entregar`, {}), `${d.ref} entregado.`);
       }
     },
-    onCancel: (d) => {
-      const reason = window.prompt(`Motivo para cancelar el envío ${d.ref} (el cliente recogerá en tienda):`, '');
-      if (reason !== null) run(d, () => api.post(`/entregas/${d.id}/cancelar`, { reason }), `Envío ${d.ref} cancelado.`);
-    },
+    onCancel: (d) => setCancelling(d),
   };
   const renderCard = (d) => <DeliveryCard key={d.id} delivery={d} {...cardProps} busy={busyId === d.id} />;
 
@@ -322,10 +398,6 @@ export default function EntregasPage({ currentUser }) {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-ink-soft cursor-pointer">
-              <input type="checkbox" checked={onlyMine} onChange={e => setOnlyMine(e.target.checked)} className="accent-orange-600 w-4 h-4" />
-              Solo mis entregas
-            </label>
             <button
               onClick={() => setShowSchedule(true)}
               className="bg-brand hover:bg-brand-strong text-brand-contrast font-bold py-2 px-4 rounded-lg shadow text-sm"
@@ -357,6 +429,20 @@ export default function EntregasPage({ currentUser }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{deliveries.map(renderCard)}</div>
         )}
       </div>
+
+      {cancelling && (
+        <CancelDeliveryModal
+          delivery={cancelling}
+          busy={busyId === cancelling.id}
+          onClose={() => setCancelling(null)}
+          onConfirm={(motivo) => {
+            const envio = cancelling;
+            setCancelling(null);
+            run(envio, () => api.post(`/entregas/${envio.id}/cancelar`, { reason: motivo || null }),
+              `Envío ${envio.ref} cancelado: el cliente lo recoge en tienda.`);
+          }}
+        />
+      )}
 
       {showSchedule && (
         <ScheduleDeliveryModal

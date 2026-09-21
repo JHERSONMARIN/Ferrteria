@@ -97,15 +97,23 @@ export function formatDelivery(d) {
 
 const RECENT_DAYS = 7;
 
-export async function listDeliveries(db, { finished = false, onlyUserId = null, branchId = null } = {}) {
+export async function listDeliveries(db, { finished = false, ownUserId = null, branchId = null } = {}) {
   const where = finished
     ? { status: { in: ['ENTREGADO', 'CANCELADO'] }, updatedAt: { gte: new Date(Date.now() - RECENT_DAYS * 86400000) } }
     : { status: { in: ['PENDIENTE', 'EN_CAMINO'] } };
   where.AND = [];
   // Cada sucursal ve sus envíos (las entregas antiguas, sin venta, las ven todas).
   if (branchId) where.AND.push({ OR: [{ venta: { branchId } }, { ventaId: null }] });
-  // "Mis entregas": las asignadas al repartidor y las que nadie tomó todavía.
-  if (onlyUserId) where.AND.push({ OR: [{ repartidorId: onlyUserId }, { repartidorId: null }] });
+  // El repartidor ve todo lo que sigue en almacén (puede solicitarlo) y, ya despachado, solo lo suyo.
+  // El administrador y quien atiende la tienda ven todo.
+  if (ownUserId) {
+    where.AND.push({
+      OR: [
+        { repartidorId: ownUserId },
+        { venta: { status: { not: 'DISPATCHED' } } },
+      ],
+    });
+  }
 
   const deliveries = await db.entrega.findMany({
     where,
@@ -130,17 +138,37 @@ async function transition(db, id, fromStatuses, data, conflictMessage) {
   return formatDelivery(await findDelivery(db, id));
 }
 
+// Comprueba que el usuario pueda hacer entregas en la sucursal del envío. Devuelve el repartidor.
+export async function assertCanDeliver(db, courierId, branchId) {
+  const courier = await db.usuario.findUnique({
+    where: { id: courierId },
+    select: { id: true, name: true, active: true, role: true, modules: true, branchId: true },
+  });
+  const puede = courier && courier.active && (!branchId || courier.branchId === branchId) && (
+    courier.role === 'ADMINISTRADOR' || courier.role === 'REPARTIDOR'
+    || (Array.isArray(courier.modules) && courier.modules.includes('deliveries'))
+  );
+  if (!puede) throw new DeliveryError('El usuario elegido no puede realizar entregas.');
+  return courier;
+}
+
 export async function assignCourier(db, id, courierId, user) {
   const delivery = await findDelivery(db, id, user);
   if (!['PENDIENTE', 'EN_CAMINO'].includes(delivery.status)) {
     throw new DeliveryError('Solo se puede asignar repartidor a entregas activas.', 409);
   }
+  // El repartidor solo se toma para sí lo que está libre, y solo suelta lo suyo: no se pisan entre ellos.
+  if (user.role === 'REPARTIDOR') {
+    const tomar = courierId === user.id && !delivery.repartidor;
+    const soltar = courierId === null && delivery.repartidor?.id === user.id;
+    if (!tomar && !soltar) {
+      throw new DeliveryError(delivery.repartidor
+        ? `Este pedido ya lo tomó ${delivery.repartidor.name}.`
+        : 'Solo puede tomar el pedido para usted mismo.', 409);
+    }
+  }
   if (courierId !== null) {
-    const courier = await db.usuario.findUnique({ where: { id: courierId }, select: { active: true, role: true, modules: true, branchId: true } });
-    const canDeliver = courier && courier.active && (!delivery.venta || courier.branchId === delivery.venta.branchId) && (
-      courier.role === 'ADMINISTRADOR' || courier.role === 'REPARTIDOR' || (Array.isArray(courier.modules) && courier.modules.includes('deliveries'))
-    );
-    if (!canDeliver) throw new DeliveryError('El usuario elegido no puede realizar entregas.');
+    await assertCanDeliver(db, courierId, delivery.venta?.branchId ?? null);
   }
   await db.entrega.update({ where: { id }, data: { repartidorId: courierId } });
   return formatDelivery(await findDelivery(db, id));
@@ -177,16 +205,21 @@ export async function cancelDelivery(db, id, user, reason) {
   }
   const note = `Envío cancelado por ${user.name}${reason?.trim() ? `: ${reason.trim()}` : ''}`;
   return db.$transaction(async (tx) => {
-    const cancelled = await transition(tx, id, ['PENDIENTE'], {
+    // También se cancela en camino: el cliente avisa que lo recoge y el repartidor regresa con todo.
+    const cancelled = await transition(tx, id, ['PENDIENTE', 'EN_CAMINO'], {
       status: 'CANCELADO',
       notes: [delivery.notes, note].filter(Boolean).join(' · ').slice(0, 300),
-    }, 'Solo se puede cancelar un envío que todavía no salió.');
+    }, 'Este envío ya fue entregado o cancelado.');
     await recordAudit(tx, {
       action: 'DELIVERY_CANCELLED',
       entity: 'Entrega',
       entityId: id,
-      summary: `Envío ${delivery.ref} cancelado${reason?.trim() ? `: ${reason.trim()}` : ''}`,
-      details: { ref: delivery.ref, address: delivery.address, reason: reason?.trim() || null },
+      summary: `Envío ${delivery.ref} cancelado${delivery.status === 'EN_CAMINO' ? ' (ya había salido)' : ''}`
+        + `${reason?.trim() ? `: ${reason.trim()}` : ''}`,
+      details: {
+        ref: delivery.ref, address: delivery.address, reason: reason?.trim() || null,
+        estado: delivery.status, repartidor: delivery.repartidor?.name ?? null,
+      },
       user,
     });
     return cancelled;
