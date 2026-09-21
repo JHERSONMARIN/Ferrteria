@@ -159,8 +159,7 @@ export default function CompanyDetail({ company, plans, themes, modules, onClose
           <section className="bg-white rounded-lg border border-gray-200 p-4">
             <h3 className="font-bold text-slate-800 text-sm">Estilo del sistema</h3>
             <p className="text-xs text-slate-500 mt-0.5 mb-2">
-              Colores con los que la empresa ve FerreSys. También puede cambiarlo su administrador desde
-              <em> Configuración → Identidad</em>.
+              Colores con los que la empresa ve FerreSys. Solo se cambian desde aquí.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {themes && Object.entries(themes).map(([id, estilo]) => {
