@@ -263,15 +263,17 @@ function Aplicacion() {
     return () => window.removeEventListener('sesion-expirada', onSessionExpired);
   }, []);
 
-  // Si el usuario cambia de tab a uno al que no tiene acceso, redirigirlo al primero accesible
+  // Si el usuario cambia de tab a uno al que no tiene acceso, redirigirlo al primero accesible.
+  // Mientras carga la configuración la lista está incompleta: mover de pantalla ahí dejaría al
+  // usuario en un sitio al que no quería ir (por ejemplo, Auditoría en vez de Vender).
   useEffect(() => {
-    if (currentUser && navigableTabs.length > 0) {
+    if (currentUser && settingsStatus !== 'loading' && navigableTabs.length > 0) {
       const isAllowed = navigableTabs.includes(activeTab) || (activeTab === 'categories' && navigableTabs.includes('inventory'));
       if (!isAllowed) {
         setActiveTab(primeraPantalla(navigableTabs));
       }
     }
-  }, [currentUser, activeTab, navigableTabs]);
+  }, [currentUser, activeTab, navigableTabs, settingsStatus]);
 
   const handleLogin = async (e, customUser, customPass) => {
     if (e && e.preventDefault) e.preventDefault();
