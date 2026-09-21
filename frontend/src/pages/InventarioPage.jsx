@@ -5,6 +5,8 @@ import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
 import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quantities.js';
 import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
+import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
+import SaleUnitsEditor, { toSaleUnitRow, toSaleUnitPayload, validateSaleUnits } from '../components/SaleUnitsEditor.jsx';
 
 export default function InventarioPage({ initialCategory = 'Todas', initialSearch = '', onNavigateToCategories, currentUser }) {
   const aviso = useToast();
@@ -36,6 +38,10 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
   const [wholesalePrice, setWholesalePrice] = useState('');
   const [searchingBarcode, setSearchingBarcode] = useState(false);
   const [productErrors, setProductErrors] = useState({});
+  const [saleUnits, setSaleUnits] = useState([]);
+  const [saleUnitErrors, setSaleUnitErrors] = useState({});
+  // Escáner abierto: guarda a qué campo va el código leído.
+  const [scanTarget, setScanTarget] = useState(null);
 
   useEffect(() => {
     if (initialSearch) setSearchQuery(initialSearch);
@@ -129,8 +135,10 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
     const wholesaleNum = parseFloat(wholesalePrice);
     if (wholesalePrice !== '' && (isNaN(wholesaleNum) || wholesaleNum <= 0)) e.wholesalePrice = 'Debe ser mayor a 0 (o dejarlo vacío).';
 
+    const unitErrors = validateSaleUnits(saleUnits, unit, code);
+    setSaleUnitErrors(unitErrors);
     setProductErrors(e);
-    return Object.keys(e).length === 0;
+    return Object.keys(e).length === 0 && Object.keys(unitErrors).length === 0;
   };
 
   const resetForm = () => {
@@ -144,6 +152,8 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
     setUnit('Unidad');
     setAllowsFractions(false);
     setProductErrors({});
+    setSaleUnits([]);
+    setSaleUnitErrors({});
     setEditingProductId(null);
   };
 
@@ -167,6 +177,8 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
     setMinStock(String(p.minStock ?? 10));
     setPrice(String(p.price));
     setWholesalePrice(p.wholesalePrice != null ? String(p.wholesalePrice) : '');
+    setSaleUnits((p.saleUnits || []).map(toSaleUnitRow));
+    setSaleUnitErrors({});
     setShowModal(true);
   };
 
@@ -190,6 +202,7 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
           minStock: Number(minStock),
           price: parseFloat(price),
           wholesalePrice: wholesalePrice === '' ? null : parseFloat(wholesalePrice),
+          saleUnits: saleUnits.map(toSaleUnitPayload),
         });
       } else {
         await api.post('/productos', {
@@ -202,6 +215,7 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
           minStock: Number(minStock),
           price: parseFloat(price),
           wholesalePrice: wholesalePrice === '' ? null : parseFloat(wholesalePrice),
+          saleUnits: saleUnits.map(toSaleUnitPayload),
           usuarioId: currentUser?.id,
         });
       }
@@ -216,11 +230,12 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
     }
   };
 
-  const handleSearchBarcode = async () => {
-    if (!code.trim()) return;
+  const handleSearchBarcode = async (scanned) => {
+    const barcode = (typeof scanned === 'string' ? scanned : code).trim();
+    if (!barcode) return;
     try {
       setSearchingBarcode(true);
-      const res = await api.get(`/productos/barcode/${code.trim()}`);
+      const res = await api.get(`/productos/barcode/${encodeURIComponent(barcode)}`);
       if (res.foundInDb) {
         aviso.exito('Este producto ya existe en el inventario.');
         setName(res.product.name);
@@ -385,7 +400,17 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
                           {p.category || 'General'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center text-xs text-muted">{p.unit}</td>
+                      <td className="px-4 py-3 text-center text-xs text-muted">
+                        {p.unit}
+                        {p.saleUnits?.length > 0 && (
+                          <span
+                            className="block text-[10px] text-brand-text font-semibold cursor-help"
+                            title={p.saleUnits.map(u => `${u.name} (${formatQuantity(u.factor)} ${p.unit.toLowerCase()}): S/ ${u.price.toFixed(2)}`).join('\n')}
+                          >
+                            +{p.saleUnits.length} presentación{p.saleUnits.length === 1 ? '' : 'es'}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right font-bold text-ink-soft">
                         {formatQuantity(p.stock)}
                         {multiBranch && (
@@ -433,8 +458,8 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
       {/* Modal Nuevo / Editar Producto */}
       {showModal && (
         <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
-          <div className="bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 bg-panel text-white flex justify-between items-center">
+          <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="p-4 bg-panel text-white flex justify-between items-center shrink-0">
               <h3 className="font-bold text-lg">
                 <i className={`fa-solid ${editingProductId ? 'fa-pen-to-square' : 'fa-box-open'} mr-2`}></i>
                 {editingProductId ? 'Editar Producto' : 'Nuevo Producto'}
@@ -443,7 +468,7 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
-            <div className="p-6 flex flex-col gap-4">
+            <div className="p-6 flex flex-col gap-4 overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-muted mb-1 block">Código (Escanear)</label>
@@ -457,6 +482,18 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
                       placeholder="Escanea aquí..."
                       className={`w-full border p-2 rounded outline-none text-sm ${borderClass(productErrors.code)}`}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setScanTarget(() => (scanned) => {
+                        setCode(scanned);
+                        clearProductError('code');
+                        if (!editingProductId) handleSearchBarcode(scanned);
+                      })}
+                      className="bg-brand-soft text-brand-text px-3 rounded hover:brightness-95 text-xs"
+                      title="Escanear el código de barras con la cámara o el lector"
+                    >
+                      <i className="fa-solid fa-barcode"></i>
+                    </button>
                     <button
                       onClick={handleSearchBarcode}
                       disabled={searchingBarcode || !!editingProductId}
@@ -530,7 +567,7 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
                 <FieldError msg={productErrors.category} />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <label className="text-xs font-bold text-muted mb-1 block">Stock {editingProductId ? 'Actual' : 'Inicial'}</label>
                   <input
@@ -580,8 +617,17 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
                   <FieldError msg={productErrors.wholesalePrice} />
                 </div>
               </div>
+
+              <SaleUnitsEditor
+                rows={saleUnits}
+                onChange={rows => { setSaleUnits(rows); setSaleUnitErrors({}); }}
+                baseUnit={unit}
+                basePrice={price}
+                errors={saleUnitErrors}
+                onScan={apply => setScanTarget(() => apply)}
+              />
             </div>
-            <div className="p-4 bg-surface-muted border-t flex justify-end gap-3">
+            <div className="p-4 bg-surface-muted border-t flex justify-end gap-3 shrink-0">
               <button onClick={closeModal} className="px-4 py-2 font-bold text-ink-soft bg-surface-muted rounded-lg text-sm">Cancelar</button>
               <button onClick={handleSaveProduct} disabled={loading} className="px-4 py-2 font-bold text-brand-contrast bg-brand hover:bg-brand-strong rounded-lg text-sm shadow-sm transition-colors">
                 {editingProductId ? 'Guardar Cambios' : 'Guardar Producto'}
@@ -590,6 +636,12 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
           </div>
         </div>
       )}
+
+      <BarcodeScannerModal
+        open={Boolean(scanTarget)}
+        onClose={() => setScanTarget(null)}
+        onDetected={code => scanTarget?.(code)}
+      />
     </div>
   );
 }

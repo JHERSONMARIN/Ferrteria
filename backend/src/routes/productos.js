@@ -1,6 +1,6 @@
 import express from 'express';
 import { prisma } from '../db.js';
-import { quantityProblem } from '../utils/quantities.js';
+import { quantityProblem, roundQuantity } from '../utils/quantities.js';
 import { recordAudit, changedFields } from '../services/audit.js';
 import { resolveBranchId, BranchError } from '../services/branches.js';
 
@@ -14,6 +14,99 @@ function parseWholesalePrice(value) {
 }
 
 const BRANCH_STOCK_SELECT = { select: { branchId: true, stock: true, reserved: true } };
+const SALE_UNITS_SELECT = {
+  where: { active: true },
+  select: { id: true, name: true, factor: true, price: true, wholesalePrice: true, code: true, allowsFractions: true },
+  orderBy: { factor: 'asc' },
+};
+const MAX_SALE_UNITS = 10;
+
+class ProductError extends Error {}
+
+// Presentaciones de venta que manda el formulario: [{ id?, name, factor, price, wholesalePrice?, code?, allowsFractions? }].
+// undefined = no se tocan; [] = se quitan todas.
+export function parseSaleUnits(raw, baseUnitName) {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) throw new ProductError('Las presentaciones no son válidas.');
+  if (raw.length > MAX_SALE_UNITS) throw new ProductError(`Se permiten hasta ${MAX_SALE_UNITS} presentaciones por producto.`);
+
+  const names = new Set([String(baseUnitName || 'Unidad').trim().toLowerCase()]);
+  const codes = new Set();
+  return raw.map((u, i) => {
+    const name = String(u?.name ?? '').trim().slice(0, 40);
+    const factor = Number(u?.factor);
+    const price = Number(u?.price);
+    const wholesale = parseWholesalePrice(u?.wholesalePrice);
+    const code = u?.code ? String(u.code).trim().slice(0, 60) : null;
+    const label = name || `la presentación ${i + 1}`;
+    if (!name) throw new ProductError(`Falta el nombre de la presentación ${i + 1}.`);
+    if (names.has(name.toLowerCase())) throw new ProductError(`La presentación "${name}" está repetida o es igual a la unidad base.`);
+    names.add(name.toLowerCase());
+    if (!Number.isFinite(factor) || factor <= 0 || roundQuantity(factor) !== factor) {
+      throw new ProductError(`Indique cuántas unidades base trae ${label} (mayor a 0, hasta 3 decimales).`);
+    }
+    if (!Number.isFinite(price) || price <= 0) throw new ProductError(`El precio de ${label} debe ser mayor a 0.`);
+    if (wholesale === false) throw new ProductError(`El precio mayorista de ${label} debe ser mayor a 0.`);
+    if (code) {
+      if (codes.has(code)) throw new ProductError(`El código ${code} está repetido en las presentaciones.`);
+      codes.add(code);
+    }
+    const id = Number(u?.id);
+    return {
+      id: Number.isInteger(id) && id > 0 ? id : null,
+      name, factor, price: Math.round(price * 100) / 100, wholesalePrice: wholesale, code, allowsFractions: u?.allowsFractions === true,
+    };
+  });
+}
+
+// Deja activas exactamente las presentaciones indicadas. Las quitadas se desactivan (las ventas
+// pasadas las siguen referenciando) y una con el nombre de otra desactivada la reactiva.
+export async function syncSaleUnits(tx, productId, units, productCode) {
+  if (units === undefined) return;
+  if (units.some(u => u.code && u.code === productCode)) {
+    throw new ProductError('Una presentación no puede tener el mismo código que el producto.');
+  }
+  const existing = await tx.productUnit.findMany({ where: { productoId: productId } });
+  const keep = new Set();
+  for (const unit of units) {
+    const match = existing.find(e => e.id === unit.id) || existing.find(e => e.name.toLowerCase() === unit.name.toLowerCase());
+    const data = {
+      name: unit.name, factor: unit.factor, price: unit.price, wholesalePrice: unit.wholesalePrice,
+      code: unit.code, allowsFractions: unit.allowsFractions, active: true,
+    };
+    if (match) {
+      keep.add(match.id);
+      await tx.productUnit.update({ where: { id: match.id }, data });
+    } else {
+      const created = await tx.productUnit.create({ data: { ...data, productoId: productId } });
+      keep.add(created.id);
+    }
+  }
+  await tx.productUnit.updateMany({
+    where: { productoId: productId, id: { notIn: [...keep] }, active: true },
+    data: { active: false, code: null },
+  });
+}
+
+// El código de una presentación no puede ser el de otro producto (el escáner no sabría cuál es).
+async function assertUnitCodesFree(db, units, productId = null) {
+  const codes = (units || []).map(u => u.code).filter(Boolean);
+  if (codes.length === 0) return;
+  const clash = await db.producto.findFirst({
+    where: { code: { in: codes }, ...(productId ? { id: { not: productId } } : {}) },
+    select: { code: true },
+  });
+  if (clash) throw new ProductError(`El código ${clash.code} ya es de otro producto.`);
+}
+
+// Y al revés: el código del producto no puede ser el de una presentación de otro producto.
+async function assertProductCodeFree(db, code, productId = null) {
+  const clash = await db.productUnit.findFirst({
+    where: { code: String(code).trim(), ...(productId ? { productoId: { not: productId } } : {}) },
+    select: { name: true, producto: { select: { name: true } } },
+  });
+  if (clash) throw new ProductError(`El código ya es de la presentación ${clash.name} de ${clash.producto.name}.`);
+}
 
 // stock/reserved son los de la sucursal del usuario (lo que puede vender); totalStock/totalReserved,
 // los de toda la empresa, y branches el detalle por sucursal.
@@ -47,6 +140,7 @@ router.get('/', async (req, res) => {
         price: true,
         category: true,
         branchStocks: BRANCH_STOCK_SELECT,
+        saleUnits: SALE_UNITS_SELECT,
       },
       orderBy: { name: 'asc' }
     });
@@ -109,6 +203,9 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'El stock mínimo no es válido.' });
     }
     const categoryName = category && category.trim() ? category.trim() : 'General';
+    const saleUnits = parseSaleUnits(req.body.saleUnits, unit || 'Unidad');
+    await assertUnitCodesFree(prisma, saleUnits);
+    await assertProductCodeFree(prisma, code);
 
     // Resolver Categoria relacional
     let resolvedCatId = categoriaId ? parseInt(categoriaId, 10) : null;
@@ -142,6 +239,7 @@ router.post('/', async (req, res) => {
       });
 
       await tx.branchStock.create({ data: { branchId, productoId: p.id, stock: stockNum } });
+      await syncSaleUnits(tx, p.id, saleUnits, p.code);
 
       if (stockNum > 0) {
         await tx.movimientoKardex.create({
@@ -162,6 +260,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(product);
   } catch (error) {
+    if (error instanceof ProductError) return res.status(400).json({ error: error.message });
     if (error instanceof BranchError) return res.status(error.status).json({ error: error.message });
     if (error.code === 'P2002') {
       return res.status(400).json({ error: 'Ya existe un producto registrado con este código.' });
@@ -201,6 +300,9 @@ router.put('/:id', async (req, res) => {
 
     const wholesale = parseWholesalePrice(req.body.wholesalePrice);
     if (wholesale === false) return res.status(400).json({ error: 'El precio mayorista debe ser mayor a 0.' });
+    const saleUnits = parseSaleUnits(req.body.saleUnits, unit || 'Unidad');
+    await assertUnitCodesFree(prisma, saleUnits, id);
+    await assertProductCodeFree(prisma, code, id);
 
     const current = await prisma.producto.findUnique({
       where: { id },
@@ -234,6 +336,8 @@ router.put('/:id', async (req, res) => {
         },
       });
 
+      await syncSaleUnits(tx, id, saleUnits, product.code);
+
       const priceChanges = changedFields(current, product, ['price', 'wholesalePrice']);
       if (priceChanges) {
         const describe = (label, change) => `${label} S/ ${change.before ?? '—'} → S/ ${change.after ?? '—'}`;
@@ -254,8 +358,9 @@ router.put('/:id', async (req, res) => {
 
     res.json(updated);
   } catch (error) {
+    if (error instanceof ProductError) return res.status(400).json({ error: error.message });
     if (error.code === 'P2002') {
-      return res.status(400).json({ error: 'Ya existe otro producto con este código.' });
+      return res.status(400).json({ error: 'Ya existe otro producto o presentación con este código.' });
     }
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Producto no encontrado.' });

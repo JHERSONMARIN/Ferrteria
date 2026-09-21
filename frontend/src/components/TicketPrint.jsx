@@ -66,7 +66,10 @@ export default function TicketPrint({ data, business }) {
           {items.map((item, idx) => (
             <tr key={idx}>
               <td style={{ padding: '2px 0' }}>{item.qty}</td>
-              <td style={{ padding: '2px 0' }}>{item.name ? item.name.substring(0, 15) : ''}</td>
+              <td style={{ padding: '2px 0' }}>
+                {item.name ? item.name.substring(0, 15) : ''}
+                {item.unitName && <><br />({item.unitName})</>}
+              </td>
               <td style={{ padding: '2px 0', textAlign: 'right' }}>{Number(item.price).toFixed(2)}</td>
               <td style={{ padding: '2px 0', textAlign: 'right' }}>{(item.qty * item.price).toFixed(2)}</td>
             </tr>

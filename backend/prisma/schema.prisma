@@ -148,8 +148,35 @@ model Producto {
   detallesCotizacion DetalleCotizacion[]
   branchStocks       BranchStock[]
   transferItems      StockTransferItem[]
+  // Otras formas de vender el mismo producto (paquete, ciento, kilo…); el stock sigue en `unit`.
+  saleUnits          ProductUnit[]
 
   @@map("productos")
+}
+
+// Presentación de venta de un producto. `factor` = cuántas unidades del stock contiene
+// (un "Ciento" de tornillos = 100). Se desactiva en vez de borrarse: las ventas la referencian.
+model ProductUnit {
+  id              Int      @id @default(autoincrement())
+  name            String
+  factor          Decimal  @db.Decimal(12, 3)
+  price           Decimal  @db.Decimal(12, 2)
+  wholesalePrice  Decimal? @db.Decimal(12, 2)
+  // Código de barras propio de la presentación (ej. el de la caja); opcional.
+  code            String?  @unique
+  allowsFractions Boolean  @default(false)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  detallesVenta      DetalleVenta[]
+  detallesCotizacion DetalleCotizacion[]
+
+  @@unique([productoId, name])
+  @@map("product_units")
 }
 
 model Categoria {
@@ -250,6 +277,13 @@ model DetalleVenta {
 
   ventaId Int
   venta   Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  // Presentación vendida (null = la unidad base). quantity y unitPrice están en esa presentación;
+  // lo que sale del stock es quantity × unitFactor.
+  unitId     Int?
+  unit       ProductUnit? @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  unitName   String?
+  unitFactor Decimal      @default(1) @db.Decimal(12, 3)
 
   productoId Int
   producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
@@ -480,6 +514,13 @@ model DetalleCotizacion {
 
   cotizacionId Int
   cotizacion   Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+
+  // Presentación vendida (null = la unidad base). quantity y unitPrice están en esa presentación;
+  // lo que sale del stock es quantity × unitFactor.
+  unitId     Int?
+  unit       ProductUnit? @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  unitName   String?
+  unitFactor Decimal      @default(1) @db.Decimal(12, 3)
 
   productoId Int
   producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)

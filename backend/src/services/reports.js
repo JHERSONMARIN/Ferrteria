@@ -79,7 +79,7 @@ export async function salesReport(db, query) {
       GROUP BY v."paidById", u.name ORDER BY total DESC`,
     db.$queryRaw`SELECT to_char(${localDay}, 'YYYY-MM-DD') AS day, count(*)::int AS sales, sum(v.total)::float8 AS total
       FROM ventas v WHERE ${inRange} GROUP BY 1 ORDER BY 1`,
-    db.$queryRaw`SELECT p.id, p.code, p.name, p.unit, sum(d.quantity)::float8 AS quantity, sum(d.subtotal)::float8 AS amount,
+    db.$queryRaw`SELECT p.id, p.code, p.name, p.unit, sum(d.quantity * d."unitFactor")::float8 AS quantity, sum(d.subtotal)::float8 AS amount,
         count(DISTINCT d."ventaId")::int AS sales
       FROM detalle_ventas d JOIN ventas v ON v.id = d."ventaId" JOIN productos p ON p.id = d."productoId"
       WHERE ${inRange} GROUP BY p.id ORDER BY amount DESC LIMIT ${TOP_PRODUCTS}`,
@@ -90,7 +90,7 @@ export async function salesReport(db, query) {
         COALESCE(sold.quantity, 0)::float8 AS sold
       FROM productos p
       LEFT JOIN (
-        SELECT d."productoId", sum(d.quantity) AS quantity
+        SELECT d."productoId", sum(d.quantity * d."unitFactor") AS quantity
         FROM detalle_ventas d JOIN ventas v ON v.id = d."ventaId" WHERE ${inRange} GROUP BY d."productoId"
       ) sold ON sold."productoId" = p.id
       WHERE p.active`,

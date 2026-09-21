@@ -265,7 +265,7 @@ export default function CotizacionesPage() {
                   <tbody>
                     {detailTarget.detalles.map((d, idx) => (
                       <tr key={idx} className="border-t border-line">
-                        <td className="py-1.5 px-2 text-ink-soft">{d.producto?.name}</td>
+                        <td className="py-1.5 px-2 text-ink-soft">{d.producto?.name}{d.unitName && <span className="text-brand-text font-semibold"> · {d.unitName}</span>}</td>
                         <td className="py-1.5 px-2 text-right">{d.quantity}</td>
                         <td className="py-1.5 px-2 text-right">S/ {d.unitPrice.toFixed(2)}</td>
                         <td className="py-1.5 px-2 text-right font-bold">S/ {d.subtotal.toFixed(2)}</td>

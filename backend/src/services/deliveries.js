@@ -2,6 +2,7 @@
 // descontó la venta (modo directo / caja) o lo descontará el despacho (modo por etapas).
 
 import { recordAudit } from './audit.js';
+import { roundQuantity } from '../utils/quantities.js';
 
 export class DeliveryError extends Error {
   constructor(message, status = 400) {
@@ -65,7 +66,8 @@ export async function scheduleDeliveryForSale(tx, { ventaId, numDoc, clienteId, 
       ...delivery,
       clienteId,
       ventaId,
-      detalles: { create: lines.map(l => ({ productoId: l.id, quantity: l.qty })) },
+      // El envío lleva unidades del stock: una presentación se entrega como sus unidades base.
+      detalles: { create: lines.map(l => ({ productoId: l.id, quantity: l.baseQty ?? l.qty })) },
     },
     select: { id: true, ref: true, address: true },
   });
@@ -234,7 +236,7 @@ export async function scheduleDeliveryForExistingSale(db, numDoc, deliveryInput,
       where: { numDoc: String(numDoc ?? '').trim().toUpperCase() },
       include: {
         entrega: { select: { ref: true } },
-        detalles: { select: { productoId: true, quantity: true } },
+        detalles: { select: { productoId: true, quantity: true, unitFactor: true } },
         branch: { select: { name: true, deliveriesEnabled: true } },
       },
     });
@@ -249,7 +251,7 @@ export async function scheduleDeliveryForExistingSale(db, numDoc, deliveryInput,
       ventaId: sale.id,
       numDoc: sale.numDoc,
       clienteId: sale.clienteId,
-      lines: sale.detalles.map(d => ({ id: d.productoId, qty: d.quantity })),
+      lines: sale.detalles.map(d => ({ id: d.productoId, qty: d.quantity, baseQty: roundQuantity(d.quantity * d.unitFactor) })),
       delivery,
     });
     return formatDelivery(await tx.entrega.findUnique({ where: { id: created.id }, include: DELIVERY_INCLUDE }));
@@ -263,7 +265,7 @@ export async function findSaleForDelivery(db, numDoc, user) {
     include: {
       cliente: { select: { name: true, phone: true, address: true } },
       entrega: { select: { ref: true } },
-      detalles: { select: { quantity: true, producto: { select: { name: true } } } },
+      detalles: { select: { quantity: true, unitName: true, producto: { select: { name: true } } } },
     },
   });
   if (!sale || !['PAID', 'DISPATCHED'].includes(sale.status)) {
@@ -275,6 +277,6 @@ export async function findSaleForDelivery(db, numDoc, user) {
     total: sale.total,
     existingDelivery: sale.entrega?.ref ?? null,
     customer: sale.cliente ? { name: sale.cliente.name, phone: sale.cliente.phone, address: sale.cliente.address } : null,
-    items: sale.detalles.map(d => ({ name: d.producto.name, qty: d.quantity })),
+    items: sale.detalles.map(d => ({ name: d.unitName ? `${d.producto.name} (${d.unitName})` : d.producto.name, qty: d.quantity })),
   };
 }
