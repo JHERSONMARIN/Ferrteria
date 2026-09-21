@@ -6,7 +6,7 @@ import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
 import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
 import { formatSoles } from '../utils/currency.js';
 import { findCustomerByInput } from '../utils/customers.js';
-import { buildSaleTicket, buildOrderTicket } from '../utils/tickets.js';
+import { buildSaleTicket } from '../utils/tickets.js';
 import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../utils/quantities.js';
 import { useToast, useConfirm, SkeletonCards, Modal } from '../components/ui/index.js';
 
@@ -437,11 +437,8 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         totalEsperado: cartTotal,
         discount: discountPayload,
       });
+      // El comprobante se emite e imprime recién en caja, al cobrar; aquí solo se da el número de pedido.
       const order = res.pedido;
-      if (onTriggerPrint) {
-        onTriggerPrint(buildOrderTicket(order));
-        setTimeout(() => window.print(), 300);
-      }
       setSuccess({
         icon: 'fa-paper-plane',
         title: 'Pedido enviado a caja',
