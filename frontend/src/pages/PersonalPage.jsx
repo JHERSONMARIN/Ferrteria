@@ -38,7 +38,11 @@ export default function PersonalPage({ currentUser }) {
   const [availableModules, setAvailableModules] = useState(moduleOptions.map(m => m.value));
   const isAvailable = (moduleId) => availableModules.includes(moduleId);
   // Cargos que tienen sentido con esos módulos (sin envíos no se ofrece Repartidor, por ejemplo).
-  const roleOptions = rolesForModules(availableModules);
+  // Con flujo directo (plan básico) el vendedor cobra: no hay cajeros. Se sigue mostrando si se edita
+  // a alguien que ya es cajero, para no cambiarle el cargo sin querer.
+  const allDirect = branches.length > 0 && branches.every(b => b.saleFlowMode === 'DIRECT');
+  const roleOptions = rolesForModules(availableModules)
+    .filter(r => r.value !== 'CAJERO' || !allDirect || (editingId && role === 'CAJERO'));
   const ownBranch = () => branches.find(b => b.id === currentUser?.branchId) || null;
   const [errors, setErrors] = useState({});
 
@@ -352,7 +356,7 @@ export default function PersonalPage({ currentUser }) {
       {/* Modal Crear / Modificar Personal */}
       {showModal && (
         <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm transition-all overflow-y-auto">
-          <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden my-auto border border-line">
+          <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden my-auto border border-line">
             {/* Modal Header */}
             <div className="p-4 bg-panel-strong text-white flex justify-between items-center border-b border-brand/80">
               <div>
@@ -372,8 +376,9 @@ export default function PersonalPage({ currentUser }) {
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-5 flex flex-col gap-4 max-h-[80vh] overflow-y-auto">
+            {/* Modal Body: datos de la cuenta a la izquierda y módulos permitidos a la derecha */}
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[80vh] overflow-y-auto">
+              <div className="flex flex-col gap-4">
               {/* Nombres y Apellidos */}
               <div>
                 <label className="text-xs font-bold text-ink-soft mb-1 block">
@@ -458,8 +463,35 @@ export default function PersonalPage({ currentUser }) {
                 </div>
               )}
 
+              {/* Estado de la cuenta (Activo / Inactivo) */}
+              {editingId && (
+                <div className="p-3 bg-surface-muted border border-line rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-ink-soft block">
+                      Estado de la Cuenta
+                    </span>
+                    <span className="text-[11px] text-muted">
+                      {active
+                        ? 'El usuario puede iniciar sesión y operar.'
+                        : 'Acceso suspendido: cerrará su sesión de inmediato.'}
+                    </span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={active}
+                      disabled={editingId === 1}
+                      onChange={e => setActive(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-line after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success"></div>
+                  </label>
+                </div>
+              )}
+              </div>
+
               {/* Módulos de Acceso */}
-              <div className={`p-3.5 rounded-xl border ${errors.modules ? 'border-danger bg-danger-soft/20' : 'border-line bg-surface-muted/70'}`}>
+              <div className={`p-3.5 rounded-xl border self-start ${errors.modules ? 'border-danger bg-danger-soft/20' : 'border-line bg-surface-muted/70'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-ink-soft flex items-center gap-1.5">
                     <i className="fa-solid fa-shield-halved text-brand text-xs"></i>
@@ -538,31 +570,6 @@ export default function PersonalPage({ currentUser }) {
                 })()}
               </div>
 
-              {/* Estado de la cuenta (Activo / Inactivo) */}
-              {editingId && (
-                <div className="p-3 bg-surface-muted border border-line rounded-xl flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-ink-soft block">
-                      Estado de la Cuenta
-                    </span>
-                    <span className="text-[11px] text-muted">
-                      {active
-                        ? 'El usuario puede iniciar sesión y operar.'
-                        : 'Acceso suspendido: cerrará su sesión de inmediato.'}
-                    </span>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={active}
-                      disabled={editingId === 1}
-                      onChange={e => setActive(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-line after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success"></div>
-                  </label>
-                </div>
-              )}
             </div>
 
             {/* Modal Footer */}
