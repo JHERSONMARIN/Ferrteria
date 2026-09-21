@@ -35,6 +35,10 @@ const DEMO_TEST_USERS = [
   { role: 'REPARTIDOR', label: 'Repartidor', user: 'repartidor1', pass: '1234', icon: 'fa-truck-fast' },
 ];
 
+// Al entrar se abre el Punto de Venta, que es el trabajo de todos los días; si el usuario no lo tiene,
+// la primera pantalla a la que sí llega.
+const primeraPantalla = (pantallas = []) => (pantallas.includes('pos') ? 'pos' : pantallas[0]);
+
 // Íconos de cada pantalla, para el buscador general.
 const TAB_ICONS = {
   pos: 'fa-cash-register', cobros: 'fa-hand-holding-dollar', despacho: 'fa-dolly', caja: 'fa-vault',
@@ -264,7 +268,7 @@ function Aplicacion() {
     if (currentUser && navigableTabs.length > 0) {
       const isAllowed = navigableTabs.includes(activeTab) || (activeTab === 'categories' && navigableTabs.includes('inventory'));
       if (!isAllowed) {
-        setActiveTab(navigableTabs[0]);
+        setActiveTab(primeraPantalla(navigableTabs));
       }
     }
   }, [currentUser, activeTab, navigableTabs]);
@@ -304,7 +308,7 @@ function Aplicacion() {
         setCurrentUser(res.user);
         localStorage.setItem('ferre_user', JSON.stringify(res.user));
         if (res.user.modules && res.user.modules.length > 0) {
-          setActiveTab(res.user.modules[0]);
+          setActiveTab(primeraPantalla(res.user.modules));
         }
       }
     } catch (err) {
