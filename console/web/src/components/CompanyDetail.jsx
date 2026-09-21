@@ -2,7 +2,18 @@ import React, { useState } from 'react';
 import { api } from '../api.js';
 
 // Acciones sobre una empresa: plan, contacto, actualizar, suspender, clave del administrador y baja.
-export default function CompanyDetail({ company, plans, themes, onClose, onChanged }) {
+// Nombres de los módulos, para no mostrar identificadores sueltos.
+const NOMBRES_MODULO = {
+  pos: 'Punto de venta', cotizaciones: 'Cotizaciones', caja: 'Arqueo de caja', inventory: 'Productos',
+  categories: 'Categorías', kardex: 'Kardex / Movimientos', compras: 'Compras', deliveries: 'Entregas',
+  despacho: 'Despacho', 'client-dir': 'Clientes', customers: 'Créditos', personal: 'Personal',
+  dashboard: 'Reportes',
+};
+
+export default function CompanyDetail({ company, plans, themes, modules, onClose, onChanged }) {
+  // Los módulos de la empresa: los administra VALETEC, la empresa ya no los toca.
+  const [modulos, setModulos] = useState(
+    company.modules.length > 0 ? company.modules : (modules?.disponibles ?? []));
   const [plan, setPlan] = useState(company.plan || '');
   const [extras, setExtras] = useState([]);
   const [expiresAt, setExpiresAt] = useState(company.license.expiresAt || '');
@@ -105,6 +116,43 @@ export default function CompanyDetail({ company, plans, themes, onClose, onChang
             {plan && plans?.planes[plan] && (
               <p className="text-[11px] text-slate-500 mt-2">{plans.planes[plan].descripcion}</p>
             )}
+          </section>
+
+          <section className="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 className="font-bold text-slate-800 text-sm">Módulos</h3>
+            <p className="text-xs text-slate-500 mt-0.5 mb-2">
+              Lo que la empresa ve en su menú. Los desactivados se ocultan para todos sus usuarios.
+              El plan marca lo contratado; aquí se ajusta caso por caso.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              {(modules?.disponibles ?? []).map(id => {
+                const fijo = (modules?.siempre ?? []).includes(id);
+                const activo = fijo || modulos.includes(id);
+                return (
+                  <label key={id} className={`flex items-center gap-2 text-xs rounded-lg border px-2.5 py-2 ${
+                    activo ? 'border-orange-500 bg-orange-50 text-slate-800' : 'border-gray-200 text-slate-500'
+                  } ${fijo ? 'opacity-70' : 'cursor-pointer'}`}>
+                    <input
+                      type="checkbox"
+                      className="accent-orange-600"
+                      checked={activo}
+                      disabled={fijo}
+                      onChange={e => setModulos(prev => (e.target.checked
+                        ? [...new Set([...prev, id])]
+                        : prev.filter(m => m !== id)))}
+                    />
+                    <span className="font-semibold truncate">{NOMBRES_MODULO[id] ?? id}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => run('modulos', () => api.put(`/empresas/${company.slug}/modulos`, { modulos }), 'Módulos aplicados y empresa reiniciada.')}
+              disabled={busy === 'modulos'}
+              className={`${boton} bg-orange-600 hover:bg-orange-700 text-white mt-2`}
+            >
+              {busy === 'modulos' ? 'Aplicando…' : 'Guardar módulos'}
+            </button>
           </section>
 
           <section className="bg-white rounded-lg border border-gray-200 p-4">

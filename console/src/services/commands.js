@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { prisma } from '../db.js';
-import { DEPLOY_DIR, readPlans, readThemes, companySlugs, readCompanyEnv } from './companies.js';
+import { DEPLOY_DIR, readPlans, readThemes, readModules, companySlugs, readCompanyEnv } from './companies.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -113,6 +113,21 @@ export async function setPlan({ slug, plan, extras = [], expiresAt = null }, use
     script: 'set-plan.sh', args, action: 'PLAN_CHANGED', slug,
     summary: `Plan de ${slug}: ${planes[plan].nombre}${extras.length ? ` + ${extras.join(', ')}` : ''}${expiresAt ? `, vence ${expiresAt}` : ''}`,
     user,
+  });
+}
+
+// Módulos de la empresa: los administra VALETEC (la empresa ya no puede activarlos ni desactivarlos).
+export async function setModules({ slug, modules }, user) {
+  assertExists(slug);
+  const { disponibles } = readModules();
+  if (!Array.isArray(modules)) throw new CommandError('Indique la lista de módulos.');
+  const desconocidos = modules.filter(m => !disponibles.includes(m));
+  if (desconocidos.length > 0) throw new CommandError(`Módulos desconocidos: ${desconocidos.join(', ')}.`);
+  if (modules.length === 0) throw new CommandError('La empresa necesita al menos un módulo.');
+  const valor = modules.length === disponibles.length ? 'todos' : modules.join(',');
+  return run({
+    script: 'set-modules.sh', args: [slug, valor],
+    action: 'MODULES_CHANGED', slug, summary: `Módulos de ${slug}: ${valor}`, user,
   });
 }
 

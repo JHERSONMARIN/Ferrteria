@@ -12,11 +12,20 @@ const COMPANIES_DIR = join(DEPLOY_DIR, 'companies');
 const PLANS_FILE = join(DEPLOY_DIR, 'plans.json');
 // Los estilos viven con el producto (los usa también la Configuración de cada empresa).
 const THEMES_FILE = join(DEPLOY_DIR, '..', 'backend', 'src', 'config', 'themes.json');
+const MODULES_FILE = join(DEPLOY_DIR, '..', 'backend', 'src', 'config', 'modules.js');
 const DB_CONTAINER = 'ferresys-infra-db';
 const CLAVES_SECRETAS = ['DATABASE_URL', 'JWT_SECRET', 'INITIAL_ADMIN_PASSWORD'];
 
 export const readPlans = () => JSON.parse(readFileSync(PLANS_FILE, 'utf8'));
 export const readThemes = () => JSON.parse(readFileSync(THEMES_FILE, 'utf8')).estilos;
+
+// Módulos del producto: se leen del backend para no repetir la lista aquí.
+export function readModules() {
+  const texto = readFileSync(MODULES_FILE, 'utf8');
+  const lista = (bloque) => (texto.match(new RegExp(`${bloque} = \\[([^\\]]*)\\]`))?.[1] ?? '')
+    .match(/'[^']+'/g)?.map(m => m.replace(/'/g, '')) ?? [];
+  return { disponibles: lista('AVAILABLE_MODULES'), siempre: lista('ALWAYS_ENABLED_MODULES') };
+}
 
 // .env sencillo: CLAVE=valor, una por línea, con comillas opcionales.
 function parseEnv(text) {

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Define los módulos contratados por una empresa y reinicia su instancia.
+# Define los módulos de una empresa y reinicia su instancia.
+# Los módulos los administra VALETEC: la empresa ya no los activa ni desactiva desde su Configuración.
+# Además de la licencia (.env), deja la configuración de la empresa con esos mismos módulos activos.
 #
 #   Uso: deploy/set-modules.sh <identificador> <módulos separados por coma | todos>
 #   Ej.: deploy/set-modules.sh ferreteriax pos,caja,inventory,categories
@@ -40,4 +42,35 @@ fi
 echo "▶ Aplicando y reiniciando la instancia…"
 docker compose -p "ferresys-$SLUG" -f "$COMPANY_COMPOSE" --env-file "$COMPANY_ENV" up -d >/dev/null 2>&1
 
-echo "✅ Módulos contratados de '$SLUG': ${VALUE:-todos} (personal siempre incluido)"
+# La empresa ve lo que VALETEC le deja: se activan en su configuración los módulos de la licencia.
+CONTAINER="ferresys-$SLUG-backend-1"
+echo -n "▶ Esperando la instancia"
+for _ in $(seq 1 60); do
+  if docker exec "$CONTAINER" wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1; then LISTA=1; break; fi
+  echo -n "."; sleep 2
+done
+echo
+[ "${LISTA:-0}" = "1" ] || fail "La instancia no respondió; los módulos quedaron en la licencia pero no en su configuración."
+
+docker exec -e MODULOS="$VALUE" "$CONTAINER" node --input-type=module -e "
+  import { prisma } from '/app/src/db.js';
+  import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '/app/src/config/modules.js';
+  const pedidos = (process.env.MODULOS || '').split(',').map(m => m.trim()).filter(Boolean);
+  const licencia = pedidos.length > 0 ? pedidos : AVAILABLE_MODULES;
+  const activos = AVAILABLE_MODULES.filter(m => licencia.includes(m) || ALWAYS_ENABLED_MODULES.includes(m));
+
+  // Una sucursal con pedidos necesita Caja; una por etapas, además Despacho.
+  const modos = (await prisma.branch.findMany({ where: { active: true }, select: { saleFlowMode: true } })).map(b => b.saleFlowMode);
+  if (!activos.includes('caja') && modos.some(m => m !== 'DIRECT')) {
+    console.error('Hay sucursales que trabajan con pedidos: el módulo Arqueo de Caja no se puede quitar.');
+    process.exit(2);
+  }
+  if (!activos.includes('despacho') && modos.includes('STAGED')) {
+    console.error('Hay sucursales que trabajan por etapas: el módulo Despacho no se puede quitar.');
+    process.exit(2);
+  }
+  await prisma.businessSettings.updateMany({ where: { id: 1 }, data: { enabledModules: activos } });
+  await prisma.\$disconnect();
+" || fail "No se pudieron activar los módulos en la configuración de '$SLUG'."
+
+echo "✅ Módulos de '$SLUG': ${VALUE:-todos} (personal siempre incluido)"
