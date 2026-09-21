@@ -12,8 +12,9 @@ const NOMBRES_MODULO = {
 
 export default function CompanyDetail({ company, plans, themes, modules, onClose, onChanged }) {
   // Los módulos de la empresa: los administra VALETEC, la empresa ya no los toca.
-  const [modulos, setModulos] = useState(
-    company.modules.length > 0 ? company.modules : (modules?.disponibles ?? []));
+  const [modulos, setModulos] = useState(company.usage?.enabledModules?.length
+    ? company.usage.enabledModules
+    : (company.modules.length > 0 ? company.modules : (modules?.disponibles ?? [])));
   const [plan, setPlan] = useState(company.plan || '');
   const [extras, setExtras] = useState([]);
   const [expiresAt, setExpiresAt] = useState(company.license.expiresAt || '');

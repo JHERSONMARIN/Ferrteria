@@ -10,6 +10,8 @@ COMPANY_COMPOSE="$DEPLOY_DIR/company/docker-compose.yml"
 PLANS_FILE="$DEPLOY_DIR/plans.json"
 
 fail() { echo "❌ $*" >&2; exit 1; }
+# 0 = sin límite.
+limite() { [ "$1" = "0" ] && echo "sin límite" || echo "$1"; }
 
 [ $# -ge 2 ] || fail "Uso: $0 <identificador> <plan> [--extra a,b] [--vence AAAA-MM-DD]"
 SLUG="$1"; PLAN="$2"; shift 2
@@ -74,7 +76,7 @@ cat <<INFO
 ✅ Plan de '$SLUG': $PLAN_NOMBRE${EXTRAS:+ + $EXTRAS}
    Módulos:     $MODULES
    Funciones:   ${FEATURES:-ninguna}
-   Límites:     usuarios ${MAX_USERS/0/sin límite} · sucursales ${MAX_BRANCHES/0/sin límite} · cajas ${MAX_CAJAS/0/sin límite}
+   Límites:     usuarios $(limite "$MAX_USERS") · sucursales $(limite "$MAX_BRANCHES") · cajas $(limite "$MAX_CAJAS")
    Conexiones:  $CONNECTIONS
    Vence:       ${EXPIRES:-sin vencimiento}
 INFO

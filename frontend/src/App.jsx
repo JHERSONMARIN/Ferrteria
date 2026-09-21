@@ -374,7 +374,7 @@ function Aplicacion() {
     'customers': ['Créditos', 'Deudas, pagos y clientes con fiado.'],
     'personal': ['Personal', 'Usuarios, accesos y permisos.'],
     'dashboard': ['Reportes', 'Ventas, ganancias y estado del negocio.'],
-    'settings': ['Configuración', 'Datos de la empresa, módulos y sucursales.'],
+    'settings': ['Configuración', 'Datos de la empresa, sucursales, cajas y comprobantes.'],
     'audit': ['Auditoría', 'Quién hizo cada cambio y cuándo.'],
     'transfers': ['Transferencias', 'Envío de mercadería entre sucursales.'],
     'cobros': ['Por cobrar', 'Pedidos esperando pago en caja.'],

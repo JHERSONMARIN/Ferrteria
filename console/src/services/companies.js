@@ -83,17 +83,21 @@ async function usage(slug) {
     "(SELECT count(*) FROM cash_registers WHERE active) || '|' ||",
     `(SELECT count(*) FROM ventas WHERE status IN ('PAID','DISPATCHED')`,
     `AND COALESCE("paidAt", "createdAt") >= date_trunc('month', (NOW() AT TIME ZONE 'America/Lima'))) || '|' ||`,
-    `(SELECT COALESCE("primaryColor", '') || ',' || COALESCE("navColor", '') FROM business_settings WHERE id = 1)`,
+    `(SELECT COALESCE("primaryColor", '') || ',' || COALESCE("navColor", '') FROM business_settings WHERE id = 1) || '|' ||`,
+    `(SELECT COALESCE((SELECT string_agg(m, ',') FROM jsonb_array_elements_text(("enabledModules")::jsonb) AS m), '')`,
+    `FROM business_settings WHERE id = 1)`,
   ].join(' ');
   try {
     const { stdout } = await execFileAsync('docker', ['exec', DB_CONTAINER, 'sh', '-c',
       `psql -U "$POSTGRES_USER" -d ${dbName} -tAc ${JSON.stringify(sql)}`]);
-    const [users, branches, cashRegisters, salesThisMonth, colores] = stdout.trim().split('|');
+    const [users, branches, cashRegisters, salesThisMonth, colores, modulos] = stdout.trim().split('|');
     const [primaryColor, navColor] = (colores || '').split(',');
     return {
       users: Number(users), branches: Number(branches), cashRegisters: Number(cashRegisters),
       salesThisMonth: Number(salesThisMonth),
       theme: { primaryColor: primaryColor || null, navColor: navColor || null },
+      // Lo que la empresa ve hoy en su menú (su configuración, no solo la licencia).
+      enabledModules: (modulos || '').split(',').filter(Boolean),
     };
   } catch {
     return null; // la empresa puede estar detenida o la base todavía sin migrar
