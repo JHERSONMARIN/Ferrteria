@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 
-const SIZES = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+const SIZES = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl', full: 'max-w-6xl' };
 
 // Ventana del sistema. Reemplaza a las ventanas del navegador (alert y confirm), que se ven
 // como un error del sistema y no como parte del producto. Se cierra con Esc o tocando el fondo.

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
-import { useToast, useConfirm, SearchInput, EmptyState } from '../components/ui/index.js';
+import { useToast, useConfirm, SearchInput, EmptyState, Modal, Button, Field, Input, Pagination, usePagination } from '../components/ui/index.js';
 
 export default function ClientesPage({ initialSearch = '' }) {
   const aviso = useToast();
@@ -12,6 +12,12 @@ export default function ClientesPage({ initialSearch = '' }) {
   const [busqueda, setBusqueda] = useState(initialSearch);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  // Cliente que se está editando; null al registrar uno nuevo.
+  const [editing, setEditing] = useState(null);
+  // Ventana del límite de crédito.
+  const [creditTarget, setCreditTarget] = useState(null);
+  const [creditValue, setCreditValue] = useState('');
+  const [creditError, setCreditError] = useState('');
 
   // Form State
   const [cliType, setCliType] = useState('Natural');
@@ -55,10 +61,13 @@ export default function ClientesPage({ initialSearch = '' }) {
     if (cliEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cliEmail.trim()))
       e.email = 'Correo electrónico inválido.';
 
-    const mc = parseFloat(maxCredit);
-    if (maxCredit === '' || isNaN(mc)) e.maxCredit = 'Ingrese un monto válido.';
-    else if (mc < 0) e.maxCredit = 'El límite no puede ser negativo.';
-    else if (mc > 1000000) e.maxCredit = 'El límite es demasiado alto.';
+    // Al editar, el crédito se cambia desde su propio botón.
+    if (!editing) {
+      const mc = parseFloat(maxCredit);
+      if (maxCredit === '' || isNaN(mc)) e.maxCredit = 'Ingrese un monto válido.';
+      else if (mc < 0) e.maxCredit = 'El límite no puede ser negativo.';
+      else if (mc > 1000000) e.maxCredit = 'El límite es demasiado alto.';
+    }
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -80,34 +89,43 @@ export default function ClientesPage({ initialSearch = '' }) {
     }
   };
 
+  const fillForm = (c) => {
+    setErrors({});
+    setCliType(c?.type === 'EMPRESA' ? 'Empresa' : 'Natural');
+    setCliDoc(c?.doc || '');
+    setCliName(c?.name || '');
+    setCliPhone(c?.phone || '');
+    setCliEmail(c?.email || '');
+    setCliAddress(c?.address || '');
+    setMaxCredit('1000');
+    setPriceList('RETAIL');
+  };
+
+  const openNew = () => { setEditing(null); fillForm(null); setShowModal(true); };
+  const openEdit = (client) => { setEditing(client); fillForm(client); setShowModal(true); };
+  const closeModal = () => { if (!loading) setShowModal(false); };
+
   const handleSaveClient = async () => {
     if (!validateClient()) return;
 
+    const datos = {
+      type: cliType,
+      doc: cliDoc.trim(),
+      name: cliName.trim(),
+      phone: cliPhone.trim(),
+      email: cliEmail.trim(),
+      address: cliAddress.trim(),
+    };
     try {
       setLoading(true);
-      await api.post('/clientes', {
-        type: cliType,
-        doc: cliDoc.trim(),
-        name: cliName.trim(),
-        phone: cliPhone.trim(),
-        email: cliEmail.trim(),
-        address: cliAddress.trim(),
-        maxCredit: parseFloat(maxCredit) || 1000.0,
-        priceList,
-      });
-
+      if (editing) {
+        await api.put(`/clientes/${editing.id}`, datos);
+      } else {
+        await api.post('/clientes', { ...datos, maxCredit: parseFloat(maxCredit) || 1000.0, priceList });
+      }
       setShowModal(false);
-      setErrors({});
-      setCliDoc('');
-      setCliName('');
-      setCliPhone('');
-      setCliEmail('');
-      setCliAddress('');
-      setMaxCredit('1000');
-      setPriceList('RETAIL');
-
       await loadClients();
-      aviso.exito('Cliente guardado con éxito.');
+      aviso.exito(editing ? 'Datos del cliente actualizados.' : 'Cliente guardado con éxito.');
     } catch (err) {
       aviso.error('Error al guardar cliente: ' + err.message);
     } finally {
@@ -115,19 +133,25 @@ export default function ClientesPage({ initialSearch = '' }) {
     }
   };
 
-  const handleEditMaxCredit = async (client) => {
-    const val = prompt(`Ingrese el nuevo Límite de Crédito para ${client.name} (S/):`, client.maxCredit);
-    if (val === null) return;
-    const parsed = parseFloat(val);
-    if (isNaN(parsed) || parsed < 0) return aviso.exito('Monto no válido.');
+  const openCredit = (client) => {
+    setCreditTarget(client);
+    setCreditValue(String(client.maxCredit));
+    setCreditError('');
+  };
+
+  const handleSaveCredit = async () => {
+    const parsed = parseFloat(creditValue);
+    if (creditValue === '' || isNaN(parsed) || parsed < 0) return setCreditError('Ingrese un monto válido.');
+    if (parsed > 1000000) return setCreditError('El límite es demasiado alto.');
 
     try {
       setLoading(true);
-      await api.put(`/clientes/${client.id}/max-credit`, { maxCredit: parsed });
+      await api.put(`/clientes/${creditTarget.id}/max-credit`, { maxCredit: parsed });
+      setCreditTarget(null);
       await loadClients();
       aviso.exito('Límite de crédito actualizado.');
     } catch (err) {
-      aviso.error('Error al actualizar límite: ' + err.message);
+      setCreditError(err.message);
     } finally {
       setLoading(false);
     }
@@ -153,6 +177,9 @@ export default function ClientesPage({ initialSearch = '' }) {
     }
   };
 
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(clientesFiltrados);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
@@ -163,7 +190,7 @@ export default function ClientesPage({ initialSearch = '' }) {
             </p>
             <p className="text-xs text-muted">Datos del cliente y su límite de crédito (fiado).</p>
           </div>
-          <button onClick={() => setShowModal(true)} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2">
+          <button onClick={openNew} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2">
             <i className="fa-solid fa-user-plus"></i> Nuevo cliente
           </button>
         </div>
@@ -193,7 +220,7 @@ export default function ClientesPage({ initialSearch = '' }) {
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-line">
-              {clientesFiltrados.map(c => (
+              {pg.pageItems.map(c => (
                 <tr key={c.id} className="hover:bg-surface-muted border-b border-line">
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.type === 'EMPRESA' ? 'bg-info-soft text-info' : 'bg-info-soft text-info'}`}>
@@ -219,14 +246,23 @@ export default function ClientesPage({ initialSearch = '' }) {
                   <td className="px-4 py-3 text-right font-bold text-danger">S/ {c.currentDebt.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right font-semibold text-ink-soft">S/ {c.maxCredit.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right font-black text-success">S/ {c.availableCredit.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      onClick={() => handleEditMaxCredit(c)}
-                      className="text-xs bg-surface-muted hover:bg-line text-ink-soft font-bold px-2.5 py-1 rounded shadow-sm"
-                      title="Editar Límite de Crédito"
-                    >
-                      <i className="fa-solid fa-pen-to-square mr-1"></i> Crédito
-                    </button>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-center gap-1.5">
+                      <button
+                        onClick={() => openEdit(c)}
+                        className="text-xs bg-surface-muted hover:bg-line text-ink-soft font-bold px-2.5 py-1 rounded shadow-sm whitespace-nowrap"
+                        title="Editar datos del cliente"
+                      >
+                        <i className="fa-solid fa-pen mr-1"></i> Editar
+                      </button>
+                      <button
+                        onClick={() => openCredit(c)}
+                        className="text-xs bg-surface-muted hover:bg-line text-ink-soft font-bold px-2.5 py-1 rounded shadow-sm whitespace-nowrap"
+                        title="Editar límite de crédito"
+                      >
+                        <i className="fa-solid fa-hand-holding-dollar mr-1"></i> Crédito
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -242,68 +278,87 @@ export default function ClientesPage({ initialSearch = '' }) {
             />
           )}
         </div>
+        <Pagination {...pg} />
       </div>
 
-      {/* Modal Nuevo Cliente */}
-      {showModal && (
-        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
-          <div className="bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 bg-panel text-white flex justify-between items-center">
-              <h3 className="font-bold text-lg"><i className="fa-solid fa-user-plus mr-2"></i> Registrar Cliente</h3>
-              <button onClick={() => setShowModal(false)} className="text-muted hover:text-white">
-                <i className="fa-solid fa-xmark text-xl"></i>
-              </button>
+      {/* Registrar o editar cliente */}
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        title={editing ? 'Editar cliente' : 'Registrar cliente'}
+        icon={editing ? 'fa-user-pen' : 'fa-user-plus'}
+        footer={(
+          <>
+            <Button onClick={closeModal} disabled={loading}>Cancelar</Button>
+            <Button variant="primary" onClick={handleSaveClient} loading={loading}>
+              {editing ? 'Guardar cambios' : 'Guardar cliente'}
+            </Button>
+          </>
+        )}
+      >
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-muted mb-1 block">Tipo Cliente</label>
+              <select
+                value={cliType}
+                onChange={e => { setCliType(e.target.value); clearError('doc'); }}
+                className="w-full border border-line p-2 rounded outline-none focus:border-brand bg-surface text-sm"
+              >
+                <option value="Natural">Persona Natural</option>
+                <option value="Empresa">Empresa (RUC)</option>
+              </select>
             </div>
-            <div className="p-6 flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-muted mb-1 block">Tipo Cliente</label>
-                  <select
-                    value={cliType}
-                    onChange={e => { setCliType(e.target.value); clearError('doc'); }}
-                    className="w-full border border-line p-2 rounded outline-none focus:border-brand bg-surface text-sm"
-                  >
-                    <option value="Natural">Persona Natural</option>
-                    <option value="Empresa">Empresa (RUC)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-muted mb-1 block">DNI / RUC</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={11}
-                    value={cliDoc}
-                    onChange={e => { setCliDoc(e.target.value.replace(/\D/g, '')); clearError('doc'); }}
-                    className={`w-full border p-2 rounded outline-none text-sm font-medium ${borderClass(errors.doc)}`}
-                  />
-                  <FieldError msg={errors.doc} />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-muted mb-1 block">Nombre / Razón Social</label>
-                <input
-                  type="text"
-                  maxLength={120}
-                  value={cliName}
-                  onChange={e => { setCliName(e.target.value); clearError('name'); }}
-                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.name)}`}
-                />
-                <FieldError msg={errors.name} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-muted mb-1 block">Teléfono</label>
-                  <input
-                    type="text"
-                    inputMode="tel"
-                    maxLength={15}
-                    value={cliPhone}
-                    onChange={e => { setCliPhone(e.target.value); clearError('phone'); }}
-                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.phone)}`}
-                  />
-                  <FieldError msg={errors.phone} />
-                </div>
+            <div>
+              <label className="text-xs font-bold text-muted mb-1 block">DNI / RUC</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={11}
+                value={cliDoc}
+                onChange={e => { setCliDoc(e.target.value.replace(/\D/g, '')); clearError('doc'); }}
+                className={`w-full border p-2 rounded outline-none text-sm font-medium ${borderClass(errors.doc)}`}
+              />
+              <FieldError msg={errors.doc} />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-muted mb-1 block">Nombre / Razón Social</label>
+            <input
+              type="text"
+              maxLength={120}
+              value={cliName}
+              onChange={e => { setCliName(e.target.value); clearError('name'); }}
+              className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.name)}`}
+            />
+            <FieldError msg={errors.name} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-muted mb-1 block">Teléfono</label>
+              <input
+                type="text"
+                inputMode="tel"
+                maxLength={15}
+                value={cliPhone}
+                onChange={e => { setCliPhone(e.target.value); clearError('phone'); }}
+                className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.phone)}`}
+              />
+              <FieldError msg={errors.phone} />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-muted mb-1 block">Correo</label>
+              <input
+                type="email"
+                maxLength={120}
+                value={cliEmail}
+                onChange={e => { setCliEmail(e.target.value); clearError('email'); }}
+                className={`w-full border p-2 rounded outline-none text-sm ${borderClass(errors.email)}`}
+              />
+              <FieldError msg={errors.email} />
+            </div>
+            {!editing && (
+              <>
                 <div>
                   <label className="text-xs font-bold text-muted mb-1 block">Límite de Crédito (S/)</label>
                   <input
@@ -327,25 +382,70 @@ export default function ClientesPage({ initialSearch = '' }) {
                     <option value="WHOLESALE">Mayorista</option>
                   </select>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-muted mb-1 block">Dirección</label>
-                <input
-                  type="text"
-                  maxLength={200}
-                  value={cliAddress}
-                  onChange={e => setCliAddress(e.target.value)}
-                  className="w-full border border-line p-2 rounded outline-none focus:border-brand text-sm"
-                />
-              </div>
-            </div>
-            <div className="p-4 bg-surface-muted border-t flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 font-bold text-ink-soft bg-surface-muted rounded-lg text-sm">Cancelar</button>
-              <button onClick={handleSaveClient} disabled={loading} className="px-4 py-2 font-bold text-brand-contrast bg-brand rounded-lg text-sm">Guardar Cliente</button>
-            </div>
+              </>
+            )}
           </div>
+          <div>
+            <label className="text-xs font-bold text-muted mb-1 block">Dirección</label>
+            <input
+              type="text"
+              maxLength={200}
+              value={cliAddress}
+              onChange={e => setCliAddress(e.target.value)}
+              className="w-full border border-line p-2 rounded outline-none focus:border-brand text-sm"
+            />
+          </div>
+          {editing && (
+            <p className="text-[11px] text-muted">
+              El límite de crédito y la lista de precios se cambian desde los botones de la tabla.
+            </p>
+          )}
         </div>
-      )}
+      </Modal>
+
+      {/* Límite de crédito */}
+      <Modal
+        open={Boolean(creditTarget)}
+        onClose={() => !loading && setCreditTarget(null)}
+        title="Límite de crédito"
+        description={creditTarget?.name}
+        icon="fa-hand-holding-dollar"
+        size="sm"
+        footer={(
+          <>
+            <Button onClick={() => setCreditTarget(null)} disabled={loading}>Cancelar</Button>
+            <Button variant="primary" onClick={handleSaveCredit} loading={loading}>Guardar</Button>
+          </>
+        )}
+      >
+        {creditTarget && (
+          <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-surface-muted rounded-lg p-2.5">
+                <p className="text-muted">Deuda actual</p>
+                <p className="font-bold text-danger text-sm">S/ {creditTarget.currentDebt.toFixed(2)}</p>
+              </div>
+              <div className="bg-surface-muted rounded-lg p-2.5">
+                <p className="text-muted">Límite actual</p>
+                <p className="font-bold text-ink text-sm">S/ {creditTarget.maxCredit.toFixed(2)}</p>
+              </div>
+            </div>
+            <Field label="Nuevo límite (S/)" error={creditError}>
+              <Input
+                type="number"
+                min="0"
+                step="10"
+                autoFocus
+                value={creditValue}
+                error={creditError}
+                onChange={e => { setCreditValue(e.target.value); setCreditError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handleSaveCredit()}
+                className="font-bold"
+              />
+            </Field>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

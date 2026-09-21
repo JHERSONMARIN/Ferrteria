@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
-import { useToast, EmptyState, SkeletonCards } from '../components/ui/index.js';
+import { useToast, EmptyState, SkeletonCards, Pagination, usePagination } from '../components/ui/index.js';
+import ImportModal from '../components/ImportModal.jsx';
+import { downloadTemplate } from '../utils/spreadsheet.js';
 
 // Paleta de colores temáticos para categorías
 const COLOR_CLASSES = {
@@ -30,6 +32,17 @@ const AVAILABLE_COLORS = [
   'orange', 'blue', 'emerald', 'cyan', 'purple', 'amber', 'red', 'indigo', 'slate', 'yellow'
 ];
 
+const IMPORT_COLUMNS = [
+  { key: 'name', label: 'Nombre', required: true, aliases: ['categoria', 'nombre de la categoria'], width: 26 },
+  { key: 'description', label: 'Descripción', aliases: ['descripcion', 'detalle'], width: 40 },
+  { key: 'icon', label: 'Ícono', aliases: ['icono'], placeholder: 'fa-tag', width: 16 },
+  { key: 'color', label: 'Color', placeholder: 'orange', width: 12 },
+];
+const IMPORT_EXAMPLES = [
+  { name: 'Electricidad', description: 'Cables, tomacorrientes e interruptores', icon: 'fa-bolt', color: 'amber' },
+  { name: 'Gasfitería', description: 'Tubos, llaves y accesorios', icon: 'fa-faucet-drip', color: 'blue' },
+];
+
 export default function CategoriasPage({ onSelectCategory, onNavigateToProducts }) {
   const aviso = useToast();
   const [categories, setCategories] = useState([]);
@@ -49,6 +62,9 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
   const [deleteCategoryTarget, setDeleteCategoryTarget] = useState(null);
   const [reassignCategoryId, setReassignCategoryId] = useState('');
   const [deletingCategory, setDeletingCategory] = useState(false);
+
+  const [showImport, setShowImport] = useState(false);
+  const [onExisting, setOnExisting] = useState('skip');
 
   useEffect(() => {
     loadCategories();
@@ -192,6 +208,37 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
     }
   };
 
+  const existingNames = useMemo(() => new Set(categories.map(c => c.name.toLowerCase())), [categories]);
+
+  const validateImportRow = (v) => {
+    const errors = {};
+    const warnings = [];
+    const icon = v.icon.toLowerCase();
+    const normalizedIcon = icon && !icon.startsWith('fa-') ? `fa-${icon}` : icon;
+    if (v.name.length < 2 || v.name.length > 60) errors.name = 'El nombre debe tener entre 2 y 60 caracteres.';
+    if (v.description.length > 200) errors.description = 'La descripción es demasiado larga (máx. 200).';
+    if (normalizedIcon && !/^fa-[a-z0-9-]{1,40}$/.test(normalizedIcon)) errors.icon = 'Ícono no válido (ej. fa-hammer).';
+    else if (normalizedIcon && !AVAILABLE_ICONS.includes(normalizedIcon)) warnings.push(`El ícono ${normalizedIcon} no está en la lista del sistema; puede no verse.`);
+    if (v.color && !AVAILABLE_COLORS.includes(v.color.toLowerCase())) errors.color = `Color no válido. Use: ${AVAILABLE_COLORS.join(', ')}.`;
+    if (existingNames.has(v.name.toLowerCase())) {
+      warnings.push(onExisting === 'update' ? 'Ya existe: se actualizarán descripción, ícono y color.' : 'Ya existe: se omitirá.');
+    }
+    return { errors, warnings };
+  };
+
+  const handleImport = async (rows) => {
+    const res = await api.post('/categorias/importar', { rows, onExisting }, { timeoutMs: 60000 });
+    await loadCategories();
+    aviso.exito('Importación completada.');
+    const parts = [`${res.created} creada${res.created === 1 ? '' : 's'}`];
+    if (res.updated) parts.push(`${res.updated} actualizada${res.updated === 1 ? '' : 's'}`);
+    if (res.skipped) parts.push(`${res.skipped} omitida${res.skipped === 1 ? '' : 's'} (ya existían)`);
+    return { message: `Categorías importadas: ${parts.join(', ')}.` };
+  };
+
+  // Máximo 12 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(filteredCategories, 12);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
@@ -213,6 +260,18 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
                 <i className="fa-solid fa-boxes-stacked text-brand"></i> Ver Catálogo Completo
               </button>
             )}
+            <button
+              onClick={() => downloadTemplate('Plantilla_categorias.xlsx', IMPORT_COLUMNS, IMPORT_EXAMPLES)}
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+            >
+              <i className="fa-solid fa-download"></i> Plantilla
+            </button>
+            <button
+              onClick={() => setShowImport(true)}
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+            >
+              <i className="fa-solid fa-file-import"></i> Importar
+            </button>
             <button
               onClick={openCreateModal}
               className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2"
@@ -268,7 +327,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
                 />
               </div>
             ) : (
-              filteredCategories.map(cat => {
+              pg.pageItems.map(cat => {
                 const style = COLOR_CLASSES[cat.color] || COLOR_CLASSES.orange;
                 return (
                   <div
@@ -277,11 +336,17 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
                   >
                     <div>
                       {/* Cabecera: Icono y Botones */}
-                      <div className="flex justify-between items-start mb-2">
-                        <span className={`w-10 h-10 rounded-xl ${style.bg} ${style.text} flex items-center justify-center font-bold text-base shadow-sm border ${style.border}`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`w-10 h-10 shrink-0 rounded-xl ${style.bg} ${style.text} flex items-center justify-center font-bold text-base shadow-sm border ${style.border}`}>
                           <i className={`fa-solid ${cat.icon || 'fa-tag'}`}></i>
                         </span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex-1 min-w-0">
+                          <h5 className="font-bold text-ink text-base leading-tight truncate" title={cat.name}>{cat.name}</h5>
+                          {cat.description && (
+                            <p className="text-xs text-muted mt-0.5 line-clamp-1">{cat.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
                           <button
                             onClick={() => openEditModal(cat)}
                             className="text-muted hover:text-brand p-1.5 rounded hover:bg-surface-muted transition-colors"
@@ -298,11 +363,6 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
                           </button>
                         </div>
                       </div>
-
-                      <h5 className="font-bold text-ink text-base leading-tight">{cat.name}</h5>
-                      {cat.description && (
-                        <p className="text-xs text-muted mt-0.5 line-clamp-1">{cat.description}</p>
-                      )}
 
                       {/* Métricas */}
                       <div className="mt-3 pt-3 border-t border-line flex flex-col gap-1.5 text-xs text-muted">
@@ -345,6 +405,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
               })
             )}
           </div>
+          <Pagination {...pg} className="bg-surface" />
         </div>
       </div>
 
@@ -550,6 +611,29 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
           </div>
         </div>
       )}
+      <ImportModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        title="Importar categorías"
+        entityLabel="categorías"
+        columns={IMPORT_COLUMNS}
+        examples={IMPORT_EXAMPLES}
+        templateName="Plantilla_categorias.xlsx"
+        uniqueKey="name"
+        validateRow={validateImportRow}
+        onImport={handleImport}
+        options={(
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-surface-muted rounded-lg px-3 py-2">
+            <span className="font-bold text-ink-soft">Si la categoría ya existe:</span>
+            {[['skip', 'Omitirla'], ['update', 'Actualizar descripción, ícono y color']].map(([id, label]) => (
+              <label key={id} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="onExistingCat" checked={onExisting === id} onChange={() => setOnExisting(id)} className="accent-orange-600" />
+                {label}
+              </label>
+            ))}
+          </div>
+        )}
+      />
     </div>
   );
 }

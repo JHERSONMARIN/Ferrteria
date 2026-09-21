@@ -28,34 +28,54 @@ const PAY_METHODS = {
 
 const redondear = (n) => Math.round(n * 100) / 100;
 
-// Agrupa productos repetidos y rechaza ids inválidos o cantidades no positivas. Si el producto admite
-// fracciones se valida después, al cargarlo. Se ordena por id para que las ventas concurrentes
-// bloqueen filas en el mismo orden.
+// Agrupa productos repetidos (en la misma presentación) y rechaza ids inválidos o cantidades no
+// positivas. Si el producto admite fracciones se valida después, al cargarlo. Se ordena por id para
+// que las ventas concurrentes bloqueen filas en el mismo orden.
 export function normalizarCarrito(cart) {
   if (!Array.isArray(cart) || cart.length === 0) {
     throw new VentaError('El carrito no puede estar vacío.');
   }
 
-  const cantidades = new Map();
+  const lineas = new Map();
   for (const item of cart) {
     const id = Number(item?.id);
     const qty = Number(item?.qty);
+    const unitId = item?.unitId === undefined || item?.unitId === null || item?.unitId === '' ? null : Number(item.unitId);
     if (!Number.isInteger(id) || id <= 0) {
       throw new VentaError('El carrito contiene un producto inválido.');
+    }
+    if (unitId !== null && (!Number.isInteger(unitId) || unitId <= 0)) {
+      throw new VentaError(`La presentación de ${item?.name || `el producto ${id}`} no es válida.`);
     }
     if (!Number.isFinite(qty) || qty <= 0 || roundQuantity(qty) !== qty) {
       throw new VentaError(`Cantidad inválida para ${item?.name || `el producto ${id}`}: debe ser mayor a 0 y con hasta ${MAX_QUANTITY_DECIMALS} decimales.`);
     }
-    cantidades.set(id, roundQuantity((cantidades.get(id) || 0) + qty));
+    const key = lineKey(id, unitId);
+    lineas.set(key, { id, unitId, qty: roundQuantity((lineas.get(key)?.qty || 0) + qty) });
   }
 
-  return [...cantidades].map(([id, qty]) => ({ id, qty })).sort((a, b) => a.id - b.id);
+  return [...lineas.values()].sort((a, b) => a.id - b.id || (a.unitId ?? 0) - (b.unitId ?? 0));
 }
 
+// Clave de una línea: el mismo producto en otra presentación es otra línea.
+export const lineKey = (productId, unitId) => `${productId}:${unitId ?? 0}`;
+
+// Unidades que salen del stock por una línea (el stock siempre está en la unidad base).
+export const baseQuantity = (qty, factor = 1) => roundQuantity(qty * factor);
+
+const ACTIVE_UNITS = {
+  where: { active: true },
+  select: { id: true, name: true, factor: true, price: true, wholesalePrice: true, allowsFractions: true },
+};
+
+// Devuelve los productos por id; cada uno con sus presentaciones activas en `saleUnits`.
 export async function cargarProductosActivos(db, items) {
   const productos = await db.producto.findMany({
-    where: { id: { in: items.map(i => i.id) } },
-    select: { id: true, name: true, code: true, price: true, wholesalePrice: true, stock: true, active: true, allowsFractions: true, unit: true },
+    where: { id: { in: [...new Set(items.map(i => i.id))] } },
+    select: {
+      id: true, name: true, code: true, price: true, wholesalePrice: true, stock: true, active: true, allowsFractions: true, unit: true,
+      saleUnits: ACTIVE_UNITS,
+    },
   });
   const porId = new Map(productos.map(p => [p.id, p]));
 
@@ -64,10 +84,19 @@ export async function cargarProductosActivos(db, items) {
     if (!prod || !prod.active) {
       throw new VentaError(`El producto ${prod?.name || item.id} no existe o no está activo.`);
     }
-    const problem = quantityProblem(item.qty, prod.allowsFractions);
-    if (problem) throw new VentaError(`La cantidad de ${prod.name} ${problem}.`);
+    const unit = saleUnitOf(prod, item.unitId);
+    const problem = quantityProblem(item.qty, unit ? unit.allowsFractions : prod.allowsFractions);
+    if (problem) throw new VentaError(`La cantidad de ${prod.name}${unit ? ` (${unit.name})` : ''} ${problem}.`);
   }
   return porId;
+}
+
+// Presentación de venta de un producto; null = su unidad base.
+export function saleUnitOf(product, unitId) {
+  if (!unitId) return null;
+  const unit = product.saleUnits?.find(u => u.id === unitId);
+  if (!unit) throw new VentaError(`La presentación elegida para ${product.name} ya no está disponible.`);
+  return unit;
 }
 
 function cotizacionVigente(cot) {
@@ -87,8 +116,17 @@ export async function priceListFor(tx, clienteId) {
   return client?.priceList ?? 'RETAIL';
 }
 
-export const unitPriceFor = (product, priceList) =>
-  (priceList === 'WHOLESALE' && product.wholesalePrice != null ? product.wholesalePrice : product.price);
+// Precio de la presentación (o del producto, si se vende en su unidad base) según la lista del cliente.
+export const unitPriceFor = (product, priceList, unit = null) => {
+  const source = unit || product;
+  return priceList === 'WHOLESALE' && source.wholesalePrice != null ? source.wholesalePrice : source.price;
+};
+
+// Datos de la línea que dependen de la presentación: nombre, factor y unidades que salen del stock.
+export function unitFields(product, unit, qty) {
+  const factor = unit ? unit.factor : 1;
+  return { unitId: unit?.id ?? null, unitName: unit?.name ?? null, factor, baseQty: baseQuantity(qty, factor) };
+}
 
 // Precio de cada línea: el de la cotización si sigue vigente; si no, el de la lista del cliente
 // (mayorista o minorista). Nunca se usa el precio que manda el navegador.
@@ -100,21 +138,24 @@ export async function priceLines(tx, items, cotizacionId, clienteId = null) {
   if (cotizacionId) {
     const cot = await tx.cotizacion.findUnique({
       where: { id: cotizacionId },
-      include: { detalles: { select: { productoId: true, unitPrice: true } } },
+      include: { detalles: { select: { productoId: true, unitId: true, unitPrice: true } } },
     });
     if (!cot) throw new VentaError('La cotización no existe.', 404);
     if (cot.status !== 'PENDIENTE') {
       throw new VentaError(`La cotización ${cot.numDoc} ya fue ${cot.status === 'CONVERTIDO' ? 'convertida a venta' : 'cancelada'}.`);
     }
     if (cotizacionVigente(cot)) {
-      cot.detalles.forEach(d => preciosCotizados.set(d.productoId, d.unitPrice));
+      cot.detalles.forEach(d => preciosCotizados.set(lineKey(d.productoId, d.unitId), d.unitPrice));
     }
   }
 
   const lineas = items.map(item => {
     const prod = productos.get(item.id);
-    const price = preciosCotizados.get(item.id) ?? unitPriceFor(prod, priceList);
-    return { ...item, name: prod.name, code: prod.code, price, subtotal: redondear(price * item.qty) };
+    const unit = saleUnitOf(prod, item.unitId);
+    const price = preciosCotizados.get(lineKey(item.id, item.unitId)) ?? unitPriceFor(prod, priceList, unit);
+    return {
+      ...item, ...unitFields(prod, unit, item.qty), name: prod.name, code: prod.code, price, subtotal: redondear(price * item.qty),
+    };
   });
   return { lineas, total: redondear(lineas.reduce((sum, l) => sum + l.subtotal, 0)) };
 }
@@ -178,7 +219,7 @@ export function assertExpectedTotal(totalEsperado, lineas, total) {
       `Los precios cambiaron: el total actual es S/ ${total.toFixed(2)} y no S/ ${Number(totalEsperado).toFixed(2)}. Revise el carrito antes de cobrar.`,
       409,
       'PRECIOS_CAMBIARON',
-      { precios: lineas.map(l => ({ id: l.id, price: l.price })) }
+      { precios: lineas.map(l => ({ id: l.id, unitId: l.unitId, price: l.price })) }
     );
   }
 }
@@ -242,7 +283,7 @@ export async function recordCreditCharge(tx, { clienteId, total, numDoc, lineas 
       creditoId: credito.id,
       amount: total,
       docRef: numDoc,
-      desc: lineas.map(l => `${l.qty}x ${l.name}`).join(', '),
+      desc: lineas.map(l => `${l.qty}x ${l.name}${l.unitName ? ` (${l.unitName})` : ''}`).join(', '),
       type: 'CARGO',
     },
   });
@@ -255,7 +296,12 @@ export async function writeKardexExit(tx, { productId, qty, stockAfter, ref, use
 }
 
 export const publicLines = (lineas) =>
-  lineas.map(({ id, name, code, qty, price, subtotal }) => ({ id, name, code, qty, price, subtotal }));
+  lineas.map(({ id, name, code, qty, price, subtotal, unitId, unitName, factor }) => ({
+    id, name, code, qty, price, subtotal, unitId: unitId ?? null, unitName: unitName ?? null, factor: factor ?? 1,
+  }));
+
+// Columnas de la presentación al guardar el detalle de una venta o cotización.
+export const unitColumns = (linea) => ({ unitId: linea.unitId ?? null, unitName: linea.unitName ?? null, unitFactor: linea.factor ?? 1 });
 
 // Venta directa (modo DIRECTO): se cobra, se emite el comprobante y se entrega en un solo paso.
 async function ejecutarVenta(tx, datos) {
@@ -306,17 +352,20 @@ async function ejecutarVenta(tx, datos) {
 
   for (const linea of lineas) {
     await tx.detalleVenta.create({
-      data: { ventaId: venta.id, productoId: linea.id, quantity: linea.qty, unitPrice: linea.price, subtotal: linea.subtotal },
+      data: {
+        ventaId: venta.id, productoId: linea.id, quantity: linea.qty, unitPrice: linea.price, subtotal: linea.subtotal,
+        ...unitColumns(linea),
+      },
     });
     // Por despachar: se reserva y el kardex registra la salida al despachar.
     if (delivery) {
-      await reserveStock(tx, linea.id, linea.qty, user.branchId);
+      await reserveStock(tx, linea.id, linea.baseQty, user.branchId);
       continue;
     }
-    const stockAfter = await takeAvailableStock(tx, linea.id, linea.qty, user.branchId);
+    const stockAfter = await takeAvailableStock(tx, linea.id, linea.baseQty, user.branchId);
     await writeKardexExit(tx, {
       productId: linea.id,
-      qty: linea.qty,
+      qty: linea.baseQty,
       stockAfter,
       ref: cotizacionId ? `Venta ${numDoc} (por cotización)` : `Venta ${numDoc}`,
       userId: vendedorId,

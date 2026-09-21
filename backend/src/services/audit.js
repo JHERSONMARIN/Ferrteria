@@ -13,6 +13,7 @@ export const AUDIT_ACTIONS = {
   USER_CREATED: 'Usuario creado',
   USER_UPDATED: 'Usuario modificado',
   USER_DELETED: 'Usuario eliminado',
+  CLIENT_UPDATED: 'Cliente modificado',
   CREDIT_LIMIT_CHANGED: 'Límite de crédito modificado',
   PRICE_LIST_CHANGED: 'Lista de precios modificada',
   QUOTE_CANCELLED: 'Cotización anulada',

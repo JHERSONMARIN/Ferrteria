@@ -28,6 +28,7 @@ router.get('/', async (req, res) => {
             quantity: true,
             unitPrice: true,
             subtotal: true,
+            unitName: true,
             producto: { select: { name: true, code: true } }
           }
         }

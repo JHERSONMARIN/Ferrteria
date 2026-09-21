@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api.js';
-import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
+import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../components/ui/index.js';
 
 const STATUS_STYLE = {
   PENDIENTE: { label: 'Pendiente', badge: 'bg-warning-soft text-warning border-warning/30' },
-  CONVERTIDO: { label: 'Convertida', badge: 'bg-success-soft text-success border-success/30' },
+  CONVERTIDO: { label: 'Terminada', badge: 'bg-success-soft text-success border-success/30' },
   CANCELADO: { label: 'Cancelada', badge: 'bg-surface-muted text-ink-soft border-line' },
 };
 
+// Terminadas son las que ya se vendieron. Modificar una cotización genera otra nueva.
 const FILTER_TABS = [
-  { id: 'ACTIVAS', label: 'Activas' },
   { id: 'PENDIENTE', label: 'Pendientes' },
-  { id: 'CONVERTIDO', label: 'Convertidas' },
+  { id: 'CONVERTIDO', label: 'Terminadas' },
   { id: 'CANCELADO', label: 'Canceladas' },
   { id: 'TODAS', label: 'Todas' },
 ];
@@ -21,7 +21,7 @@ export default function CotizacionesPage() {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ACTIVAS');
+  const [statusFilter, setStatusFilter] = useState('PENDIENTE');
   const [sortDir, setSortDir] = useState('desc'); // desc = más recientes primero
 
   const [detailTarget, setDetailTarget] = useState(null);
@@ -48,9 +48,7 @@ export default function CotizacionesPage() {
   const filteredCotizaciones = useMemo(() => {
     let list = cotizaciones;
 
-    if (statusFilter === 'ACTIVAS') {
-      list = list.filter(c => c.status !== 'CANCELADO');
-    } else if (statusFilter !== 'TODAS') {
+    if (statusFilter !== 'TODAS') {
       list = list.filter(c => c.status === statusFilter);
     }
 
@@ -93,6 +91,9 @@ export default function CotizacionesPage() {
       setDeleting(false);
     }
   };
+
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(filteredCotizaciones);
 
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
@@ -186,7 +187,7 @@ export default function CotizacionesPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredCotizaciones.map(cot => {
+                  pg.pageItems.map(cot => {
                     const style = STATUS_STYLE[cot.status] || STATUS_STYLE.PENDIENTE;
                     return (
                       <tr key={cot.id} className="border-b border-line hover:bg-surface-muted transition-colors">
@@ -228,6 +229,7 @@ export default function CotizacionesPage() {
                 )}
               </tbody>
             </table>
+            <Pagination {...pg} className="px-0" />
           </div>
         </div>
       </div>
@@ -267,7 +269,7 @@ export default function CotizacionesPage() {
                   <tbody>
                     {detailTarget.detalles.map((d, idx) => (
                       <tr key={idx} className="border-t border-line">
-                        <td className="py-1.5 px-2 text-ink-soft">{d.producto?.name}</td>
+                        <td className="py-1.5 px-2 text-ink-soft">{d.producto?.name}{d.unitName && <span className="text-brand-text font-semibold"> · {d.unitName}</span>}</td>
                         <td className="py-1.5 px-2 text-right">{d.quantity}</td>
                         <td className="py-1.5 px-2 text-right">S/ {d.unitPrice.toFixed(2)}</td>
                         <td className="py-1.5 px-2 text-right font-bold">S/ {d.subtotal.toFixed(2)}</td>

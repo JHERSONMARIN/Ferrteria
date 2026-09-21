@@ -7,7 +7,7 @@ import { canDispatch } from '../config/dispatch.js';
 import { recordAudit } from './audit.js';
 import {
   VentaError, normalizarCarrito, priceLines, assertExpectedTotal, validatePayment, parseDiscountRequest, applyDiscount, auditDiscount,
-  findOpenCashRegister, recordCashIncome, recordCreditCharge, writeKardexExit, publicLines,
+  findOpenCashRegister, recordCashIncome, recordCreditCharge, writeKardexExit, publicLines, unitColumns, baseQuantity,
   toDocTypeEnum, toPayMethodEnum,
 } from './ventas.js';
 
@@ -28,7 +28,12 @@ const toId = (v) => (v === undefined || v === null || v === '' ? null : parseInt
 const ORDER_INCLUDE = {
   cliente: { select: { id: true, name: true, doc: true, type: true } },
   vendedor: { select: { name: true } },
-  detalles: { select: { productoId: true, quantity: true, unitPrice: true, subtotal: true, producto: { select: { name: true, code: true } } } },
+  detalles: {
+    select: {
+      productoId: true, quantity: true, unitPrice: true, subtotal: true, unitId: true, unitName: true, unitFactor: true,
+      producto: { select: { name: true, code: true } },
+    },
+  },
   entrega: {
     select: {
       id: true, ref: true, address: true, status: true,
@@ -38,8 +43,10 @@ const ORDER_INCLUDE = {
   branch: { select: { id: true, name: true, saleFlowMode: true, deliveriesEnabled: true, dispatchRole: true } },
 };
 
+// qty y price están en la presentación vendida; baseQty es lo que mueve el stock.
 const linesOf = (order) => order.detalles.map(d => ({
   id: d.productoId, qty: d.quantity, price: d.unitPrice, subtotal: d.subtotal, name: d.producto.name, code: d.producto.code,
+  unitId: d.unitId, unitName: d.unitName, factor: d.unitFactor, baseQty: baseQuantity(d.quantity, d.unitFactor),
 }));
 
 export function formatOrder(order) {
@@ -92,9 +99,9 @@ function assertSameBranch(order, user) {
 
 async function dispatchLines(tx, order, numDoc, userId) {
   for (const line of linesOf(order)) {
-    const stockAfter = await consumeReservedStock(tx, line.id, line.qty, order.branchId);
+    const stockAfter = await consumeReservedStock(tx, line.id, line.baseQty, order.branchId);
     await writeKardexExit(tx, {
-      productId: line.id, qty: line.qty, stockAfter, ref: `Venta ${numDoc} (despacho)`, userId, branchId: order.branchId,
+      productId: line.id, qty: line.baseQty, stockAfter, ref: `Venta ${numDoc} (despacho)`, userId, branchId: order.branchId,
     });
   }
 }
@@ -131,9 +138,12 @@ export async function createOrder(db, payload, user) {
     await auditDiscount(tx, { saleId: order.id, reference: `el pedido N° ${order.id}`, subtotal, discount, total, request: discountRequest, user });
 
     for (const line of lineas) {
-      await reserveStock(tx, line.id, line.qty, user.branchId);
+      await reserveStock(tx, line.id, line.baseQty, user.branchId);
       await tx.detalleVenta.create({
-        data: { ventaId: order.id, productoId: line.id, quantity: line.qty, unitPrice: line.price, subtotal: line.subtotal },
+        data: {
+          ventaId: order.id, productoId: line.id, quantity: line.qty, unitPrice: line.price, subtotal: line.subtotal,
+          ...unitColumns(line),
+        },
       });
     }
 
@@ -229,7 +239,7 @@ async function cancelInTransaction(tx, order, reason, user = null) {
   await transition(tx, order.id, 'PENDING_PAYMENT', { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: reason },
     'Solo se pueden anular pedidos pendientes de cobro.');
   for (const line of linesOf(order)) {
-    await releaseReservedStock(tx, line.id, line.qty, order.branchId);
+    await releaseReservedStock(tx, line.id, line.baseQty, order.branchId);
   }
   await recordAudit(tx, {
     action: 'SALE_CANCELLED',

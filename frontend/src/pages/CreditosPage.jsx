@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
-import { useToast, useConfirm } from '../components/ui/index.js';
+import { useToast, useConfirm, Pagination, usePagination } from '../components/ui/index.js';
 
 export default function CreditosPage() {
   const aviso = useToast();
@@ -33,6 +33,14 @@ export default function CreditosPage() {
     setSelectedCredito(cred);
     setAbonoAmount('');
     setAbonoError('');
+  };
+
+  // El abono nunca supera la deuda: si se escribe más, queda en el total adeudado.
+  const limitAbono = (value, debt) => {
+    if (value === '') return '';
+    const [entero, decimales] = value.split('.');
+    const limpio = decimales !== undefined ? `${entero}.${decimales.slice(0, 2)}` : entero;
+    return Number(limpio) > debt ? debt.toFixed(2) : limpio;
   };
 
   const handleRegisterAbono = async (amountToPay) => {
@@ -76,6 +84,9 @@ export default function CreditosPage() {
     }
   };
 
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(creditos);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
       <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
@@ -105,7 +116,7 @@ export default function CreditosPage() {
                   </td>
                 </tr>
               ) : (
-                creditos.map(c => (
+                pg.pageItems.map(c => (
                   <tr key={c.id} className="hover:bg-surface-muted border-b border-line">
                     <td className="px-4 py-4 font-bold text-ink-soft">{c.name}</td>
                     <td className="px-4 py-4 text-xs text-muted">{c.lastPurchase}</td>
@@ -126,6 +137,7 @@ export default function CreditosPage() {
             </tbody>
           </table>
         </div>
+        <Pagination {...pg} />
       </div>
 
       {/* Modal Estado de Cuenta */}
@@ -165,7 +177,7 @@ export default function CreditosPage() {
                   min="0"
                   max={selectedCredito.debt}
                   value={abonoAmount}
-                  onChange={e => { setAbonoAmount(e.target.value); setAbonoError(''); }}
+                  onChange={e => { setAbonoAmount(limitAbono(e.target.value, selectedCredito.debt)); setAbonoError(''); }}
                   placeholder="Monto de abono en S/..."
                   className={`flex-1 px-3 py-2 border rounded outline-none text-sm font-bold ${borderClass(abonoError)}`}
                 />

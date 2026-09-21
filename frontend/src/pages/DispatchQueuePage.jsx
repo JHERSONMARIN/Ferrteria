@@ -271,12 +271,15 @@ export default function DispatchQueuePage() {
               <p className="text-[11px] font-bold text-muted uppercase tracking-wide mb-2">Productos a entregar</p>
               <ul className="flex flex-col gap-2">
                 {selected.items.map(item => (
-                  <li key={item.id} className="flex items-center gap-3 border border-line rounded-lg px-3 py-2.5">
+                  <li key={`${item.id}:${item.unitId ?? 0}`} className="flex items-center gap-3 border border-line rounded-lg px-3 py-2.5">
                     <span className="w-12 h-12 shrink-0 rounded-lg bg-brand-soft text-brand-text font-black text-xl flex items-center justify-center">
                       {item.qty}
                     </span>
                     <div className="min-w-0">
                       <p className="font-semibold text-ink leading-snug">{item.name}</p>
+                      {item.unitName && (
+                        <p className="text-xs font-bold text-brand-text">{item.unitName} ({item.factor} c/u)</p>
+                      )}
                       <p className="text-[11px] font-mono text-muted">{item.code}</p>
                     </div>
                   </li>

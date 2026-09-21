@@ -3,11 +3,12 @@ import { api } from '../api.js';
 import CustomerSelector from '../components/CustomerSelector.jsx';
 import CheckoutModal from '../components/CheckoutModal.jsx';
 import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
+import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
 import { formatSoles } from '../utils/currency.js';
 import { findCustomerByInput } from '../utils/customers.js';
-import { buildSaleTicket, buildOrderTicket } from '../utils/tickets.js';
+import { buildSaleTicket } from '../utils/tickets.js';
 import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../utils/quantities.js';
-import { useToast, useConfirm, SkeletonCards } from '../components/ui/index.js';
+import { useToast, useConfirm, SkeletonCards, Modal } from '../components/ui/index.js';
 
 // Stock que se puede vender: lo reservado por pedidos sin despachar ya tiene dueño.
 const availableStock = (product) => roundQuantity(product.stock - (product.reserved || 0));
@@ -15,6 +16,11 @@ const availableStock = (product) => roundQuantity(product.stock - (product.reser
 // "c/u" para lo que se vende por unidad; "/ metro", "/ kilo"… para lo demás.
 const perUnitLabel = (unit) => (!unit || unit === 'Unidad' ? 'c/u' : `/ ${unit.toLowerCase()}`);
 const stockUnitLabel = (unit) => (!unit || unit === 'Unidad' ? 'disp.' : `${unit.toLowerCase()} disp.`);
+
+// Una línea del carrito es un producto en una presentación (unitId null = unidad base).
+const lineKey = (id, unitId) => `${id}:${unitId ?? 0}`;
+// Unidades del stock que ocupa una línea.
+const baseQtyOf = (item) => roundQuantity(item.qty * (item.factor || 1));
 
 // Cantidad editable: se confirma al salir del campo o con Enter, para poder escribir "2.5"
 // sin que el valor se corrija a mitad de camino.
@@ -75,6 +81,20 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const searchRef = useRef(null);
   const customerPanelRef = useRef(null);
   const cartRef = useRef(null);
+  const cartActionsRef = useRef(null);
+  const [showScanner, setShowScanner] = useState(false);
+  // Producto con varias presentaciones esperando que se elija en cuál se vende.
+  const [unitChoice, setUnitChoice] = useState(null);
+  // En pantallas angostas la barra "Ver venta" solo aparece si los botones del carrito no se ven,
+  // así no tapa "Cobrar" ni "Guardar como cotización".
+  const [cartActionsVisible, setCartActionsVisible] = useState(false);
+  useEffect(() => {
+    const el = cartActionsRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const observer = new IntersectionObserver(([entry]) => setCartActionsVisible(entry.isIntersecting), { threshold: 0.1 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const showToast = (message, type = 'info') => {
     if (type === 'error') aviso.error(message);
@@ -131,13 +151,19 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const filteredProducts = useMemo(() => {
     const q = search.toLowerCase().trim();
     return products.filter(p => {
-      const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q);
+      const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
+        || (p.saleUnits || []).some(u => u.code && u.code.toLowerCase().includes(q));
       const matchesCategory = selectedCategory === 'Todas' || (p.category || 'General') === selectedCategory;
       return matchesSearch && matchesCategory;
     });
   }, [products, search, selectedCategory]);
 
-  const qtyInCart = useMemo(() => new Map(cart.map(i => [i.id, i.qty])), [cart]);
+  // Unidades base de cada producto ya puestas en el carrito (sumando sus presentaciones).
+  const qtyInCart = useMemo(() => {
+    const map = new Map();
+    cart.forEach(i => map.set(i.id, roundQuantity((map.get(i.id) || 0) + baseQtyOf(i))));
+    return map;
+  }, [cart]);
   const cartSubtotal = roundMoney(cart.reduce((sum, item) => sum + item.price * item.qty, 0));
 
   // Descuento sobre el total: se calcula igual que en el servidor, que es quien valida el tope.
@@ -166,9 +192,13 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const selectedCustomer = findCustomerByInput(clients, customerInput);
   const isWholesale = selectedCustomer?.priceList === 'WHOLESALE';
 
-  // Mismo criterio que el backend: precio mayorista si el cliente tiene esa lista y el producto lo define.
-  const priceFor = (product, wholesale = isWholesale) =>
-    (wholesale && product.wholesalePrice != null ? product.wholesalePrice : product.price);
+  // Mismo criterio que el backend: precio mayorista si el cliente tiene esa lista y el producto (o la
+  // presentación) lo define.
+  const priceFor = (product, wholesale = isWholesale, unit = null) => {
+    const source = unit || product;
+    return wholesale && source.wholesalePrice != null ? source.wholesalePrice : source.price;
+  };
+  const unitOf = (product, unitId) => (unitId ? (product?.saleUnits || []).find(u => u.id === unitId) || null : null);
 
   // Al cambiar de cliente se recalculan los precios del carrito (salvo si viene de una cotización,
   // que conserva los precios cotizados).
@@ -176,7 +206,9 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     if (loadedQuote) return;
     setCart(prev => prev.map(item => {
       const product = products.find(p => p.id === item.id);
-      return product ? { ...item, price: priceFor(product, isWholesale) } : item;
+      const unit = unitOf(product, item.unitId);
+      if (!product || (item.unitId && !unit)) return item;
+      return { ...item, price: priceFor(product, isWholesale, unit) };
     }));
   }, [isWholesale, products]);
 
@@ -186,36 +218,58 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
   // ---------- Carrito ----------
 
-  const addToCart = (product) => {
+  // Máximo de una línea: lo disponible del producto menos lo que ocupan sus otras líneas.
+  const maxQtyFor = (item, lines = cart) => {
+    const product = products.find(p => p.id === item.id);
+    const available = product ? availableStock(product) : item.stock;
+    const others = lines
+      .filter(i => i.id === item.id && i.key !== item.key)
+      .reduce((sum, i) => sum + baseQtyOf(i), 0);
+    const max = (available - others) / (item.factor || 1);
+    return item.allowsFractions ? Math.floor(max * 1000) / 1000 : Math.floor(max + 1e-9);
+  };
+
+  // unit: presentación elegida; sin elegir y con presentaciones, primero se pregunta cuál.
+  const addToCart = (product, unit) => {
+    if (unit === undefined && product.saleUnits?.length > 0) {
+      setUnitChoice(product);
+      return;
+    }
     const available = availableStock(product);
     if (available <= 0) return showToast(`${product.name} está agotado.`, 'error');
-    const current = cart.find(i => i.id === product.id);
-    if (current && current.qty >= available) {
-      return showToast(`Solo hay ${available} unidades disponibles de ${product.name}.`, 'error');
+    const key = lineKey(product.id, unit?.id);
+    const current = cart.find(i => i.key === key);
+    const draft = current || {
+      key, id: product.id, unitId: unit?.id ?? null, unitName: unit?.name ?? null, factor: unit?.factor ?? 1,
+      name: product.name, code: product.code, price: priceFor(product, isWholesale, unit), qty: 0, stock: available,
+      unit: unit?.name ?? product.unit, allowsFractions: unit ? unit.allowsFractions : product.allowsFractions,
+    };
+    const max = maxQtyFor(draft);
+    if (draft.qty + 1 > max) {
+      return showToast(`No alcanza el stock: quedan ${formatQuantity(roundQuantity(available - (qtyInCart.get(product.id) || 0)))} ${product.unit.toLowerCase()} de ${product.name}.`, 'error');
     }
     setCart(prev => current
-      ? prev.map(i => (i.id === product.id ? { ...i, qty: roundQuantity(Math.min(i.qty + 1, available)) } : i))
-      : [...prev, {
-        id: product.id, name: product.name, code: product.code, price: priceFor(product), qty: 1, stock: available,
-        unit: product.unit, allowsFractions: product.allowsFractions,
-      }]
+      ? prev.map(i => (i.key === key ? { ...i, qty: roundQuantity(i.qty + 1) } : i))
+      : [...prev, { ...draft, qty: 1 }]
     );
   };
 
-  const setCartQty = (id, qty) => {
-    const item = cart.find(i => i.id === id);
+  const setCartQty = (key, qty) => {
+    const item = cart.find(i => i.key === key);
     if (!item) return;
     const problem = quantityProblem(qty, item.allowsFractions);
     if (problem) return showToast(`La cantidad de ${item.name} ${problem}.`, 'error');
     let quantity = qty;
-    if (quantity > item.stock) {
-      showToast(`Solo hay ${formatQuantity(item.stock)} disponibles de ${item.name}.`, 'error');
-      quantity = item.stock;
+    const max = maxQtyFor(item);
+    if (quantity > max) {
+      showToast(`Solo hay ${formatQuantity(Math.max(max, 0))} ${item.unitName ? item.unitName.toLowerCase() : 'disponibles'} de ${item.name}.`, 'error');
+      quantity = max;
     }
-    setCart(prev => prev.map(i => (i.id === id ? { ...i, qty: quantity } : i)));
+    if (quantity <= 0) return;
+    setCart(prev => prev.map(i => (i.key === key ? { ...i, qty: quantity } : i)));
   };
 
-  const removeFromCart = (id) => setCart(prev => prev.filter(item => item.id !== id));
+  const removeFromCart = (key) => setCart(prev => prev.filter(item => item.key !== key));
 
   const clearCart = async () => {
     if (cart.length === 0) return;
@@ -254,22 +308,47 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
     const q = search.trim().toLowerCase();
     if (!q) return;
-    // Enter agrega por código exacto (lector de barras) o el único resultado de la búsqueda.
-    const candidate = products.find(p => p.code.toLowerCase() === q)
-      || (filteredProducts.length === 1 ? filteredProducts[0] : null);
+    // Enter agrega por código exacto (lector de barras, también el de una presentación) o el único
+    // resultado de la búsqueda.
+    const byCode = findByCode(q);
+    const candidate = byCode?.product || (filteredProducts.length === 1 ? filteredProducts[0] : null);
 
     if (candidate) {
-      addToCart(candidate);
+      addToCart(candidate, byCode ? byCode.unit : undefined);
       setSearch('');
     } else if (filteredProducts.length === 0) {
       showToast('No se encontró ningún producto con ese código o nombre.', 'error');
     }
   };
 
+  // Producto (y presentación, si el código es de una) con ese código exacto.
+  const findByCode = (code) => {
+    const q = code.trim().toLowerCase();
+    const product = products.find(p => p.code.toLowerCase() === q);
+    if (product) return { product, unit: undefined };
+    for (const p of products) {
+      const unit = (p.saleUnits || []).find(u => u.code && u.code.toLowerCase() === q);
+      if (unit) return { product: p, unit };
+    }
+    return null;
+  };
+
+  // Código leído con la cámara o el lector: si coincide con un producto se agrega; si no, se busca.
+  const handleScanned = (code) => {
+    const found = findByCode(code);
+    if (found) {
+      addToCart(found.product, found.unit);
+      setSearch('');
+    } else {
+      setSearch(code);
+      showToast(`No hay un producto con el código ${code}.`, 'error');
+    }
+  };
+
   // Si el servidor rechaza porque los precios cambiaron, el carrito se actualiza con los reales.
   const applyServerPrices = (err) => {
-    const serverPrices = new Map((err.data?.precios || []).map(p => [p.id, p.price]));
-    setCart(prev => prev.map(item => (serverPrices.has(item.id) ? { ...item, price: serverPrices.get(item.id) } : item)));
+    const serverPrices = new Map((err.data?.precios || []).map(p => [lineKey(p.id, p.unitId), p.price]));
+    setCart(prev => prev.map(item => (serverPrices.has(item.key) ? { ...item, price: serverPrices.get(item.key) } : item)));
     loadInitialData();
   };
 
@@ -282,7 +361,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     return true;
   };
 
-  const cartPayload = () => cart.map(item => ({ id: item.id, name: item.name, qty: item.qty }));
+  const cartPayload = () => cart.map(item => ({ id: item.id, unitId: item.unitId, name: item.name, qty: item.qty }));
 
   // ---------- Modo directo: cobro en el POS ----------
 
@@ -358,11 +437,8 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         totalEsperado: cartTotal,
         discount: discountPayload,
       });
+      // El comprobante se emite e imprime recién en caja, al cobrar; aquí solo se da el número de pedido.
       const order = res.pedido;
-      if (onTriggerPrint) {
-        onTriggerPrint(buildOrderTicket(order));
-        setTimeout(() => window.print(), 300);
-      }
       setSuccess({
         icon: 'fa-paper-plane',
         title: 'Pedido enviado a caja',
@@ -415,7 +491,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
           docLabelTitle: selectedCustomer ? (selectedCustomer.type === 'EMPRESA' ? 'RUC' : 'DNI') : 'DNI',
           sellerName: currentUser?.name || 'General',
           payMethod: 'COTIZACIÓN (Válido 7 días)',
-          items: res.cotizacion.detalles.map(d => ({ name: d.producto.name, qty: d.quantity, price: d.unitPrice })),
+          items: res.cotizacion.detalles.map(d => ({ name: d.producto.name, unitName: d.unitName, qty: d.quantity, price: d.unitPrice })),
           total: res.cotizacion.total,
           isFiscal: false,
         });
@@ -454,16 +530,23 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       if (!seguro) return;
     }
 
-    setCart(quote.detalles.map(d => ({
-      id: d.producto.id,
-      name: d.producto.name,
-      code: d.producto.code,
-      price: d.unitPrice,
-      qty: d.quantity,
-      stock: availableStock(d.producto),
-      unit: d.producto.unit,
-      allowsFractions: d.producto.allowsFractions,
-    })));
+    setCart(quote.detalles.map(d => {
+      const unit = unitOf(products.find(p => p.id === d.producto.id), d.unitId);
+      return {
+        key: lineKey(d.producto.id, d.unitId),
+        id: d.producto.id,
+        unitId: d.unitId ?? null,
+        unitName: d.unitName ?? null,
+        factor: d.unitFactor ?? 1,
+        name: d.producto.name,
+        code: d.producto.code,
+        price: d.unitPrice,
+        qty: d.quantity,
+        stock: availableStock(d.producto),
+        unit: d.unitName ?? d.producto.unit,
+        allowsFractions: unit ? unit.allowsFractions : d.producto.allowsFractions,
+      };
+    }));
     setLoadedQuote({ id: quote.id, numDoc: quote.numDoc });
     setCustomerInput(quote.clienteId ? `${quote.customerDoc} - ${quote.customer}` : '');
     setShowQuotesModal(false);
@@ -474,7 +557,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
   const shortcutsRef = useRef(null);
   shortcutsRef.current = (e) => {
-    if (showCheckout) return; // La ventana de cobro maneja sus propias teclas.
+    if (showCheckout || showScanner || unitChoice) return; // Esas ventanas manejan sus propias teclas.
     if (e.key === 'F2') {
       e.preventDefault();
       searchRef.current?.focus();
@@ -526,13 +609,22 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                   <kbd className="hidden sm:block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted border border-line rounded px-1.5 py-0.5">F2</kbd>
                 )}
               </div>
+              <div className="flex gap-2">
+              <button
+                onClick={() => setShowScanner(true)}
+                className="flex-1 sm:flex-none bg-surface border border-line hover:bg-surface-muted text-ink-soft font-bold px-3 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 shrink-0"
+                title="Escanear código de barras con la cámara o el lector"
+              >
+                <i className="fa-solid fa-barcode text-brand"></i> Escanear
+              </button>
               <button
                 onClick={openQuotesModal}
                 disabled={processing}
-                className="bg-surface border border-line hover:bg-surface-muted text-ink-soft font-bold px-3 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 shrink-0 disabled:opacity-50"
+                className="flex-1 sm:flex-none bg-surface border border-line hover:bg-surface-muted text-ink-soft font-bold px-3 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 shrink-0 disabled:opacity-50"
               >
                 <i className="fa-solid fa-file-import text-brand"></i> Cargar cotización
               </button>
+              </div>
             </div>
 
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
@@ -598,6 +690,12 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                       )}
                       <span className="text-[10px] font-mono text-muted truncate pr-7">{product.code}</span>
                       <h4 className="font-semibold text-ink text-sm leading-snug line-clamp-2 flex-1">{product.name}</h4>
+                      {product.saleUnits?.length > 0 && (
+                        <span className="text-[10px] font-semibold text-brand-text truncate">
+                          <i className="fa-solid fa-layer-group mr-1"></i>
+                          {product.unit}, {product.saleUnits.map(u => u.name).join(', ')}
+                        </span>
+                      )}
                       <div className="flex items-end justify-between gap-2">
                         <span className="text-base font-black text-ink">
                           {formatSoles(priceFor(product))}
@@ -681,32 +779,39 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             ) : (
               <ul className="divide-y divide-line">
                 {cart.map(item => (
-                  <li key={item.id} className="py-3 flex gap-3">
+                  <li key={item.key} className="py-3 flex gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-ink leading-snug line-clamp-2">{item.name}</p>
-                      <p className="text-xs text-muted mt-0.5">{formatSoles(item.price)} {perUnitLabel(item.unit)}</p>
+                      <p className="text-xs text-muted mt-0.5">
+                        {formatSoles(item.price)} {perUnitLabel(item.unit)}
+                        {item.unitName && (
+                          <span className="ml-1 text-[10px] font-bold text-brand-text bg-brand-soft rounded px-1 py-0.5">
+                            {item.unitName} · {formatQuantity(item.factor)} u.
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <div className="flex flex-col items-end gap-1.5 shrink-0">
                       <span className="text-sm font-black text-ink tabular-nums">{formatSoles(item.price * item.qty)}</span>
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => setCartQty(item.id, roundQuantity(item.qty - 1))}
+                          onClick={() => setCartQty(item.key, roundQuantity(item.qty - 1))}
                           disabled={item.qty <= 1}
                           className="w-7 h-7 rounded-md bg-surface-muted hover:bg-surface-muted text-ink-soft font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           title="Quitar uno"
                         >
                           −
                         </button>
-                        <CartQtyInput item={item} onCommit={qty => setCartQty(item.id, qty)} />
+                        <CartQtyInput item={item} onCommit={qty => setCartQty(item.key, qty)} />
                         <button
-                          onClick={() => setCartQty(item.id, roundQuantity(item.qty + 1))}
+                          onClick={() => setCartQty(item.key, roundQuantity(item.qty + 1))}
                           className="w-7 h-7 rounded-md bg-surface-muted hover:bg-surface-muted text-ink-soft font-bold"
                           title="Agregar uno"
                         >
                           +
                         </button>
                         <button
-                          onClick={() => removeFromCart(item.id)}
+                          onClick={() => removeFromCart(item.key)}
                           className="w-7 h-7 rounded-md text-muted hover:text-danger hover:bg-danger-soft ml-1"
                           title="Eliminar producto"
                         >
@@ -720,7 +825,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             )}
           </div>
 
-          <div className="border-t border-line bg-surface-muted p-4 flex flex-col gap-3 shrink-0">
+          <div ref={cartActionsRef} className="border-t border-line bg-surface-muted p-4 flex flex-col gap-3 shrink-0">
             <div>
               <label className="text-[11px] font-bold text-muted uppercase tracking-wide mb-1 block">
                 Cliente {!isDirect && <span className="normal-case font-normal">(opcional, también se puede elegir en caja)</span>}
@@ -818,7 +923,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       </div>
 
       {/* Barra inferior en móvil/tablet para llegar al carrito */}
-      {cart.length > 0 && !showCheckout && (
+      {cart.length > 0 && !showCheckout && !cartActionsVisible && (
         <div className="xl:hidden fixed bottom-0 inset-x-0 lg:left-64 z-20 p-3 bg-surface/95 backdrop-blur border-t border-line shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
           <button
             onClick={() => cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -846,6 +951,45 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       )}
 
       {success && <SaleSuccessModal {...success} onClose={closeSuccess} />}
+
+      <BarcodeScannerModal open={showScanner} onClose={() => setShowScanner(false)} onDetected={handleScanned} />
+
+      <Modal
+        open={Boolean(unitChoice)}
+        onClose={() => setUnitChoice(null)}
+        title={unitChoice?.name}
+        description="¿En qué presentación lo vende?"
+        icon="fa-layer-group"
+        size="sm"
+      >
+        {unitChoice && (
+          <div className="flex flex-col gap-2">
+            {[null, ...unitChoice.saleUnits].map(unit => {
+              const left = availableStock(unitChoice) - (qtyInCart.get(unitChoice.id) || 0);
+              const factor = unit ? unit.factor : 1;
+              const enough = left + 1e-9 >= factor;
+              return (
+                <button
+                  key={unit?.id ?? 'base'}
+                  type="button"
+                  disabled={!enough}
+                  onClick={() => { const product = unitChoice; setUnitChoice(null); addToCart(product, unit); }}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3 text-left hover:border-brand hover:bg-brand-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span>
+                    <span className="block text-sm font-bold text-ink">{unit ? unit.name : unitChoice.unit}</span>
+                    <span className="block text-[11px] text-muted">
+                      {unit ? `${formatQuantity(unit.factor)} ${unitChoice.unit.toLowerCase()}` : 'Unidad base'}
+                      {!enough && ' · sin stock suficiente'}
+                    </span>
+                  </span>
+                  <span className="text-base font-black text-ink tabular-nums">{formatSoles(priceFor(unitChoice, isWholesale, unit))}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Modal>
 
       {/* ===== MODAL: COTIZACIONES PENDIENTES ===== */}
       {showQuotesModal && (
