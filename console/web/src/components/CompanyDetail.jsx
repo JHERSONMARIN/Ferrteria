@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../api.js';
+import { urlEmpresa } from '../urls.js';
 
 // Acciones sobre una empresa: plan, contacto, actualizar, suspender, clave del administrador y baja.
 // Nombres de los módulos, para no mostrar identificadores sueltos.
@@ -52,7 +53,11 @@ export default function CompanyDetail({ company, plans, themes, modules, onClose
             <h2 className="font-black text-lg text-slate-800">{company.name}</h2>
             <p className="text-xs text-slate-500 font-mono">
               {company.slug}
-              {company.url && <a href={company.url} target="_blank" rel="noreferrer" className="ml-2 text-orange-600 hover:underline">{company.url}</a>}
+              {urlEmpresa(company) && (
+                <a href={urlEmpresa(company)} target="_blank" rel="noreferrer" className="ml-2 text-orange-600 hover:underline">
+                  {urlEmpresa(company)}
+                </a>
+              )}
             </p>
           </div>
           <button onClick={onClose} className="ml-auto text-slate-400 hover:text-slate-700 text-xl px-2"><i className="fa-solid fa-xmark"></i></button>
