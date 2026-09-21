@@ -370,6 +370,154 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+const MAX_IMPORT_ROWS = 2000;
+const yes = (v) => v === true || ['si', 'sí', 's', 'yes', 'x', '1', 'true', 'verdadero'].includes(String(v ?? '').trim().toLowerCase());
+const numOrNull = (v) => {
+  if (v === undefined || v === null || String(v).trim() === '') return null;
+  const n = Number(String(v).trim().replace(',', '.'));
+  return Number.isFinite(n) ? n : NaN;
+};
+
+// Revisa una fila de la importación. Devuelve { data } o { error } (mismas reglas que el formulario).
+function parseImportRow(row) {
+  const code = String(row?.code ?? '').trim();
+  const name = String(row?.name ?? '').trim();
+  const unit = String(row?.unit ?? '').trim() || 'Unidad';
+  const category = String(row?.category ?? '').trim() || 'General';
+  const allowsFractions = yes(row?.allowsFractions);
+  const price = numOrNull(row?.price);
+  const wholesalePrice = numOrNull(row?.wholesalePrice);
+  const stock = numOrNull(row?.stock) ?? 0;
+  const minStock = numOrNull(row?.minStock) ?? 10;
+
+  if (code.length < 2 || code.length > 60) return { error: 'El código debe tener entre 2 y 60 caracteres.' };
+  if (name.length < 2 || name.length > 120) return { error: 'El nombre debe tener entre 2 y 120 caracteres.' };
+  if (unit.length > 30) return { error: 'La unidad es demasiado larga.' };
+  if (category.length > 60) return { error: 'La categoría es demasiado larga.' };
+  if (price === null || Number.isNaN(price) || price <= 0 || price > 1000000) return { error: 'El precio debe ser un número mayor a 0.' };
+  if (Number.isNaN(wholesalePrice) || (wholesalePrice !== null && wholesalePrice <= 0)) return { error: 'El precio mayorista debe ser mayor a 0 o quedar vacío.' };
+  if (Number.isNaN(stock) || stock < 0) return { error: 'El stock inicial no puede ser negativo.' };
+  if (stock > 0 && quantityProblem(stock, allowsFractions)) return { error: `El stock inicial ${quantityProblem(stock, allowsFractions)}.` };
+  if (Number.isNaN(minStock) || minStock < 0) return { error: 'El stock mínimo no puede ser negativo.' };
+  return {
+    data: {
+      code, name, unit, category, allowsFractions,
+      price: Math.round(price * 100) / 100,
+      wholesalePrice: wholesalePrice === null ? null : Math.round(wholesalePrice * 100) / 100,
+      stock, minStock,
+    },
+  };
+}
+
+// POST /api/productos/importar  { rows: [...], onExisting: 'update' | 'skip' }
+// Todo o nada: si una fila tiene problemas no se guarda ninguna y se devuelven los errores por fila.
+// A los productos que ya existen nunca se les cambia el stock (eso se hace con un movimiento).
+router.post('/importar', async (req, res) => {
+  try {
+    const rows = req.body?.rows;
+    const onExisting = req.body?.onExisting === 'update' ? 'update' : 'skip';
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'No hay filas para importar.' });
+    if (rows.length > MAX_IMPORT_ROWS) return res.status(400).json({ error: `Se pueden importar hasta ${MAX_IMPORT_ROWS} filas por vez.` });
+    const branchId = await resolveBranchId(prisma, req.user, req.body.branchId);
+
+    const errors = [];
+    const parsed = [];
+    const seen = new Map();
+    rows.forEach((row, i) => {
+      const { data, error } = parseImportRow(row);
+      if (error) return errors.push({ index: i, error });
+      const key = data.code.toLowerCase();
+      if (seen.has(key)) return errors.push({ index: i, error: `El código ${data.code} se repite en la fila ${seen.get(key) + 1}.` });
+      seen.set(key, i);
+      parsed.push({ index: i, ...data });
+    });
+
+    const codes = parsed.map(r => r.code);
+    const [existing, unitClashes] = await Promise.all([
+      prisma.producto.findMany({
+        where: { code: { in: codes } },
+        select: { id: true, code: true, name: true, price: true, wholesalePrice: true, active: true, branchStocks: BRANCH_STOCK_SELECT },
+      }),
+      prisma.productUnit.findMany({ where: { code: { in: codes } }, select: { code: true, name: true } }),
+    ]);
+    const byCode = new Map(existing.map(p => [p.code, p]));
+    const clashCodes = new Map(unitClashes.map(u => [u.code, u.name]));
+    for (const row of parsed) {
+      if (clashCodes.has(row.code)) errors.push({ index: row.index, error: `El código ya es de la presentación ${clashCodes.get(row.code)} de otro producto.` });
+      const current = byCode.get(row.code);
+      const decimals = current?.branchStocks.some(b => !Number.isInteger(b.stock) || !Number.isInteger(b.reserved));
+      if (current && onExisting === 'update' && !row.allowsFractions && decimals) {
+        errors.push({ index: row.index, error: 'El stock actual tiene decimales: no se puede pasar a venta solo por unidades.' });
+      }
+    }
+    if (errors.length > 0) {
+      return res.status(400).json({ error: 'Hay filas con problemas: corríjalas antes de importar.', rows: errors.sort((a, b) => a.index - b.index) });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const summary = { created: 0, updated: 0, skipped: 0, categoriesCreated: 0 };
+      const categoryIds = new Map();
+      const categoryIdFor = async (name) => {
+        if (categoryIds.has(name)) return categoryIds.get(name);
+        let cat = await tx.categoria.findUnique({ where: { name }, select: { id: true } });
+        if (!cat) {
+          cat = await tx.categoria.create({ data: { name }, select: { id: true } });
+          summary.categoriesCreated++;
+        }
+        categoryIds.set(name, cat.id);
+        return cat.id;
+      };
+
+      for (const row of parsed) {
+        const current = byCode.get(row.code);
+        if (current && onExisting === 'skip') { summary.skipped++; continue; }
+        const categoriaId = await categoryIdFor(row.category);
+        const data = {
+          name: row.name, unit: row.unit, allowsFractions: row.allowsFractions, price: row.price,
+          wholesalePrice: row.wholesalePrice, minStock: row.minStock, category: row.category, categoriaId,
+        };
+
+        if (current) {
+          await tx.producto.update({ where: { id: current.id }, data: { ...data, active: true } });
+          const priceChanges = changedFields(current, row, ['price', 'wholesalePrice']);
+          if (priceChanges) {
+            await recordAudit(tx, {
+              action: 'PRICE_CHANGED',
+              entity: 'Producto',
+              entityId: current.id,
+              summary: `${row.code} ${row.name}: precios cambiados por importación`,
+              details: priceChanges,
+              user: req.user,
+            });
+          }
+          summary.updated++;
+          continue;
+        }
+
+        const product = await tx.producto.create({ data: { ...data, code: row.code, stock: row.stock } });
+        await tx.branchStock.create({ data: { branchId, productoId: product.id, stock: row.stock } });
+        if (row.stock > 0) {
+          await tx.movimientoKardex.create({
+            data: {
+              productoId: product.id, type: 'ENTRADA', qty: row.stock, stockAfter: row.stock,
+              ref: 'Stock inicial (importación)', usuarioId: req.user.id, branchId,
+            },
+          });
+        }
+        summary.created++;
+      }
+      return summary;
+    }, { timeout: 120000 });
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    if (error instanceof BranchError) return res.status(error.status).json({ error: error.message });
+    if (error.code === 'P2002') return res.status(409).json({ error: 'Otro usuario registró uno de estos códigos mientras se importaba. Vuelva a intentarlo.' });
+    console.error('[productos.js] Error al importar productos:', error);
+    res.status(500).json({ error: 'No se pudo completar la importación. No se guardó ningún producto.' });
+  }
+});
+
 // GET /api/productos/barcode/:code (Proxy a OpenFoodFacts o DB)
 router.get('/barcode/:code', async (req, res) => {
   try {

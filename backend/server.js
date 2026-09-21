@@ -40,7 +40,8 @@ app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 
 // Sin CORS: el navegador siempre llega por el mismo dominio a través del proxy del frontend,
 // así que ningún otro sitio web puede llamar a la API con la sesión del usuario.
-app.use(express.json());
+// Hasta 2 MB: la importación de productos manda varios cientos de filas.
+app.use(express.json({ limit: '2mb' }));
 
 // Logging Middleware
 app.use((req, res, next) => {

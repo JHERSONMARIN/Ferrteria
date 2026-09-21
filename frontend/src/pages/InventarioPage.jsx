@@ -6,7 +6,29 @@ import { borderClass } from '../utils/validators.js';
 import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quantities.js';
 import { useToast, EmptyState, SkeletonTable } from '../components/ui/index.js';
 import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
+import ImportModal from '../components/ImportModal.jsx';
+import { downloadTemplate } from '../utils/spreadsheet.js';
 import SaleUnitsEditor, { toSaleUnitRow, toSaleUnitPayload, validateSaleUnits } from '../components/SaleUnitsEditor.jsx';
+
+// Columnas de la importación y de su plantilla. Los alias aceptan planillas con otros encabezados.
+const IMPORT_COLUMNS = [
+  { key: 'code', label: 'Código', required: true, aliases: ['codigo de barras', 'sku', 'cod'], width: 16 },
+  { key: 'name', label: 'Nombre', required: true, aliases: ['producto', 'descripcion'], width: 36 },
+  { key: 'category', label: 'Categoría', aliases: ['categoria', 'familia', 'linea'], width: 20 },
+  { key: 'unit', label: 'Unidad', aliases: ['unidad de medida', 'um'], placeholder: 'Unidad', width: 12 },
+  { key: 'allowsFractions', label: 'Fraccionado', aliases: ['se vende fraccionado', 'decimales'], placeholder: 'No', width: 12 },
+  { key: 'price', label: 'Precio', required: true, aliases: ['precio venta', 'pv'], type: 'number', width: 10 },
+  { key: 'wholesalePrice', label: 'Precio mayorista', aliases: ['mayorista'], type: 'number', width: 16 },
+  { key: 'stock', label: 'Stock inicial', aliases: ['stock', 'cantidad', 'existencias'], type: 'number', placeholder: '0', width: 12 },
+  { key: 'minStock', label: 'Stock mínimo', aliases: ['minimo', 'stock minimo'], type: 'number', placeholder: '10', width: 12 },
+];
+const IMPORT_EXAMPLES = [
+  { code: '7750001000011', name: 'Cemento Sol 42.5 kg', category: 'Construcción', unit: 'Bolsa', allowsFractions: 'No', price: 32.5, wholesalePrice: 31, stock: 50, minStock: 10 },
+  { code: 'CAB-12', name: 'Cable mellizo 2x12', category: 'Electricidad', unit: 'Metro', allowsFractions: 'Sí', price: 2.8, wholesalePrice: null, stock: 300.5, minStock: 50 },
+];
+const YES = ['si', 'sí', 's', 'x', '1', 'true', 'verdadero', 'yes'];
+const NO = ['', 'no', 'n', '0', 'false', 'falso'];
+const parseNumber = (v) => (String(v ?? '').trim() === '' ? null : Number(String(v).trim().replace(',', '.')));
 
 export default function InventarioPage({ initialCategory = 'Todas', initialSearch = '', onNavigateToCategories, currentUser }) {
   const aviso = useToast();
@@ -42,6 +64,9 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
   const [saleUnitErrors, setSaleUnitErrors] = useState({});
   // Escáner abierto: guarda a qué campo va el código leído.
   const [scanTarget, setScanTarget] = useState(null);
+  const [showImport, setShowImport] = useState(false);
+  // Qué hacer con los códigos que ya existen al importar.
+  const [onExisting, setOnExisting] = useState('skip');
 
   useEffect(() => {
     if (initialSearch) setSearchQuery(initialSearch);
@@ -252,6 +277,51 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
     }
   };
 
+  const existingCodes = useMemo(() => new Set(products.map(p => p.code.toLowerCase())), [products]);
+  const existingCategories = useMemo(() => new Set(categoryOptions.map(c => c.toLowerCase())), [categoryOptions]);
+
+  // Mismas reglas que el formulario y el servidor; lo que no impide importar queda como advertencia.
+  const validateImportRow = (v) => {
+    const errors = {};
+    const warnings = [];
+    const fractions = String(v.allowsFractions).trim().toLowerCase();
+    const allows = YES.includes(fractions);
+    if (v.code.length < 2 || v.code.length > 60) errors.code = 'El código debe tener entre 2 y 60 caracteres.';
+    if (v.name.length < 2 || v.name.length > 120) errors.name = 'El nombre debe tener entre 2 y 120 caracteres.';
+    if (!YES.includes(fractions) && !NO.includes(fractions)) errors.allowsFractions = 'Fraccionado debe ser Sí o No.';
+    const price = parseNumber(v.price);
+    if (price === null || !(price > 0)) errors.price = 'El precio debe ser un número mayor a 0.';
+    const wholesale = parseNumber(v.wholesalePrice);
+    if (wholesale !== null && !(wholesale > 0)) errors.wholesalePrice = 'El precio mayorista debe ser mayor a 0 o quedar vacío.';
+    const stockNum = parseNumber(v.stock) ?? 0;
+    if (!Number.isFinite(stockNum) || stockNum < 0) errors.stock = 'El stock no puede ser negativo.';
+    else if (stockNum > 0 && quantityProblem(stockNum, allows)) errors.stock = `El stock ${quantityProblem(stockNum, allows)}.`;
+    const minNum = parseNumber(v.minStock) ?? 0;
+    if (!Number.isFinite(minNum) || minNum < 0) errors.minStock = 'El stock mínimo no puede ser negativo.';
+
+    if (existingCodes.has(v.code.toLowerCase())) {
+      warnings.push(onExisting === 'update'
+        ? 'Ya existe: se actualizarán sus datos y precios (el stock no cambia).'
+        : 'Ya existe: se omitirá.');
+    }
+    if (v.category && !existingCategories.has(v.category.toLowerCase())) warnings.push(`Se creará la categoría "${v.category}".`);
+    if (!v.category) warnings.push('Sin categoría: irá a General.');
+    if (price > 0 && wholesale > price) warnings.push('El precio mayorista es mayor que el normal.');
+    return { errors, warnings };
+  };
+
+  const handleImport = async (rows) => {
+    const res = await api.post('/productos/importar', { rows, onExisting }, { timeoutMs: 120000 });
+    await loadProducts();
+    await loadCategories();
+    const parts = [`${res.created} creado${res.created === 1 ? '' : 's'}`];
+    if (res.updated) parts.push(`${res.updated} actualizado${res.updated === 1 ? '' : 's'}`);
+    if (res.skipped) parts.push(`${res.skipped} omitido${res.skipped === 1 ? '' : 's'} (ya existían)`);
+    if (res.categoriesCreated) parts.push(`${res.categoriesCreated} categoría(s) nueva(s)`);
+    aviso.exito('Importación completada.');
+    return { message: `Productos importados: ${parts.join(', ')}.` };
+  };
+
   const handleExportExcel = () => {
     const exportData = filteredProducts.map(p => ({
       'Código': p.code,
@@ -288,6 +358,18 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
                 <i className="fa-solid fa-tags"></i> Categorías
               </button>
             )}
+            <button
+              onClick={() => downloadTemplate('Plantilla_productos.xlsx', IMPORT_COLUMNS, IMPORT_EXAMPLES)}
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
+            >
+              <i className="fa-solid fa-download"></i> Plantilla
+            </button>
+            <button
+              onClick={() => setShowImport(true)}
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
+            >
+              <i className="fa-solid fa-file-import"></i> Importar
+            </button>
             <button
               onClick={handleExportExcel}
               className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
@@ -636,6 +718,31 @@ export default function InventarioPage({ initialCategory = 'Todas', initialSearc
           </div>
         </div>
       )}
+
+      <ImportModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        title="Importar productos"
+        entityLabel="productos"
+        columns={IMPORT_COLUMNS}
+        examples={IMPORT_EXAMPLES}
+        templateName="Plantilla_productos.xlsx"
+        uniqueKey="code"
+        validateRow={validateImportRow}
+        onImport={handleImport}
+        options={(
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-surface-muted rounded-lg px-3 py-2">
+            <span className="font-bold text-ink-soft">Si el código ya existe:</span>
+            {[['skip', 'Omitirlo'], ['update', 'Actualizar datos y precios']].map(([id, label]) => (
+              <label key={id} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="onExisting" checked={onExisting === id} onChange={() => setOnExisting(id)} className="accent-orange-600" />
+                {label}
+              </label>
+            ))}
+            <span className="text-muted">El stock de los productos existentes nunca se cambia al importar (use Movimientos).</span>
+          </div>
+        )}
+      />
 
       <BarcodeScannerModal
         open={Boolean(scanTarget)}
