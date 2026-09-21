@@ -3,9 +3,40 @@ import { api } from '../api.js';
 import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
+import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quantities.js';
+import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../components/ui/index.js';
+import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
+import ImportModal from '../components/ImportModal.jsx';
+import { downloadTemplate } from '../utils/spreadsheet.js';
+import SaleUnitsEditor, { toSaleUnitRow, toSaleUnitPayload, validateSaleUnits } from '../components/SaleUnitsEditor.jsx';
 
-export default function InventarioPage({ initialCategory = 'Todas', onNavigateToCategories, currentUser }) {
+// Columnas de la importación y de su plantilla. Los alias aceptan planillas con otros encabezados.
+const IMPORT_COLUMNS = [
+  { key: 'code', label: 'Código', required: true, aliases: ['codigo de barras', 'sku', 'cod'], width: 16 },
+  { key: 'name', label: 'Nombre', required: true, aliases: ['producto', 'descripcion'], width: 36 },
+  { key: 'category', label: 'Categoría', aliases: ['categoria', 'familia', 'linea'], width: 20 },
+  { key: 'unit', label: 'Unidad', aliases: ['unidad de medida', 'um'], placeholder: 'Unidad', width: 12 },
+  { key: 'allowsFractions', label: 'Fraccionado', aliases: ['se vende fraccionado', 'decimales'], placeholder: 'No', width: 12 },
+  { key: 'price', label: 'Precio', required: true, aliases: ['precio venta', 'pv'], type: 'number', width: 10 },
+  { key: 'wholesalePrice', label: 'Precio mayorista', aliases: ['mayorista'], type: 'number', width: 16 },
+  { key: 'stock', label: 'Stock inicial', aliases: ['stock', 'cantidad', 'existencias'], type: 'number', placeholder: '0', width: 12 },
+  { key: 'minStock', label: 'Stock mínimo', aliases: ['minimo', 'stock minimo'], type: 'number', placeholder: '10', width: 12 },
+];
+const IMPORT_EXAMPLES = [
+  { code: '7750001000011', name: 'Cemento Sol 42.5 kg', category: 'Construcción', unit: 'Bolsa', allowsFractions: 'No', price: 32.5, wholesalePrice: 31, stock: 50, minStock: 10 },
+  { code: 'CAB-12', name: 'Cable mellizo 2x12', category: 'Electricidad', unit: 'Metro', allowsFractions: 'Sí', price: 2.8, wholesalePrice: null, stock: 300.5, minStock: 50 },
+];
+const YES = ['si', 'sí', 's', 'x', '1', 'true', 'verdadero', 'yes'];
+const NO = ['', 'no', 'n', '0', 'false', 'falso'];
+const parseNumber = (v) => (String(v ?? '').trim() === '' ? null : Number(String(v).trim().replace(',', '.')));
+
+export default function InventarioPage({ initialCategory = 'Todas', initialSearch = '', onNavigateToCategories, currentUser }) {
+  const aviso = useToast();
   const [products, setProducts] = useState([]);
+  const [branches, setBranches] = useState([]);
+  // Con una sola sucursal no se muestra nada de sucursales.
+  const multiBranch = branches.length > 1;
+  const branchName = (id) => branches.find(b => b.id === id)?.name ?? `Sucursal ${id}`;
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -14,19 +45,32 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
   const [editingProductId, setEditingProductId] = useState(null);
 
   // Filtros y búsqueda
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [filterCategory, setFilterCategory] = useState(initialCategory || 'Todas');
 
   // Campos formulario producto
   const [code, setCode] = useState('');
   const [unit, setUnit] = useState('Unidad');
+  const [allowsFractions, setAllowsFractions] = useState(false);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('Ferretería general');
   const [stock, setStock] = useState('');
   const [minStock, setMinStock] = useState('10');
   const [price, setPrice] = useState('');
+  const [wholesalePrice, setWholesalePrice] = useState('');
   const [searchingBarcode, setSearchingBarcode] = useState(false);
   const [productErrors, setProductErrors] = useState({});
+  const [saleUnits, setSaleUnits] = useState([]);
+  const [saleUnitErrors, setSaleUnitErrors] = useState({});
+  // Escáner abierto: guarda a qué campo va el código leído.
+  const [scanTarget, setScanTarget] = useState(null);
+  const [showImport, setShowImport] = useState(false);
+  // Qué hacer con los códigos que ya existen al importar.
+  const [onExisting, setOnExisting] = useState('skip');
+
+  useEffect(() => {
+    if (initialSearch) setSearchQuery(initialSearch);
+  }, [initialSearch]);
 
   useEffect(() => {
     if (initialCategory) {
@@ -37,6 +81,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
   useEffect(() => {
     loadProducts();
     loadCategories();
+    api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
   }, []);
 
   const loadProducts = async () => {
@@ -46,7 +91,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
       setProducts(data || []);
     } catch (err) {
       console.error('Error cargando productos:', err);
-      alert('Error cargando inventario: ' + err.message);
+      aviso.error('Error cargando inventario: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -99,21 +144,26 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
 
     const stockNum = Number(stock);
     if (stock === '' || isNaN(stockNum)) e.stock = 'Ingrese el stock inicial.';
-    else if (!Number.isInteger(stockNum)) e.stock = 'El stock debe ser un número entero.';
     else if (stockNum < 0) e.stock = 'El stock no puede ser negativo.';
+    else if (stockNum > 0 && quantityProblem(stockNum, allowsFractions)) e.stock = `El stock ${quantityProblem(stockNum, allowsFractions)}.`;
 
     const minNum = Number(minStock);
     if (minStock === '' || isNaN(minNum)) e.minStock = 'Ingrese el stock mínimo.';
-    else if (!Number.isInteger(minNum)) e.minStock = 'Debe ser un número entero.';
     else if (minNum < 0) e.minStock = 'No puede ser negativo.';
+    else if (minNum > 0 && quantityProblem(minNum, allowsFractions)) e.minStock = `El mínimo ${quantityProblem(minNum, allowsFractions)}.`;
 
     const priceNum = parseFloat(price);
     if (price === '' || isNaN(priceNum)) e.price = 'Ingrese el precio.';
     else if (priceNum <= 0) e.price = 'El precio debe ser mayor a 0.';
     else if (priceNum > 1000000) e.price = 'El precio es demasiado alto.';
 
+    const wholesaleNum = parseFloat(wholesalePrice);
+    if (wholesalePrice !== '' && (isNaN(wholesaleNum) || wholesaleNum <= 0)) e.wholesalePrice = 'Debe ser mayor a 0 (o dejarlo vacío).';
+
+    const unitErrors = validateSaleUnits(saleUnits, unit, code);
+    setSaleUnitErrors(unitErrors);
     setProductErrors(e);
-    return Object.keys(e).length === 0;
+    return Object.keys(e).length === 0 && Object.keys(unitErrors).length === 0;
   };
 
   const resetForm = () => {
@@ -123,8 +173,12 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
     setStock('');
     setMinStock('10');
     setPrice('');
+    setWholesalePrice('');
     setUnit('Unidad');
+    setAllowsFractions(false);
     setProductErrors({});
+    setSaleUnits([]);
+    setSaleUnitErrors({});
     setEditingProductId(null);
   };
 
@@ -142,10 +196,14 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
     setCode(p.code);
     setName(p.name);
     setUnit(p.unit || 'Unidad');
+    setAllowsFractions(Boolean(p.allowsFractions));
     setCategory(p.category || 'General');
     setStock(String(p.stock));
     setMinStock(String(p.minStock ?? 10));
     setPrice(String(p.price));
+    setWholesalePrice(p.wholesalePrice != null ? String(p.wholesalePrice) : '');
+    setSaleUnits((p.saleUnits || []).map(toSaleUnitRow));
+    setSaleUnitErrors({});
     setShowModal(true);
   };
 
@@ -164,40 +222,47 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
           code: code.trim(),
           name: name.trim(),
           unit,
+          allowsFractions,
           category,
-          minStock: parseInt(minStock, 10) || 10,
+          minStock: Number(minStock),
           price: parseFloat(price),
+          wholesalePrice: wholesalePrice === '' ? null : parseFloat(wholesalePrice),
+          saleUnits: saleUnits.map(toSaleUnitPayload),
         });
       } else {
         await api.post('/productos', {
           code: code.trim(),
           name: name.trim(),
           unit,
+          allowsFractions,
           category,
-          stock: parseInt(stock, 10),
-          minStock: parseInt(minStock, 10) || 10,
+          stock: Number(stock),
+          minStock: Number(minStock),
           price: parseFloat(price),
+          wholesalePrice: wholesalePrice === '' ? null : parseFloat(wholesalePrice),
+          saleUnits: saleUnits.map(toSaleUnitPayload),
           usuarioId: currentUser?.id,
         });
       }
       closeModal();
       await loadProducts();
       await loadCategories();
-      alert(editingProductId ? 'Producto actualizado correctamente.' : 'Producto registrado exitosamente.');
+      aviso.exito(editingProductId ? 'Producto actualizado correctamente.' : 'Producto registrado exitosamente.');
     } catch (err) {
-      alert('Error guardando producto: ' + err.message);
+      aviso.error('Error guardando producto: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearchBarcode = async () => {
-    if (!code.trim()) return;
+  const handleSearchBarcode = async (scanned) => {
+    const barcode = (typeof scanned === 'string' ? scanned : code).trim();
+    if (!barcode) return;
     try {
       setSearchingBarcode(true);
-      const res = await api.get(`/productos/barcode/${code.trim()}`);
+      const res = await api.get(`/productos/barcode/${encodeURIComponent(barcode)}`);
       if (res.foundInDb) {
-        alert('Este producto ya existe en el inventario.');
+        aviso.exito('Este producto ya existe en el inventario.');
         setName(res.product.name);
         setUnit(res.product.unit);
         setPrice(res.product.price);
@@ -206,10 +271,55 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
         setName(res.name);
       }
     } catch (err) {
-      alert('No se encontró el nombre del producto de forma automática. Ingrese el nombre manualmente.');
+      aviso.error('No se encontró el nombre del producto de forma automática. Ingrese el nombre manualmente.');
     } finally {
       setSearchingBarcode(false);
     }
+  };
+
+  const existingCodes = useMemo(() => new Set(products.map(p => p.code.toLowerCase())), [products]);
+  const existingCategories = useMemo(() => new Set(categoryOptions.map(c => c.toLowerCase())), [categoryOptions]);
+
+  // Mismas reglas que el formulario y el servidor; lo que no impide importar queda como advertencia.
+  const validateImportRow = (v) => {
+    const errors = {};
+    const warnings = [];
+    const fractions = String(v.allowsFractions).trim().toLowerCase();
+    const allows = YES.includes(fractions);
+    if (v.code.length < 2 || v.code.length > 60) errors.code = 'El código debe tener entre 2 y 60 caracteres.';
+    if (v.name.length < 2 || v.name.length > 120) errors.name = 'El nombre debe tener entre 2 y 120 caracteres.';
+    if (!YES.includes(fractions) && !NO.includes(fractions)) errors.allowsFractions = 'Fraccionado debe ser Sí o No.';
+    const price = parseNumber(v.price);
+    if (price === null || !(price > 0)) errors.price = 'El precio debe ser un número mayor a 0.';
+    const wholesale = parseNumber(v.wholesalePrice);
+    if (wholesale !== null && !(wholesale > 0)) errors.wholesalePrice = 'El precio mayorista debe ser mayor a 0 o quedar vacío.';
+    const stockNum = parseNumber(v.stock) ?? 0;
+    if (!Number.isFinite(stockNum) || stockNum < 0) errors.stock = 'El stock no puede ser negativo.';
+    else if (stockNum > 0 && quantityProblem(stockNum, allows)) errors.stock = `El stock ${quantityProblem(stockNum, allows)}.`;
+    const minNum = parseNumber(v.minStock) ?? 0;
+    if (!Number.isFinite(minNum) || minNum < 0) errors.minStock = 'El stock mínimo no puede ser negativo.';
+
+    if (existingCodes.has(v.code.toLowerCase())) {
+      warnings.push(onExisting === 'update'
+        ? 'Ya existe: se actualizarán sus datos y precios (el stock no cambia).'
+        : 'Ya existe: se omitirá.');
+    }
+    if (v.category && !existingCategories.has(v.category.toLowerCase())) warnings.push(`Se creará la categoría "${v.category}".`);
+    if (!v.category) warnings.push('Sin categoría: irá a General.');
+    if (price > 0 && wholesale > price) warnings.push('El precio mayorista es mayor que el normal.');
+    return { errors, warnings };
+  };
+
+  const handleImport = async (rows) => {
+    const res = await api.post('/productos/importar', { rows, onExisting }, { timeoutMs: 120000 });
+    await loadProducts();
+    await loadCategories();
+    const parts = [`${res.created} creado${res.created === 1 ? '' : 's'}`];
+    if (res.updated) parts.push(`${res.updated} actualizado${res.updated === 1 ? '' : 's'}`);
+    if (res.skipped) parts.push(`${res.skipped} omitido${res.skipped === 1 ? '' : 's'} (ya existían)`);
+    if (res.categoriesCreated) parts.push(`${res.categoriesCreated} categoría(s) nueva(s)`);
+    aviso.exito('Importación completada.');
+    return { message: `Productos importados: ${parts.join(', ')}.` };
   };
 
   const handleExportExcel = () => {
@@ -227,20 +337,18 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
     exportToExcel(exportData, 'Inventario_Productos');
   };
 
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(filteredProducts);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col min-h-full">
+      <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
         {/* Header de la Página */}
-        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50">
+        <div className="p-4 border-b border-line flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-muted">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="bg-orange-100 text-orange-700 px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                <i className="fa-solid fa-box"></i> Almacén
-              </span>
-              <h3 className="font-bold text-slate-800 text-lg">Catálogo de Productos ({products.length})</h3>
-            </div>
-            <p className="text-xs text-slate-500">
-              Control de existencias físicas, alertas de reposición de stock mínimo y exportación valorizada.
+            <p className="text-sm font-bold text-ink">{products.length} producto{products.length === 1 ? '' : 's'} en el catálogo</p>
+            <p className="text-xs text-muted">
+              Existencias, alertas de stock mínimo y valorización del almacén.
             </p>
           </div>
 
@@ -248,44 +356,56 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
             {onNavigateToCategories && (
               <button
                 onClick={onNavigateToCategories}
-                className="bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2"
+                className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
               >
-                <i className="fa-solid fa-tags text-orange-600"></i> Gestionar Categorías
+                <i className="fa-solid fa-tags"></i> Categorías
               </button>
             )}
             <button
-              onClick={handleExportExcel}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow transition-colors flex items-center gap-2"
+              onClick={() => downloadTemplate('Plantilla_productos.xlsx', IMPORT_COLUMNS, IMPORT_EXAMPLES)}
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-file-excel"></i> Exportar Excel
+              <i className="fa-solid fa-download"></i> Plantilla
+            </button>
+            <button
+              onClick={() => setShowImport(true)}
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
+            >
+              <i className="fa-solid fa-file-import"></i> Importar
+            </button>
+            <button
+              onClick={handleExportExcel}
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
+            >
+              <i className="fa-solid fa-file-excel"></i> Exportar
             </button>
             <button
               onClick={openCreateModal}
-              className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2"
+              className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-plus"></i> Agregar Producto
+              <i className="fa-solid fa-plus"></i> Agregar producto
             </button>
           </div>
         </div>
 
         {/* Barra de Búsqueda y Filtros */}
-        <div className="p-4 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-3 items-center justify-between">
+        <div className="p-4 border-b border-line bg-surface flex flex-col md:flex-row gap-3 items-center justify-between">
           <div className="relative flex-1 w-full">
-            <i className="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-sm"></i>
+            <i className="fa-solid fa-magnifying-glass absolute left-3 top-3 text-muted text-sm"></i>
             <input
               type="text"
               placeholder="Buscar producto por nombre o código de barras..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-orange-500 transition-colors"
+              className="w-full pl-9 pr-4 py-2 bg-surface-muted border border-line rounded-lg text-sm outline-none focus:border-brand transition-colors"
             />
           </div>
           <div className="flex gap-2 w-full md:w-auto items-center">
-            <label className="text-xs font-bold text-slate-500 whitespace-nowrap">Categoría:</label>
+            <label className="text-xs font-bold text-muted whitespace-nowrap">Categoría:</label>
             <select
               value={filterCategory}
               onChange={e => setFilterCategory(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-slate-700 py-2 px-3 rounded-lg text-sm outline-none focus:border-orange-500 w-full md:w-56 font-medium"
+              className="bg-surface-muted border border-line text-ink-soft py-2 px-3 rounded-lg text-sm outline-none focus:border-brand w-full md:w-56 font-medium"
             >
               <option value="Todas">Todas las categorías</option>
               {categoryOptions.map(cat => (
@@ -296,77 +416,108 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
         </div>
 
         {/* Resumen Superior de Filtro */}
-        <div className="px-4 py-2 bg-slate-50/70 border-b border-slate-100 flex flex-wrap justify-between items-center text-xs text-slate-500 gap-2">
+        <div className="px-4 py-2 bg-surface-muted/70 border-b border-line flex flex-wrap justify-between items-center text-xs text-muted gap-2">
           <div className="flex items-center gap-2">
-            <span>Mostrando: <strong className="text-slate-800">{filteredProducts.length}</strong> de {products.length} productos</span>
+            <span>Mostrando: <strong className="text-ink">{filteredProducts.length}</strong> de {products.length} productos</span>
             {filterCategory !== 'Todas' && (
               <button
                 onClick={() => setFilterCategory('Todas')}
-                className="text-orange-600 hover:underline font-semibold ml-2"
+                className="text-brand hover:underline font-semibold ml-2"
               >
                 (Quitar filtro de categoría)
               </button>
             )}
           </div>
           <div>
-            <span>Valorización mostrada: <strong className="text-emerald-700 font-bold">S/ {totalValuation.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong></span>
+            <span>Valorización mostrada: <strong className="text-success font-bold">S/ {totalValuation.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</strong></span>
           </div>
         </div>
 
         {/* Tabla de Productos */}
-        <div className="flex-1 overflow-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0 z-10 shadow-sm">
+            <thead className="bg-surface-muted text-muted text-xs uppercase shadow-sm">
               <tr>
                 <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Producto</th>
                 <th className="px-4 py-3">Categoría</th>
                 <th className="px-4 py-3 text-center">Unidad</th>
-                <th className="px-4 py-3 text-right">Stock</th>
+                <th className="px-4 py-3 text-right">{multiBranch ? 'Stock (mi sucursal)' : 'Stock'}</th>
                 <th className="px-4 py-3 text-right">Mínimo</th>
                 <th className="px-4 py-3 text-right">Precio</th>
                 <th className="px-4 py-3 text-center">Estado</th>
                 <th className="px-4 py-3 text-center">Acciones</th>
               </tr>
             </thead>
-            <tbody className="text-sm divide-y divide-gray-100">
+            <tbody className="text-sm divide-y divide-line">
               {loading && products.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="text-center py-8 text-slate-400">
-                    <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando catálogo...
-                  </td>
+                  <td colSpan="9" className="p-0"><SkeletonTable rows={8} columns={5} /></td>
                 </tr>
               ) : filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="text-center py-8 text-slate-400">
-                    No se encontraron productos en esta categoría o búsqueda.
+                  <td colSpan="9" className="p-0">
+                    {products.length === 0 ? (
+                      <EmptyState
+                        icon="fa-box"
+                        title="Todavía no hay productos"
+                        description="Cargue su catálogo para empezar a vender y a controlar el stock."
+                        action={<button onClick={openCreateModal} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold">Agregar el primero</button>}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon="fa-magnifying-glass"
+                        title="Ningún producto coincide"
+                        description="Pruebe con otro texto o quite el filtro de categoría."
+                      />
+                    )}
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map(p => {
+                pg.pageItems.map(p => {
                   const isLowStock = p.stock <= (p.minStock ?? 10);
                   return (
-                    <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs font-bold text-slate-600">{p.code}</td>
-                      <td className="px-4 py-3 font-semibold text-slate-800">{p.name}</td>
+                    <tr key={p.id} className="hover:bg-surface-muted transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs font-bold text-ink-soft">{p.code}</td>
+                      <td className="px-4 py-3 font-semibold text-ink">{p.name}</td>
                       <td className="px-4 py-3">
-                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs">
+                        <span className="bg-surface-muted text-ink-soft px-2 py-0.5 rounded text-xs">
                           {p.category || 'General'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center text-xs text-slate-500">{p.unit}</td>
-                      <td className="px-4 py-3 text-right font-bold text-slate-700">{p.stock}</td>
-                      <td className="px-4 py-3 text-right text-xs text-slate-400">{p.minStock ?? 10}</td>
-                      <td className="px-4 py-3 text-right font-bold text-orange-600">
+                      <td className="px-4 py-3 text-center text-xs text-muted">
+                        {p.unit}
+                        {p.saleUnits?.length > 0 && (
+                          <span
+                            className="block text-[10px] text-brand-text font-semibold cursor-help"
+                            title={p.saleUnits.map(u => `${u.name} (${formatQuantity(u.factor)} ${p.unit.toLowerCase()}): S/ ${u.price.toFixed(2)}`).join('\n')}
+                          >
+                            +{p.saleUnits.length} presentación{p.saleUnits.length === 1 ? '' : 'es'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-ink-soft">
+                        {formatQuantity(p.stock)}
+                        {multiBranch && (
+                          <span
+                            className="block text-[10px] font-normal text-muted cursor-help"
+                            title={(p.branches || []).map(b => `${branchName(b.branchId)}: ${formatQuantity(b.stock)}`).join('\n')}
+                          >
+                            Empresa: {formatQuantity(p.totalStock ?? p.stock)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-xs text-muted">{formatQuantity(p.minStock ?? 10)}</td>
+                      <td className="px-4 py-3 text-right font-bold text-ink tabular-nums">
                         S/ {parseFloat(p.price).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-center">
                         {isLowStock ? (
-                          <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-bold flex items-center justify-center gap-1">
+                          <span className="bg-danger-soft text-danger px-2 py-0.5 rounded-full text-xs font-bold flex items-center justify-center gap-1">
                             <i className="fa-solid fa-triangle-exclamation"></i> Bajo
                           </span>
                         ) : (
-                          <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-xs font-semibold">
+                          <span className="bg-success-soft text-success px-2 py-0.5 rounded-full text-xs font-semibold">
                             OK
                           </span>
                         )}
@@ -374,7 +525,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => openEditModal(p)}
-                          className="text-slate-500 hover:text-orange-600 p-1.5 rounded hover:bg-orange-50 transition-colors"
+                          className="text-muted hover:text-brand p-1.5 rounded hover:bg-brand-soft transition-colors"
                           title="Editar producto"
                         >
                           <i className="fa-solid fa-pen-to-square"></i>
@@ -387,25 +538,26 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
             </tbody>
           </table>
         </div>
+        <Pagination {...pg} />
       </div>
 
       {/* Modal Nuevo / Editar Producto */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
+          <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="p-4 bg-panel text-white flex justify-between items-center shrink-0">
               <h3 className="font-bold text-lg">
                 <i className={`fa-solid ${editingProductId ? 'fa-pen-to-square' : 'fa-box-open'} mr-2`}></i>
                 {editingProductId ? 'Editar Producto' : 'Nuevo Producto'}
               </h3>
-              <button onClick={closeModal} className="text-slate-300 hover:text-white">
+              <button onClick={closeModal} className="text-muted hover:text-white">
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
-            <div className="p-6 flex flex-col gap-4">
+            <div className="p-6 flex flex-col gap-4 overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Código (Escanear)</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Código (Escanear)</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -417,9 +569,21 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                       className={`w-full border p-2 rounded outline-none text-sm ${borderClass(productErrors.code)}`}
                     />
                     <button
+                      type="button"
+                      onClick={() => setScanTarget(() => (scanned) => {
+                        setCode(scanned);
+                        clearProductError('code');
+                        if (!editingProductId) handleSearchBarcode(scanned);
+                      })}
+                      className="bg-brand-soft text-brand-text px-3 rounded hover:brightness-95 text-xs"
+                      title="Escanear el código de barras con la cámara o el lector"
+                    >
+                      <i className="fa-solid fa-barcode"></i>
+                    </button>
+                    <button
                       onClick={handleSearchBarcode}
                       disabled={searchingBarcode || !!editingProductId}
-                      className="bg-slate-200 text-slate-600 px-3 rounded hover:bg-slate-300 text-xs disabled:opacity-50"
+                      className="bg-surface-muted text-ink-soft px-3 rounded hover:bg-line text-xs disabled:opacity-50"
                       title="Buscar código en internet"
                     >
                       <i className="fa-solid fa-magnifying-glass"></i>
@@ -428,25 +592,42 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                   <FieldError msg={productErrors.code} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Unidad</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Unidad</label>
                   <select
                     value={unit}
-                    onChange={e => setUnit(e.target.value)}
-                    className="w-full border border-gray-300 p-2 rounded outline-none focus:border-orange-500 bg-white text-sm"
+                    onChange={e => {
+                      setUnit(e.target.value);
+                      if (FRACTIONAL_UNITS.includes(e.target.value)) setAllowsFractions(true);
+                    }}
+                    className="w-full border border-line p-2 rounded outline-none focus:border-brand bg-surface text-sm"
                   >
                     <option value="Unidad">Unidad</option>
                     <option value="Bolsa">Bolsa</option>
                     <option value="Metro">Metro</option>
                     <option value="Kilo">Kilo</option>
                     <option value="Galón">Galón</option>
+                    <option value="Litro">Litro</option>
                     <option value="Caja">Caja</option>
                     <option value="Paquete">Paquete</option>
                   </select>
                 </div>
               </div>
 
+              <label className="flex items-start gap-2 text-sm text-ink-soft cursor-pointer bg-surface-muted border border-line rounded-lg px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={allowsFractions}
+                  onChange={e => { setAllowsFractions(e.target.checked); clearProductError('stock'); clearProductError('minStock'); }}
+                  className="accent-orange-600 w-4 h-4 mt-0.5"
+                />
+                <span>
+                  <span className="font-semibold">Se vende fraccionado</span>
+                  <span className="block text-xs text-muted">Permite vender cantidades con decimales, por ejemplo 2.5 metros o 0.750 kilos.</span>
+                </span>
+              </label>
+
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Nombre del Producto</label>
+                <label className="text-xs font-bold text-muted mb-1 block">Nombre del Producto</label>
                 <input
                   type="text"
                   maxLength={120}
@@ -459,11 +640,11 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-500 mb-1 block">Categoría de Almacén</label>
+                <label className="text-xs font-bold text-muted mb-1 block">Categoría de Almacén</label>
                 <select
                   value={category}
                   onChange={e => { setCategory(e.target.value); clearProductError('category'); }}
-                  className={`w-full border p-2 rounded outline-none bg-white text-sm ${borderClass(productErrors.category)}`}
+                  className={`w-full border p-2 rounded outline-none bg-surface text-sm ${borderClass(productErrors.category)}`}
                 >
                   {categoryOptions.map(c => (
                     <option key={c} value={c}>{c}</option>
@@ -472,21 +653,21 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                 <FieldError msg={productErrors.category} />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Stock {editingProductId ? 'Actual' : 'Inicial'}</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Stock {editingProductId ? 'Actual' : 'Inicial'}</label>
                   <input
                     type="number"
                     min="0"
                     disabled={!!editingProductId}
                     value={stock}
                     onChange={e => { setStock(e.target.value); clearProductError('stock'); }}
-                    className={`w-full border p-2 rounded outline-none text-sm ${editingProductId ? 'bg-gray-100 cursor-not-allowed' : ''} ${borderClass(productErrors.stock)}`}
+                    className={`w-full border p-2 rounded outline-none text-sm ${editingProductId ? 'bg-surface-muted cursor-not-allowed' : ''} ${borderClass(productErrors.stock)}`}
                   />
                   <FieldError msg={productErrors.stock} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Stock Mínimo</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Stock Mínimo</label>
                   <input
                     type="number"
                     min="0"
@@ -497,7 +678,7 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                   <FieldError msg={productErrors.minStock} />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-500 mb-1 block">Precio (S/)</label>
+                  <label className="text-xs font-bold text-muted mb-1 block">Precio (S/)</label>
                   <input
                     type="number"
                     step="0.10"
@@ -508,17 +689,70 @@ export default function InventarioPage({ initialCategory = 'Todas', onNavigateTo
                   />
                   <FieldError msg={productErrors.price} />
                 </div>
+                <div>
+                  <label className="text-xs font-bold text-muted mb-1 block">Precio mayorista (opcional)</label>
+                  <input
+                    type="number"
+                    step="0.10"
+                    min="0"
+                    value={wholesalePrice}
+                    onChange={e => { setWholesalePrice(e.target.value); clearProductError('wholesalePrice'); }}
+                    placeholder="Igual al normal"
+                    className={`w-full border p-2 rounded outline-none text-sm ${borderClass(productErrors.wholesalePrice)}`}
+                  />
+                  <FieldError msg={productErrors.wholesalePrice} />
+                </div>
               </div>
+
+              <SaleUnitsEditor
+                rows={saleUnits}
+                onChange={rows => { setSaleUnits(rows); setSaleUnitErrors({}); }}
+                baseUnit={unit}
+                basePrice={price}
+                errors={saleUnitErrors}
+                onScan={apply => setScanTarget(() => apply)}
+              />
             </div>
-            <div className="p-4 bg-slate-50 border-t flex justify-end gap-3">
-              <button onClick={closeModal} className="px-4 py-2 font-bold text-slate-600 bg-slate-200 rounded-lg text-sm">Cancelar</button>
-              <button onClick={handleSaveProduct} disabled={loading} className="px-4 py-2 font-bold text-white bg-orange-600 hover:bg-orange-700 rounded-lg text-sm shadow-sm transition-colors">
+            <div className="p-4 bg-surface-muted border-t flex justify-end gap-3 shrink-0">
+              <button onClick={closeModal} className="px-4 py-2 font-bold text-ink-soft bg-surface-muted rounded-lg text-sm">Cancelar</button>
+              <button onClick={handleSaveProduct} disabled={loading} className="px-4 py-2 font-bold text-brand-contrast bg-brand hover:bg-brand-strong rounded-lg text-sm shadow-sm transition-colors">
                 {editingProductId ? 'Guardar Cambios' : 'Guardar Producto'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <ImportModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        title="Importar productos"
+        entityLabel="productos"
+        columns={IMPORT_COLUMNS}
+        examples={IMPORT_EXAMPLES}
+        templateName="Plantilla_productos.xlsx"
+        uniqueKey="code"
+        validateRow={validateImportRow}
+        onImport={handleImport}
+        options={(
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs bg-surface-muted rounded-lg px-3 py-2">
+            <span className="font-bold text-ink-soft">Si el código ya existe:</span>
+            {[['skip', 'Omitirlo'], ['update', 'Actualizar datos y precios']].map(([id, label]) => (
+              <label key={id} className="flex items-center gap-1.5 cursor-pointer">
+                <input type="radio" name="onExisting" checked={onExisting === id} onChange={() => setOnExisting(id)} className="accent-orange-600" />
+                {label}
+              </label>
+            ))}
+            <span className="text-muted">El stock de los productos existentes nunca se cambia al importar (use Movimientos).</span>
+          </div>
+        )}
+      />
+
+      <BarcodeScannerModal
+        open={Boolean(scanTarget)}
+        onClose={() => setScanTarget(null)}
+        onDetected={code => scanTarget?.(code)}
+      />
     </div>
   );
 }

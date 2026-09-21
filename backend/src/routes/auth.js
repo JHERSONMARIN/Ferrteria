@@ -1,8 +1,15 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../db.js';
+import { hashPassword, verifyPassword, validateNewPassword, PasswordPolicyError } from '../services/passwords.js';
+import { createSessionToken } from '../services/sessionTokens.js';
+import { secondsBlocked, registerFailure, registerSuccess } from '../services/loginThrottle.js';
+import { authenticate, setSessionCookie, clearSessionCookie } from '../middleware/authenticate.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// Si el usuario no existe se verifica igual contra este hash, para que el tiempo de respuesta
+// no delate qué nombres de usuario existen.
+const DUMMY_HASH = await hashPassword('ferresys-usuario-inexistente');
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -10,6 +17,14 @@ router.post('/login', async (req, res) => {
     const { user, pass } = req.body;
     if (!user || !pass) {
       return res.status(400).json({ error: 'Usuario y contraseña requeridos.' });
+    }
+
+    const blockedFor = secondsBlocked(user.trim(), req.ip);
+    if (blockedFor > 0) {
+      return res.status(429).json({
+        error: `Demasiados intentos fallidos. Intente nuevamente en ${Math.ceil(blockedFor / 60)} minuto(s).`,
+        codigo: 'DEMASIADOS_INTENTOS',
+      });
     }
 
     const usuario = await prisma.usuario.findUnique({
@@ -22,14 +37,20 @@ router.post('/login', async (req, res) => {
         role: true,
         modules: true,
         active: true,
+        mustChangePassword: true,
+        branchId: true,
+        branch: { select: { id: true, name: true, saleFlowMode: true, deliveriesEnabled: true, dispatchRole: true } },
       }
     });
 
-    if (!usuario || usuario.pass !== pass.trim() || !usuario.active) {
+    const validPassword = await verifyPassword(String(pass), usuario ? usuario.pass : DUMMY_HASH);
+    if (!usuario || !validPassword || !usuario.active) {
+      registerFailure(user.trim(), req.ip);
       return res.status(401).json({ error: 'Credenciales incorrectas o usuario inactivo.' });
     }
 
-    // No devolvemos el hash o password plano en respuesta completa
+    registerSuccess(user.trim(), req.ip);
+    setSessionCookie(res, createSessionToken(usuario));
     const { pass: _, ...userData } = usuario;
     res.json({ success: true, user: userData });
   } catch (error) {
@@ -38,36 +59,44 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/usuarios/check/:id (Heartbeat de sesión)
-router.get('/check/:id', async (req, res) => {
+// POST /api/auth/change-password
+router.post('/change-password', authenticate, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    const usuario = await prisma.usuario.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        user: true,
-        role: true,
-        modules: true,
-        active: true,
-      }
-    });
+    const { currentPassword, newPassword } = req.body;
+    const stored = await prisma.usuario.findUnique({ where: { id: req.user.id }, select: { pass: true } });
 
-    if (!usuario || !usuario.active) {
-      return res.json({ active: false, error: 'Usuario desactivado o no encontrado.' });
+    if (!(await verifyPassword(String(currentPassword ?? ''), stored.pass))) {
+      return res.status(400).json({ error: 'La contraseña actual no es correcta.' });
+    }
+    validateNewPassword(newPassword);
+    if (newPassword === currentPassword) {
+      return res.status(400).json({ error: 'La nueva contraseña debe ser distinta de la actual.' });
     }
 
-    res.json({
-      active: true,
-      user: usuario,
-      modules: usuario.modules,
-      role: usuario.role,
-      name: usuario.name,
+    const updated = await prisma.usuario.update({
+      where: { id: req.user.id },
+      data: { pass: await hashPassword(newPassword), mustChangePassword: false },
     });
+
+    // La huella de la contraseña cambió: se entrega una sesión nueva y las demás quedan inválidas.
+    setSessionCookie(res, createSessionToken(updated));
+    res.json({ success: true, user: { ...req.user, mustChangePassword: false } });
   } catch (error) {
-    res.status(500).json({ active: false, error: error.message });
+    if (error instanceof PasswordPolicyError) return res.status(400).json({ error: error.message });
+    console.error('[auth.js] Error al cambiar la contraseña:', error);
+    res.status(500).json({ error: 'No se pudo cambiar la contraseña.' });
   }
+});
+
+// POST /api/auth/logout
+router.post('/logout', (req, res) => {
+  clearSessionCookie(res);
+  res.json({ success: true });
+});
+
+// GET /api/auth/me: usuario de la sesión actual (también sirve de latido para detectar cambios)
+router.get('/me', authenticate, (req, res) => {
+  res.json({ user: req.user });
 });
 
 export default router;

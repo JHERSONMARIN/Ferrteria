@@ -1,8 +1,10 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../db.js';
+import { quantityProblem, roundMoney } from '../utils/quantities.js';
+import { addStock } from '../services/stock.js';
+import { resolveBranchId, BranchError } from '../services/branches.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // GET /api/compras
 router.get('/', async (req, res) => {
@@ -53,40 +55,48 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Proveedor, número de documento y al menos un producto requeridos.' });
     }
 
+    // La mercadería entra a la sucursal del usuario (o la que indique el administrador).
+    const branchId = await resolveBranchId(prisma, req.user, req.body.branchId);
     const result = await prisma.$transaction(async (tx) => {
-      let totalCompra = 0;
+      // Cada línea se valida contra su producto: enteros, o hasta 3 decimales si se vende fraccionado.
+      const lines = [];
       for (const item of items) {
-        totalCompra += (parseFloat(item.cost) || 0) * (parseInt(item.qty) || 0);
+        const product = await tx.producto.findUnique({
+          where: { id: parseInt(item.id, 10) },
+          select: { id: true, name: true, active: true, allowsFractions: true },
+        });
+        if (!product || !product.active) throw new Error(`El producto ${item.name || item.id} no existe o no está activo.`);
+        const qty = Number(item.qty);
+        const problem = quantityProblem(qty, product.allowsFractions);
+        if (problem) throw new Error(`La cantidad de ${product.name} ${problem}.`);
+        const cost = Number(item.cost);
+        if (!Number.isFinite(cost) || cost < 0) throw new Error(`El costo de ${product.name} no es válido.`);
+        lines.push({ id: product.id, qty, cost, subtotal: roundMoney(qty * cost) });
       }
+      const totalCompra = roundMoney(lines.reduce((sum, l) => sum + l.subtotal, 0));
 
       const compra = await tx.compra.create({
         data: {
           proveedorId: parseInt(proveedorId),
           numDoc: numDoc.trim(),
           total: totalCompra,
+          branchId,
         }
       });
 
-      for (const item of items) {
-        const prodId = parseInt(item.id);
-        const qtyNum = parseInt(item.qty);
-        const costNum = parseFloat(item.cost);
-
+      for (const { id: prodId, qty: qtyNum, cost: costNum, subtotal } of lines) {
         await tx.detalleCompra.create({
           data: {
             compraId: compra.id,
             productoId: prodId,
             quantity: qtyNum,
             unitPrice: costNum,
-            subtotal: qtyNum * costNum,
+            subtotal,
           }
         });
 
         // Incrementar Stock en Almacén
-        const updatedProd = await tx.producto.update({
-          where: { id: prodId },
-          data: { stock: { increment: qtyNum } }
-        });
+        const stockAfter = await addStock(tx, prodId, qtyNum, branchId);
 
         // Registrar ENTRADA en Kardex
         await tx.movimientoKardex.create({
@@ -94,8 +104,10 @@ router.post('/', async (req, res) => {
             productoId: prodId,
             type: 'ENTRADA',
             qty: qtyNum,
-            stockAfter: updatedProd.stock,
+            stockAfter,
             ref: `Compra a Proveedor (Doc: ${numDoc.trim()})`,
+            usuarioId: req.user.id,
+            branchId,
           }
         });
       }
@@ -105,6 +117,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ success: true, compra: result });
   } catch (error) {
+    if (error instanceof BranchError) return res.status(error.status).json({ error: error.message });
     res.status(400).json({ error: error.message || 'Error al registrar compra.' });
   }
 });

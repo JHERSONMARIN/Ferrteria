@@ -18,6 +18,7 @@ export async function apiFetch(endpoint, options = {}) {
   const config = {
     ...options,
     headers,
+    credentials: 'same-origin',
     signal: controller.signal,
   };
 
@@ -45,6 +46,10 @@ export async function apiFetch(endpoint, options = {}) {
       error.status = response.status;
       error.codigo = codigo;
       error.data = data;
+      // La aplicación escucha este evento para volver al inicio de sesión.
+      if (codigo === 'SESION_INVALIDA') {
+        window.dispatchEvent(new Event('sesion-expirada'));
+      }
       throw error;
     }
 

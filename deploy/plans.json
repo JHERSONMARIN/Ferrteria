@@ -1,0 +1,35 @@
+{
+  "_comentario": "Catálogo de planes de FerreSys. Lo usan deploy/set-plan.sh, create-company.sh y la consola de VALETEC. Los módulos son los de backend/src/config/modules.js; las funciones y límites, los de backend/src/config/features.js.",
+  "planes": {
+    "basico": {
+      "nombre": "Básico",
+      "descripcion": "Ferretería chica: vende, cobra, controla stock, compra a proveedores y fía.",
+      "modules": ["pos", "cotizaciones", "caja", "inventory", "categories", "kardex", "compras", "client-dir", "customers", "personal", "dashboard"],
+      "features": [],
+      "limits": { "maxUsers": 3, "maxBranches": 1, "maxCashRegisters": 1 },
+      "connectionLimit": 5
+    },
+    "profesional": {
+      "nombre": "Profesional",
+      "descripcion": "Ferretería mediana: vendedor y cajero separados, reparto, mayoristas y reportes.",
+      "modules": ["pos", "cotizaciones", "caja", "inventory", "categories", "kardex", "compras", "deliveries", "despacho", "client-dir", "customers", "personal", "dashboard"],
+      "features": ["split_flow", "shared_cash", "deliveries", "wholesale", "discounts", "period_reports"],
+      "limits": { "maxUsers": 10, "maxBranches": 1, "maxCashRegisters": 5 },
+      "connectionLimit": 8
+    },
+    "empresa": {
+      "nombre": "Empresa",
+      "descripcion": "Varias sucursales, transferencias, auditoría y usuarios sin límite.",
+      "modules": ["pos", "cotizaciones", "caja", "inventory", "categories", "kardex", "compras", "deliveries", "despacho", "client-dir", "customers", "personal", "dashboard"],
+      "features": ["split_flow", "shared_cash", "deliveries", "wholesale", "discounts", "period_reports", "branches", "audit"],
+      "limits": { "maxUsers": 0, "maxBranches": 0, "maxCashRegisters": 0 },
+      "connectionLimit": 12
+    }
+  },
+  "_limites": "0 = sin límite.",
+  "adicionales": {
+    "sunat": { "nombre": "Facturación electrónica SUNAT", "features": ["sunat"] },
+    "envios": { "nombre": "Envíos a domicilio", "modules": ["deliveries", "despacho"], "features": ["deliveries"] },
+    "sucursales": { "nombre": "Sucursales adicionales", "features": ["branches"] }
+  }
+}

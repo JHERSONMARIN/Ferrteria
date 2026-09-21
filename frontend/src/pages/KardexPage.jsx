@@ -3,6 +3,8 @@ import { api } from '../api.js';
 import { exportToExcel } from '../utils/excelExport.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
+import { quantityProblem, roundQuantity, formatQuantity } from '../utils/quantities.js';
+import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../components/ui/index.js';
 
 const COMMON_REASONS = {
   ENTRADA: [
@@ -22,6 +24,7 @@ const COMMON_REASONS = {
 };
 
 export default function KardexPage({ currentUser }) {
+  const aviso = useToast();
   const [kardexRecords, setKardexRecords] = useState([]);
   const [summary, setSummary] = useState({
     totalIn: 0,
@@ -33,11 +36,15 @@ export default function KardexPage({ currentUser }) {
   const [loading, setLoading] = useState(false);
 
   // Filtros
-  const [period, setPeriod] = useState('month'); // 'today' | 'week' | 'month' | 'all' | 'custom'
+  const [period, setPeriod] = useState('month'); // 'today' | 'week' | 'month' | 'custom'
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [filterCode, setFilterCode] = useState('');
   const [filterType, setFilterType] = useState('TODOS'); // 'TODOS' | 'ENTRADA' | 'SALIDA'
+  const [filterBranch, setFilterBranch] = useState('');
+  const [branches, setBranches] = useState([]);
+  // Con una sola sucursal no se muestra nada de sucursales.
+  const multiBranch = branches.length > 1;
 
   // Modal Form
   const [showModal, setShowModal] = useState(false);
@@ -50,11 +57,12 @@ export default function KardexPage({ currentUser }) {
 
   useEffect(() => {
     loadProducts();
+    api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
   }, []);
 
   useEffect(() => {
     loadKardex();
-  }, [period, startDate, endDate, filterCode, filterType]);
+  }, [period, startDate, endDate, filterCode, filterType, filterBranch]);
 
   const loadProducts = async () => {
     try {
@@ -78,6 +86,7 @@ export default function KardexPage({ currentUser }) {
 
       if (filterCode) params.append('productCode', filterCode);
       if (filterType !== 'TODOS') params.append('type', filterType);
+      if (filterBranch) params.append('branchId', filterBranch);
 
       const res = await api.get(`/kardex?${params.toString()}`);
       if (res && res.records) {
@@ -88,11 +97,13 @@ export default function KardexPage({ currentUser }) {
       }
     } catch (err) {
       console.error('Error cargando Kardex:', err);
-      alert('Error cargando movimientos de Kardex: ' + err.message);
+      aviso.error('Error cargando movimientos de Kardex: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
+
+  const pagination = usePagination(kardexRecords);
 
   const clearError = (field) => setErrors((prev) => ({ ...prev, [field]: '' }));
 
@@ -101,14 +112,12 @@ export default function KardexPage({ currentUser }) {
     if (!selectedProdId) e.producto = 'Seleccione un producto.';
 
     const qtyNum = Number(qty);
+    const prod = products.find((p) => String(p.id) === String(selectedProdId));
+    const available = prod ? roundQuantity(prod.stock - (prod.reserved || 0)) : 0;
     if (qty === '' || isNaN(qtyNum)) e.qty = 'Ingrese la cantidad.';
-    else if (!Number.isInteger(qtyNum)) e.qty = 'La cantidad debe ser un número entero.';
-    else if (qtyNum <= 0) e.qty = 'La cantidad debe ser mayor a 0.';
-    else if (type === 'SALIDA') {
-      const prod = products.find((p) => String(p.id) === String(selectedProdId));
-      if (prod && qtyNum > prod.stock) {
-        e.qty = `Stock insuficiente. Disponible: ${prod.stock}.`;
-      }
+    else if (prod && quantityProblem(qtyNum, prod.allowsFractions)) e.qty = `La cantidad ${quantityProblem(qtyNum, prod.allowsFractions)}.`;
+    else if (type === 'SALIDA' && prod && qtyNum > available) {
+      e.qty = `Stock insuficiente. Disponible: ${formatQuantity(available)}${prod.reserved > 0 ? ' (el resto está reservado para pedidos)' : ''}.`;
     }
 
     setErrors(e);
@@ -145,7 +154,7 @@ export default function KardexPage({ currentUser }) {
       await api.post('/kardex', {
         productoId: selectedProdId,
         type,
-        qty: parseInt(qty, 10),
+        qty: Number(qty),
         ref: fullRef,
         usuarioId: currentUser?.id,
       });
@@ -153,9 +162,9 @@ export default function KardexPage({ currentUser }) {
       setShowModal(false);
       await loadKardex();
       await loadProducts();
-      alert('Movimiento registrado correctamente.');
+      aviso.exito('Movimiento registrado correctamente.');
     } catch (err) {
-      alert('Error al registrar movimiento: ' + err.message);
+      aviso.error('Error al registrar movimiento: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -183,61 +192,55 @@ export default function KardexPage({ currentUser }) {
 
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col min-h-full">
+      <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
         {/* Encabezado Principal */}
-        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-50">
+        <div className="p-4 border-b border-line flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-muted">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="bg-orange-100 text-orange-700 px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                <i className="fa-solid fa-receipt"></i> Almacén
-              </span>
-              <h3 className="font-bold text-slate-800 text-lg">Kardex de Inventario</h3>
-            </div>
-            <p className="text-xs text-slate-500">
-              Trazabilidad física de entradas, salidas por ventas, compras y ajustes de existencias.
+            <p className="text-xs text-muted">
+              Entradas, salidas por ventas, compras y ajustes de existencias, producto por producto.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2 w-full md:w-auto justify-end items-center">
             <button
               onClick={handleExportExcel}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-bold shadow transition-colors flex items-center gap-2"
+              className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-file-excel"></i> Exportar Excel
+              <i className="fa-solid fa-file-excel"></i> Exportar
             </button>
 
             <button
               onClick={handleOpenManualModal}
-              className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition-colors flex items-center gap-2"
+              className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2"
             >
-              <i className="fa-solid fa-plus"></i> Registrar Movimiento
+              <i className="fa-solid fa-plus"></i> Registrar movimiento
             </button>
           </div>
         </div>
 
         {/* Panel de Resumen Contextual Reactivo */}
-        <div className="p-4 bg-white border-b border-gray-100">
+        <div className="p-4 bg-surface border-b border-line">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {/* Entradas */}
-            <div className="bg-emerald-50/70 border border-emerald-100 p-3 rounded-xl flex items-center justify-between">
+            <div className="bg-success-soft/70 border border-success/20 p-3 rounded-xl flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Entradas</p>
-                <h4 className="text-xl font-black text-emerald-900 mt-0.5">+{summary.totalIn}</h4>
-                <p className="text-[10px] text-emerald-600">Unidades ingresadas</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-success">Entradas</p>
+                <h4 className="text-xl font-black text-success mt-0.5">+{summary.totalIn}</h4>
+                <p className="text-[10px] text-success">Unidades ingresadas</p>
               </div>
-              <span className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-base">
+              <span className="w-10 h-10 rounded-xl bg-success-soft text-success flex items-center justify-center text-base">
                 <i className="fa-solid fa-arrow-down-long"></i>
               </span>
             </div>
 
             {/* Salidas */}
-            <div className="bg-red-50/70 border border-red-100 p-3 rounded-xl flex items-center justify-between">
+            <div className="bg-danger-soft/70 border border-danger/20 p-3 rounded-xl flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-red-700">Salidas</p>
-                <h4 className="text-xl font-black text-red-900 mt-0.5">-{summary.totalOut}</h4>
-                <p className="text-[10px] text-red-600">Ventas / mermas / bajas</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-danger">Salidas</p>
+                <h4 className="text-xl font-black text-danger mt-0.5">-{summary.totalOut}</h4>
+                <p className="text-[10px] text-danger">Ventas / mermas / bajas</p>
               </div>
-              <span className="w-10 h-10 rounded-xl bg-red-100 text-red-700 flex items-center justify-center text-base">
+              <span className="w-10 h-10 rounded-xl bg-danger-soft text-danger flex items-center justify-center text-base">
                 <i className="fa-solid fa-arrow-up-long"></i>
               </span>
             </div>
@@ -245,31 +248,31 @@ export default function KardexPage({ currentUser }) {
             {/* Balance Neto */}
             <div className={`p-3 rounded-xl border flex items-center justify-between ${
               summary.netBalance >= 0
-                ? 'bg-blue-50/70 border-blue-100 text-blue-900'
-                : 'bg-amber-50/70 border-amber-100 text-amber-900'
+                ? 'bg-info-soft/70 border-info/20 text-info'
+                : 'bg-warning-soft/70 border-warning/20 text-warning'
             }`}>
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Variación Neta</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Variación Neta</p>
                 <h4 className="text-xl font-black mt-0.5">
                   {summary.netBalance >= 0 ? `+${summary.netBalance}` : summary.netBalance}
                 </h4>
-                <p className="text-[10px] text-slate-500">Diferencia del periodo</p>
+                <p className="text-[10px] text-muted">Diferencia del periodo</p>
               </div>
-              <span className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center text-base shadow-sm">
+              <span className="w-10 h-10 rounded-xl bg-surface/80 flex items-center justify-center text-base shadow-sm">
                 <i className="fa-solid fa-scale-balanced"></i>
               </span>
             </div>
 
             {/* Total Transacciones */}
-            <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between">
+            <div className="bg-surface-muted border border-line p-3 rounded-xl flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Movimientos</p>
-                <h4 className="text-xl font-black text-slate-800 mt-0.5">{summary.movementCount}</h4>
-                <p className="text-[10px] text-slate-500">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Movimientos</p>
+                <h4 className="text-xl font-black text-ink mt-0.5">{summary.movementCount}</h4>
+                <p className="text-[10px] text-muted">
                   {selectedProductData ? `${selectedProductData.name.slice(0, 18)}...` : 'En todo el catálogo'}
                 </p>
               </div>
-              <span className="w-10 h-10 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center text-base">
+              <span className="w-10 h-10 rounded-xl bg-surface-muted text-ink-soft flex items-center justify-center text-base">
                 <i className="fa-solid fa-list-check"></i>
               </span>
             </div>
@@ -277,18 +280,17 @@ export default function KardexPage({ currentUser }) {
         </div>
 
         {/* Barra de Filtros Temporales y de Producto */}
-        <div className="p-4 border-b border-gray-100 bg-slate-50/60 flex flex-col gap-3">
+        <div className="p-4 border-b border-line bg-surface-muted/60 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Botones de Periodo Rápido */}
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+              <span className="text-xs font-bold text-muted mr-1 flex items-center gap-1">
                 <i className="fa-regular fa-calendar"></i> Periodo:
               </span>
               {[
                 { id: 'today', label: 'Hoy' },
                 { id: 'week', label: 'Esta Semana' },
                 { id: 'month', label: 'Este Mes' },
-                { id: 'all', label: 'Todo el Historial' },
                 { id: 'custom', label: 'Personalizado' },
               ].map((btn) => (
                 <button
@@ -296,8 +298,8 @@ export default function KardexPage({ currentUser }) {
                   onClick={() => setPeriod(btn.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     period === btn.id
-                      ? 'bg-orange-600 text-white shadow-sm'
-                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                      ? 'bg-brand text-brand-contrast shadow-sm'
+                      : 'bg-surface text-ink-soft border border-line hover:bg-surface-muted'
                   }`}
                 >
                   {btn.label}
@@ -307,11 +309,11 @@ export default function KardexPage({ currentUser }) {
 
             {/* Filtro por Tipo de Movimiento */}
             <div className="flex items-center gap-2">
-              <label className="text-xs font-bold text-slate-500">Tipo:</label>
+              <label className="text-xs font-bold text-muted">Tipo:</label>
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="border border-slate-200 bg-white text-xs font-semibold py-1.5 px-3 rounded-lg outline-none focus:border-orange-500"
+                className="border border-line bg-surface text-xs font-semibold py-1.5 px-3 rounded-lg outline-none focus:border-brand"
               >
                 <option value="TODOS">Todos los tipos</option>
                 <option value="ENTRADA">Solo Entradas (+)</option>
@@ -322,33 +324,33 @@ export default function KardexPage({ currentUser }) {
 
           {/* Rango de Fechas Personalizado si se selecciona 'custom' */}
           {period === 'custom' && (
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 flex-wrap text-xs">
-              <span className="font-bold text-slate-500">Desde:</span>
+            <div className="flex items-center gap-2 pt-2 border-t border-line/60 flex-wrap text-xs">
+              <span className="font-bold text-muted">Desde:</span>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="border border-slate-200 bg-white p-1.5 rounded-lg outline-none focus:border-orange-500"
+                className="border border-line bg-surface p-1.5 rounded-lg outline-none focus:border-brand"
               />
-              <span className="font-bold text-slate-500 ml-2">Hasta:</span>
+              <span className="font-bold text-muted ml-2">Hasta:</span>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="border border-slate-200 bg-white p-1.5 rounded-lg outline-none focus:border-orange-500"
+                className="border border-line bg-surface p-1.5 rounded-lg outline-none focus:border-brand"
               />
             </div>
           )}
 
           {/* Selector de Producto */}
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60">
-            <label className="text-xs font-bold text-slate-500 whitespace-nowrap">
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-line/60">
+            <label className="text-xs font-bold text-muted whitespace-nowrap">
               <i className="fa-solid fa-box mr-1"></i> Filtrar Producto:
             </label>
             <select
               value={filterCode}
               onChange={(e) => setFilterCode(e.target.value)}
-              className="border border-slate-200 bg-white p-2 rounded-lg outline-none focus:border-orange-500 text-xs font-medium w-full md:w-96"
+              className="border border-line bg-surface p-2 rounded-lg outline-none focus:border-brand text-xs font-medium w-full md:w-96"
             >
               <option value="">-- Todos los Productos del Almacén --</option>
               {products.map((p) => (
@@ -360,18 +362,55 @@ export default function KardexPage({ currentUser }) {
             {filterCode && (
               <button
                 onClick={() => setFilterCode('')}
-                className="text-xs text-orange-600 hover:underline font-semibold"
+                className="text-xs text-brand hover:underline font-semibold"
               >
                 (Limpiar filtro de producto)
               </button>
             )}
+            {multiBranch && (
+              <select
+                value={filterBranch}
+                onChange={(e) => setFilterBranch(e.target.value)}
+                aria-label="Sucursal"
+                className="border border-line bg-surface p-2 rounded-lg outline-none focus:border-brand text-xs font-medium"
+              >
+                <option value="">Todas las sucursales</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            )}
           </div>
         </div>
 
-        {/* Tabla de Movimientos */}
-        <div className="flex-1 overflow-auto">
+        {/* Movimientos: tarjetas en pantallas chicas, tabla desde md. Máximo 10 por página. */}
+        {!loading && kardexRecords.length > 0 && (
+          <ul className="md:hidden divide-y divide-line">
+            {pagination.pageItems.map((k) => {
+              const isEntrada = k.type === 'ENTRADA';
+              return (
+                <li key={k.id} className="px-4 py-3 flex flex-col gap-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-ink text-sm leading-snug">{k.name}</p>
+                      <p className="text-[11px] text-muted font-mono">{k.code} · {k.date}</p>
+                    </div>
+                    <span className={`shrink-0 text-right font-black ${isEntrada ? 'text-success' : 'text-danger'}`}>
+                      {isEntrada ? '+' : '-'}{k.qty} <span className="text-[10px] font-normal text-muted">{k.unit || 'un.'}</span>
+                      <span className="block text-[10px] font-semibold text-muted">Queda {k.stockAfter}</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink-soft">{k.ref}</p>
+                  <p className="text-[11px] text-muted">
+                    <i className="fa-solid fa-user-check mr-1"></i>{k.user || 'Sistema'}
+                    {multiBranch && k.branch && <> · <i className="fa-solid fa-store mr-1"></i>{k.branch.name}</>}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <div className={`overflow-x-auto ${!loading && kardexRecords.length > 0 ? 'hidden md:block' : ''}`}>
           <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-50 text-slate-500 text-xs uppercase sticky top-0 z-10 shadow-sm">
+            <thead className="bg-surface-muted text-muted text-xs uppercase shadow-sm">
               <tr>
                 <th className="px-4 py-3">Fecha / Hora</th>
                 <th className="px-4 py-3">Código</th>
@@ -383,31 +422,33 @@ export default function KardexPage({ currentUser }) {
                 <th className="px-4 py-3">Detalle / Referencia</th>
               </tr>
             </thead>
-            <tbody className="text-sm divide-y divide-gray-100">
+            <tbody className="text-sm divide-y divide-line">
               {loading && kardexRecords.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-8 text-center text-slate-400">
-                    <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando movimientos de Kardex...
-                  </td>
+                  <td colSpan="8" className="p-0"><SkeletonTable rows={8} columns={5} /></td>
                 </tr>
               ) : kardexRecords.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-8 text-center text-slate-400">
-                    No se encontraron movimientos registrados en este periodo o filtro.
+                  <td colSpan="8" className="p-0">
+                    <EmptyState
+                      icon="fa-receipt"
+                      title="Sin movimientos en este período"
+                      description="Cambie las fechas o el filtro para ver otras entradas y salidas."
+                    />
                   </td>
                 </tr>
               ) : (
-                kardexRecords.map((k) => {
+                pagination.pageItems.map((k) => {
                   const isEntrada = k.type === 'ENTRADA';
                   return (
-                    <tr key={k.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 text-xs text-slate-500 font-medium whitespace-nowrap">{k.date}</td>
-                      <td className="px-4 py-3 font-mono text-xs font-bold text-slate-600">{k.code}</td>
-                      <td className="px-4 py-3 font-semibold text-slate-800">{k.name}</td>
+                    <tr key={k.id} className="hover:bg-surface-muted transition-colors">
+                      <td className="px-4 py-3 text-xs text-muted font-medium whitespace-nowrap">{k.date}</td>
+                      <td className="px-4 py-3 font-mono text-xs font-bold text-ink-soft">{k.code}</td>
+                      <td className="px-4 py-3 font-semibold text-ink">{k.name}</td>
                       <td className="px-4 py-3 text-center">
                         <span
                           className={`${
-                            isEntrada ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                            isEntrada ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger'
                           } px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1`}
                         >
                           <i className={`fa-solid ${isEntrada ? 'fa-arrow-down' : 'fa-arrow-up'} text-[8px]`}></i>
@@ -416,24 +457,29 @@ export default function KardexPage({ currentUser }) {
                       </td>
                       <td
                         className={`px-4 py-3 text-right font-black ${
-                          isEntrada ? 'text-emerald-600' : 'text-red-600'
+                          isEntrada ? 'text-success' : 'text-danger'
                         }`}
                       >
-                        {isEntrada ? '+' : '-'}{k.qty} <span className="text-[10px] font-normal text-slate-400">{k.unit || 'un.'}</span>
+                        {isEntrada ? '+' : '-'}{k.qty} <span className="text-[10px] font-normal text-muted">{k.unit || 'un.'}</span>
                       </td>
-                      <td className="px-4 py-3 text-right font-bold text-slate-800">
+                      <td className="px-4 py-3 text-right font-bold text-ink">
                         {k.stockAfter}
                       </td>
                       <td className="px-4 py-3 text-xs whitespace-nowrap">
-                        <div className="font-bold text-slate-700 flex items-center gap-1.5">
-                          <i className="fa-solid fa-user-check text-slate-400 text-[10px]"></i>
+                        <div className="font-bold text-ink-soft flex items-center gap-1.5">
+                          <i className="fa-solid fa-user-check text-muted text-[10px]"></i>
                           {k.user || 'Sistema'}
                         </div>
                         {k.userRole && (
-                          <span className="text-[10px] text-slate-400 font-medium">({k.userRole})</span>
+                          <span className="text-[10px] text-muted font-medium">({k.userRole})</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-600">{k.ref}</td>
+                      <td className="px-4 py-3 text-xs text-ink-soft">
+                        {k.ref}
+                        {multiBranch && k.branch && (
+                          <span className="block text-[10px] text-muted"><i className="fa-solid fa-store mr-1"></i>{k.branch.name}</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
@@ -441,18 +487,19 @@ export default function KardexPage({ currentUser }) {
             </tbody>
           </table>
         </div>
+        <Pagination {...pagination} />
       </div>
 
       {/* Modal Ajuste Manual de Kardex */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all p-4">
+          <div className="bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-4 bg-panel text-white flex justify-between items-center">
               <h3 className="font-bold text-lg flex items-center gap-2">
-                <i className="fa-solid fa-boxes-packing text-orange-400"></i>
+                <i className="fa-solid fa-boxes-packing text-brand"></i>
                 Nuevo Movimiento de Kardex
               </h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-300 hover:text-white">
+              <button onClick={() => setShowModal(false)} className="text-muted hover:text-white">
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
@@ -460,8 +507,8 @@ export default function KardexPage({ currentUser }) {
             <div className="p-6 flex flex-col gap-4">
               {/* Producto */}
               <div>
-                <label className="text-xs font-bold text-slate-600 mb-1 block">
-                  Producto a Ajustar <span className="text-red-500">*</span>
+                <label className="text-xs font-bold text-ink-soft mb-1 block">
+                  Producto a Ajustar <span className="text-danger">*</span>
                 </label>
                 <select
                   value={selectedProdId}
@@ -470,7 +517,7 @@ export default function KardexPage({ currentUser }) {
                     clearError('producto');
                     clearError('qty');
                   }}
-                  className={`w-full border p-2.5 rounded-lg outline-none bg-white text-sm ${borderClass(
+                  className={`w-full border p-2.5 rounded-lg outline-none bg-surface text-sm ${borderClass(
                     errors.producto
                   )}`}
                 >
@@ -487,24 +534,24 @@ export default function KardexPage({ currentUser }) {
               {/* Tipo y Cantidad */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1 block">Tipo de Flujo</label>
+                  <label className="text-xs font-bold text-ink-soft mb-1 block">Tipo de Flujo</label>
                   <select
                     value={type}
                     onChange={(e) => handleTypeChange(e.target.value)}
-                    className="w-full border border-gray-300 p-2.5 rounded-lg outline-none focus:border-orange-500 bg-white text-sm font-semibold"
+                    className="w-full border border-line p-2.5 rounded-lg outline-none focus:border-brand bg-surface text-sm font-semibold"
                   >
                     <option value="ENTRADA">🟢 Ingreso (+)</option>
                     <option value="SALIDA">🔴 Salida / Baja (-)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 mb-1 block">
-                    Cantidad <span className="text-red-500">*</span>
+                  <label className="text-xs font-bold text-ink-soft mb-1 block">
+                    Cantidad <span className="text-danger">*</span>
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    step="1"
+                    min="0.001"
+                    step="any"
                     value={qty}
                     onChange={(e) => {
                       setQty(e.target.value);
@@ -520,11 +567,11 @@ export default function KardexPage({ currentUser }) {
 
               {/* Motivo Predefinido */}
               <div>
-                <label className="text-xs font-bold text-slate-600 mb-1 block">Motivo de la Operación</label>
+                <label className="text-xs font-bold text-ink-soft mb-1 block">Motivo de la Operación</label>
                 <select
                   value={reasonPreset}
                   onChange={(e) => setReasonPreset(e.target.value)}
-                  className="w-full border border-gray-300 p-2.5 rounded-lg outline-none focus:border-orange-500 bg-white text-sm"
+                  className="w-full border border-line p-2.5 rounded-lg outline-none focus:border-brand bg-surface text-sm"
                 >
                   {(COMMON_REASONS[type] || []).map((m) => (
                     <option key={m} value={m}>
@@ -536,7 +583,7 @@ export default function KardexPage({ currentUser }) {
 
               {/* Detalle Opcional */}
               <div>
-                <label className="text-xs font-bold text-slate-600 mb-1 block">
+                <label className="text-xs font-bold text-ink-soft mb-1 block">
                   Documento de Referencia / Detalle Adicional
                 </label>
                 <input
@@ -545,22 +592,22 @@ export default function KardexPage({ currentUser }) {
                   value={refDetail}
                   onChange={(e) => setRefDetail(e.target.value)}
                   placeholder="Ej. Acta de merma #402 / Conteo físico mensual"
-                  className="w-full border border-gray-300 p-2.5 rounded-lg outline-none text-sm focus:border-orange-500"
+                  className="w-full border border-line p-2.5 rounded-lg outline-none text-sm focus:border-brand"
                 />
               </div>
             </div>
 
-            <div className="p-4 bg-slate-50 border-t flex justify-end gap-3">
+            <div className="p-4 bg-surface-muted border-t flex justify-end gap-3">
               <button
                 onClick={() => setShowModal(false)}
-                className="px-4 py-2 font-bold text-slate-600 bg-slate-200 hover:bg-slate-300 rounded-lg text-sm transition-colors"
+                className="px-4 py-2 font-bold text-ink-soft bg-surface-muted hover:bg-line rounded-lg text-sm transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveMovement}
                 disabled={loading}
-                className="px-4 py-2 font-bold text-white bg-orange-600 hover:bg-orange-700 rounded-lg text-sm shadow-sm transition-colors flex items-center gap-2"
+                className="px-4 py-2 font-bold text-brand-contrast bg-brand hover:bg-brand-strong rounded-lg text-sm shadow-sm transition-colors flex items-center gap-2"
               >
                 <i className="fa-solid fa-check"></i>
                 {loading ? 'Procesando...' : 'Registrar Movimiento'}

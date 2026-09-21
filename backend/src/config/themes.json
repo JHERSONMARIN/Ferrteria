@@ -1,0 +1,41 @@
+{
+  "_comentario": "Estilos visuales de FerreSys. Es la única lista: la usan la Configuración de cada empresa, deploy/set-theme.sh y la consola de VALETEC. primaryColor tiñe los botones y lo resaltado; navColor es el menú lateral (puede ser claro u oscuro: el texto se ajusta solo).",
+  "estilos": {
+    "ferretero": {
+      "nombre": "Naranja ferretero",
+      "descripcion": "El estilo de fábrica: naranja sobre un menú grafito.",
+      "primaryColor": "#ea580c",
+      "navColor": "#0f172a"
+    },
+    "azul": {
+      "nombre": "Azul corporativo",
+      "descripcion": "Sobrio, para distribuidoras y empresas con varias sucursales.",
+      "primaryColor": "#2563eb",
+      "navColor": "#0f172a"
+    },
+    "verde": {
+      "nombre": "Verde campo",
+      "descripcion": "Verde sobre menú oscuro, para agro y materiales de construcción.",
+      "primaryColor": "#16a34a",
+      "navColor": "#052e16"
+    },
+    "ladrillo": {
+      "nombre": "Rojo ladrillo",
+      "descripcion": "Rojo cálido sobre un menú marrón oscuro.",
+      "primaryColor": "#dc2626",
+      "navColor": "#1c1917"
+    },
+    "claro": {
+      "nombre": "Claro",
+      "descripcion": "Menú blanco y color turquesa: más liviano, ideal con buena luz.",
+      "primaryColor": "#0f766e",
+      "navColor": "#ffffff"
+    },
+    "noche": {
+      "nombre": "Noche",
+      "descripcion": "Violeta sobre negro, con mucho contraste.",
+      "primaryColor": "#7c3aed",
+      "navColor": "#09090b"
+    }
+  }
+}

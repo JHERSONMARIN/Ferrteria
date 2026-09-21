@@ -122,6 +122,13 @@ async function main() {
       create: { ...prod, categoriaId: catId },
     });
 
+    // Todo el stock de demostración está en la sucursal Principal (id 1, creada por la migración 11).
+    await prisma.branchStock.upsert({
+      where: { branchId_productoId: { branchId: 1, productoId: createdProd.id } },
+      update: {},
+      create: { branchId: 1, productoId: createdProd.id, stock: createdProd.stock, reserved: createdProd.reserved },
+    });
+
     // Registrar kardex inicial si tiene stock
     if (prod.stock > 0) {
       const existingKardex = await prisma.movimientoKardex.findFirst({
@@ -136,6 +143,7 @@ async function main() {
             qty: prod.stock,
             stockAfter: prod.stock,
             ref: 'Stock Inicial al Registrar',
+            branchId: 1,
           }
         });
       }

@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import FieldError from '../components/FieldError.jsx';
 import { borderClass } from '../utils/validators.js';
+import { useToast, useConfirm, Pagination, usePagination } from '../components/ui/index.js';
 
 export default function CreditosPage() {
+  const aviso = useToast();
+  const confirmar = useConfirm();
   const [creditos, setCreditos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCredito, setSelectedCredito] = useState(null);
@@ -20,7 +23,7 @@ export default function CreditosPage() {
       const data = await api.get('/creditos');
       setCreditos(data);
     } catch (err) {
-      alert('Error cargando créditos: ' + err.message);
+      aviso.error('Error cargando créditos: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -30,6 +33,14 @@ export default function CreditosPage() {
     setSelectedCredito(cred);
     setAbonoAmount('');
     setAbonoError('');
+  };
+
+  // El abono nunca supera la deuda: si se escribe más, queda en el total adeudado.
+  const limitAbono = (value, debt) => {
+    if (value === '') return '';
+    const [entero, decimales] = value.split('.');
+    const limpio = decimales !== undefined ? `${entero}.${decimales.slice(0, 2)}` : entero;
+    return Number(limpio) > debt ? debt.toFixed(2) : limpio;
   };
 
   const handleRegisterAbono = async (amountToPay) => {
@@ -51,35 +62,43 @@ export default function CreditosPage() {
         amount: val
       });
 
-      alert('Abono registrado correctamente.');
+      aviso.exito('Abono registrado correctamente.');
       setSelectedCredito(null);
       await loadCreditos();
     } catch (err) {
-      alert('Error al registrar abono: ' + err.message);
+      aviso.error('Error al registrar abono: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSaldarTodo = () => {
-    if (selectedCredito && window.confirm(`¿Saldar la deuda total de S/ ${selectedCredito.debt.toFixed(2)}?`)) {
+  const handleSaldarTodo = async () => {
+    if (!selectedCredito) return;
+    const seguro = await confirmar({
+      title: 'Saldar la deuda',
+      description: `Se registrará el pago total de S/ ${selectedCredito.debt.toFixed(2)}.`,
+      confirmText: 'Saldar',
+    });
+    if (seguro) {
       handleRegisterAbono(selectedCredito.debt);
     }
   };
 
+  // Máximo 10 por página; en pantallas chicas se ve la página completa sin scroll interno.
+  const pg = usePagination(creditos);
+
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex-1 flex flex-col min-h-full">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+      <div className="bg-surface rounded-xl shadow-sm border border-line flex-1 flex flex-col min-h-full">
+        <div className="p-4 border-b border-line flex justify-between items-center bg-surface-muted">
           <div>
-            <h3 className="font-bold text-slate-800 text-lg">Módulo de Créditos (Cuentas por Cobrar)</h3>
-            <p className="text-xs text-slate-500">Control de deudas de clientes con verificación de límite de crédito de fiado.</p>
+            <p className="text-xs text-muted">Deudas de clientes, abonos y control del límite de fiado.</p>
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-slate-100 text-slate-500 text-xs uppercase shadow-sm">
+            <thead className="bg-surface-muted text-muted text-xs uppercase shadow-sm">
               <tr>
                 <th className="px-4 py-3">Cliente</th>
                 <th className="px-4 py-3">Último Movimiento</th>
@@ -89,25 +108,25 @@ export default function CreditosPage() {
                 <th className="px-4 py-3 text-center">Acción</th>
               </tr>
             </thead>
-            <tbody className="text-sm divide-y divide-gray-100">
+            <tbody className="text-sm divide-y divide-line">
               {creditos.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-4 py-6 text-center text-slate-400">
+                  <td colSpan="6" className="px-4 py-6 text-center text-muted">
                     No hay clientes con cuentas por cobrar pendientes.
                   </td>
                 </tr>
               ) : (
-                creditos.map(c => (
-                  <tr key={c.id} className="hover:bg-slate-50 border-b border-gray-100">
-                    <td className="px-4 py-4 font-bold text-slate-700">{c.name}</td>
-                    <td className="px-4 py-4 text-xs text-slate-500">{c.lastPurchase}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-slate-700">S/ {c.maxCredit.toFixed(2)}</td>
-                    <td className="px-4 py-4 text-right font-black text-red-600">S/ {c.debt.toFixed(2)}</td>
-                    <td className="px-4 py-4 text-right font-black text-emerald-600">S/ {c.availableCredit.toFixed(2)}</td>
+                pg.pageItems.map(c => (
+                  <tr key={c.id} className="hover:bg-surface-muted border-b border-line">
+                    <td className="px-4 py-4 font-bold text-ink-soft">{c.name}</td>
+                    <td className="px-4 py-4 text-xs text-muted">{c.lastPurchase}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-ink-soft">S/ {c.maxCredit.toFixed(2)}</td>
+                    <td className="px-4 py-4 text-right font-black text-danger">S/ {c.debt.toFixed(2)}</td>
+                    <td className="px-4 py-4 text-right font-black text-success">S/ {c.availableCredit.toFixed(2)}</td>
                     <td className="px-4 py-4 text-center">
                       <button
                         onClick={() => handleOpenModal(c)}
-                        className="bg-slate-900 hover:bg-slate-800 transition-colors text-white text-xs px-3 py-2 rounded font-bold shadow"
+                        className="bg-panel hover:bg-panel-strong transition-colors text-white text-xs px-3 py-2 rounded font-bold shadow"
                       >
                         <i className="fa-solid fa-eye mr-1"></i> Ver Detalle / Abono
                       </button>
@@ -118,38 +137,39 @@ export default function CreditosPage() {
             </tbody>
           </table>
         </div>
+        <Pagination {...pg} />
       </div>
 
       {/* Modal Estado de Cuenta */}
       {selectedCredito && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
+          <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-panel text-white flex justify-between items-center shrink-0">
               <div>
                 <h3 className="font-bold text-lg"><i className="fa-solid fa-handshake-angle mr-2"></i> Estado de Cuenta</h3>
-                <p className="text-slate-300 text-sm">Cliente: {selectedCredito.name} (DNI/RUC: {selectedCredito.doc})</p>
+                <p className="text-muted text-sm">Cliente: {selectedCredito.name} (DNI/RUC: {selectedCredito.doc})</p>
               </div>
-              <button onClick={() => setSelectedCredito(null)} className="text-slate-300 hover:text-white">
+              <button onClick={() => setSelectedCredito(null)} className="text-muted hover:text-white">
                 <i className="fa-solid fa-xmark text-xl"></i>
               </button>
             </div>
 
-            <div className="p-4 bg-slate-50 border-b border-gray-200 grid grid-cols-3 gap-4 shrink-0 text-center">
-              <div className="bg-white p-3 rounded-lg border border-slate-200">
-                <p className="text-xs font-bold text-slate-500 mb-1">Límite Autorizado</p>
-                <h4 className="text-lg font-black text-slate-800">S/ {selectedCredito.maxCredit.toFixed(2)}</h4>
+            <div className="p-4 bg-surface-muted border-b border-line grid grid-cols-3 gap-4 shrink-0 text-center">
+              <div className="bg-surface p-3 rounded-lg border border-line">
+                <p className="text-xs font-bold text-muted mb-1">Límite Autorizado</p>
+                <h4 className="text-lg font-black text-ink">S/ {selectedCredito.maxCredit.toFixed(2)}</h4>
               </div>
-              <div className="bg-red-50 p-3 rounded-lg border border-red-100">
-                <p className="text-xs font-bold text-red-600 mb-1">Deuda Pendiente</p>
-                <h4 className="text-xl font-black text-red-700">S/ {selectedCredito.debt.toFixed(2)}</h4>
+              <div className="bg-danger-soft p-3 rounded-lg border border-danger/20">
+                <p className="text-xs font-bold text-danger mb-1">Deuda Pendiente</p>
+                <h4 className="text-xl font-black text-danger">S/ {selectedCredito.debt.toFixed(2)}</h4>
               </div>
-              <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-                <p className="text-xs font-bold text-emerald-600 mb-1">Disponible para Fiar</p>
-                <h4 className="text-lg font-black text-emerald-800">S/ {selectedCredito.availableCredit.toFixed(2)}</h4>
+              <div className="bg-success-soft p-3 rounded-lg border border-success/20">
+                <p className="text-xs font-bold text-success mb-1">Disponible para Fiar</p>
+                <h4 className="text-lg font-black text-success">S/ {selectedCredito.availableCredit.toFixed(2)}</h4>
               </div>
             </div>
 
-            <div className="p-4 border-b border-gray-100 shrink-0 bg-white">
+            <div className="p-4 border-b border-line shrink-0 bg-surface">
               <div className="flex gap-2 items-center">
                 <input
                   type="number"
@@ -157,21 +177,21 @@ export default function CreditosPage() {
                   min="0"
                   max={selectedCredito.debt}
                   value={abonoAmount}
-                  onChange={e => { setAbonoAmount(e.target.value); setAbonoError(''); }}
+                  onChange={e => { setAbonoAmount(limitAbono(e.target.value, selectedCredito.debt)); setAbonoError(''); }}
                   placeholder="Monto de abono en S/..."
                   className={`flex-1 px-3 py-2 border rounded outline-none text-sm font-bold ${borderClass(abonoError)}`}
                 />
                 <button
                   onClick={() => handleRegisterAbono()}
                   disabled={loading}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded shadow text-sm"
+                  className="bg-success hover:brightness-95 text-white font-bold px-4 py-2 rounded shadow text-sm"
                 >
                   Registrar Abono
                 </button>
                 <button
                   onClick={handleSaldarTodo}
                   disabled={loading}
-                  className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-4 py-2 rounded shadow text-sm"
+                  className="bg-brand hover:bg-brand-strong text-brand-contrast font-bold px-4 py-2 rounded shadow text-sm"
                 >
                   Saldar Deuda Total
                 </button>
@@ -179,10 +199,10 @@ export default function CreditosPage() {
               <FieldError msg={abonoError} />
             </div>
 
-            <div className="flex-1 overflow-auto p-4 bg-gray-50">
-              <h4 className="font-bold text-xs uppercase text-slate-500 mb-2">Historial de Cargos y Abonos</h4>
-              <table className="w-full text-left border-collapse bg-white shadow-sm rounded-lg overflow-hidden">
-                <thead className="bg-slate-100 text-slate-500 text-xs uppercase">
+            <div className="flex-1 overflow-auto p-4 bg-surface-muted">
+              <h4 className="font-bold text-xs uppercase text-muted mb-2">Historial de Cargos y Abonos</h4>
+              <table className="w-full text-left border-collapse bg-surface shadow-sm rounded-lg overflow-hidden">
+                <thead className="bg-surface-muted text-muted text-xs uppercase">
                   <tr>
                     <th className="px-3 py-2">Fecha</th>
                     <th className="px-3 py-2">Tipo</th>
@@ -191,18 +211,18 @@ export default function CreditosPage() {
                     <th className="px-3 py-2 text-right">Monto</th>
                   </tr>
                 </thead>
-                <tbody className="text-xs divide-y divide-gray-100">
+                <tbody className="text-xs divide-y divide-line">
                   {selectedCredito.abonos.map(a => (
                     <tr key={a.id}>
-                      <td className="px-3 py-2 text-slate-500">{a.date}</td>
+                      <td className="px-3 py-2 text-muted">{a.date}</td>
                       <td className="px-3 py-2">
-                        <span className={`px-2 py-0.5 rounded font-bold ${a.type === 'CARGO' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                        <span className={`px-2 py-0.5 rounded font-bold ${a.type === 'CARGO' ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success'}`}>
                           {a.type}
                         </span>
                       </td>
                       <td className="px-3 py-2 font-mono font-semibold">{a.docRef}</td>
-                      <td className="px-3 py-2 text-slate-700">{a.desc || '-'}</td>
-                      <td className={`px-3 py-2 text-right font-black ${a.type === 'CARGO' ? 'text-red-600' : 'text-emerald-600'}`}>
+                      <td className="px-3 py-2 text-ink-soft">{a.desc || '-'}</td>
+                      <td className={`px-3 py-2 text-right font-black ${a.type === 'CARGO' ? 'text-danger' : 'text-success'}`}>
                         {a.type === 'CARGO' ? '+' : '-'}S/ {a.amount.toFixed(2)}
                       </td>
                     </tr>

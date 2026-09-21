@@ -1,8 +1,12 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../db.js';
+import { salesReport, ReportError } from '../services/reports.js';
+import { respondIfLicenseError } from '../services/license.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// Solo cuentan como venta las cobradas: los pedidos pendientes o anulados no son ingresos.
+const COMPLETED_SALE = { status: { in: ['PAID', 'DISPATCHED'] } };
 
 // GET /api/dashboard/stats
 router.get('/stats', async (req, res) => {
@@ -12,7 +16,7 @@ router.get('/stats', async (req, res) => {
       _sum: { total: true },
       where: {
         payMethod: { not: 'FIADO' },
-        status: 'COMPLETADO',
+        ...COMPLETED_SALE,
       },
     });
 
@@ -22,7 +26,7 @@ router.get('/stats', async (req, res) => {
     });
 
     // Total ventas realizadas
-    const salesCount = await prisma.venta.count();
+    const salesCount = await prisma.venta.count({ where: COMPLETED_SALE });
 
     // Métricas macro de almacén e inventario
     const products = await prisma.producto.findMany({
@@ -55,6 +59,7 @@ router.get('/stats', async (req, res) => {
         name: true,
         role: true,
         ventasAsignadas: {
+          where: COMPLETED_SALE,
           select: { total: true },
         },
         entregasAsignadas: {
@@ -83,6 +88,7 @@ router.get('/stats', async (req, res) => {
 
     // Últimas transacciones de venta
     const recentSales = await prisma.venta.findMany({
+      where: COMPLETED_SALE,
       take: 10,
       orderBy: { id: 'desc' },
       select: {
@@ -118,6 +124,18 @@ router.get('/stats', async (req, res) => {
   } catch (error) {
     console.error('[dashboard.js] Error al obtener datos de dashboard:', error);
     res.status(500).json({ error: 'Error al obtener datos de dashboard.' });
+  }
+});
+
+// GET /api/dashboard/reportes?from=AAAA-MM-DD&to=AAAA-MM-DD (por defecto, los últimos 30 días)
+router.get('/reportes', async (req, res) => {
+  try {
+    res.json(await salesReport(prisma, req.query));
+  } catch (error) {
+    if (respondIfLicenseError(res, error)) return;
+    if (error instanceof ReportError) return res.status(400).json({ error: error.message });
+    console.error('[dashboard.js] Error al generar reportes:', error);
+    res.status(500).json({ error: 'No se pudieron generar los reportes.' });
   }
 });
 

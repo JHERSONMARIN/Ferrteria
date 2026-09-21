@@ -1,0 +1,62 @@
+# Plantilla de una empresa: se levanta una copia por empresa con su propio archivo .env
+#   docker compose -p ferresys-<empresa> -f deploy/company/docker-compose.yml --env-file deploy/companies/<empresa>/.env up -d
+services:
+  backend:
+    build:
+      context: ../../backend
+    image: ferresys-backend:local
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      TZ: America/Lima
+      DATABASE_URL: ${DATABASE_URL}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      JWT_SECRET: ${JWT_SECRET}
+      # Poner true cuando la instancia se sirva por HTTPS (proxy del servidor).
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Proxies delante del backend: 1 (frontend); 2 cuando se agregue el proxy HTTPS.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      COMPANY_NAME: ${COMPANY_NAME}
+      # Módulos contratados; vacío = todos. Se cambia con deploy/set-modules.sh
+      LICENSED_MODULES: ${LICENSED_MODULES:-}
+      # Funciones y límites del plan contratado. Se cambian con deploy/set-plan.sh o desde la consola.
+      LICENSED_FEATURES: ${LICENSED_FEATURES:-}
+      MAX_USERS: ${MAX_USERS:-0}
+      MAX_BRANCHES: ${MAX_BRANCHES:-0}
+      MAX_CASH_REGISTERS: ${MAX_CASH_REGISTERS:-0}
+      LICENSE_EXPIRES_AT: ${LICENSE_EXPIRES_AT:-}
+      PLAN: ${PLAN:-}
+      # Accesos rápidos en la pantalla de inicio, solo para entornos de prueba (usuario:clave:Etiqueta,…).
+      QUICK_LOGIN: ${QUICK_LOGIN:-}
+      INITIAL_ADMIN_USER: ${INITIAL_ADMIN_USER:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+    networks:
+      - default
+      - ferresys-infra
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    build:
+      context: ../../frontend
+    image: ferresys-web:local
+    restart: unless-stopped
+    environment:
+      VITE_PORT: 5180
+      BACKEND_URL: http://backend:3000
+      TZ: America/Lima
+    ports:
+      # Solo local por defecto: en el servidor el acceso público pasará por el proxy HTTPS.
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT}:5180"
+    depends_on:
+      - backend
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  ferresys-infra:
+    external: true

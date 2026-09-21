@@ -13,6 +13,9 @@ enum Role {
   VENDEDOR
   CAJERO
   REPARTIDOR
+  // Productos, compras, kardex y despacho. El rol es el cargo y la plantilla de módulos: los permisos
+  // reales son los módulos asignados a cada persona.
+  ALMACEN
 }
 
 enum TipoCliente {
@@ -57,6 +60,27 @@ enum EstadoCaja {
   CERRADA
 }
 
+// Ciclo de una venta. En modo directo pasa a DISPATCHED en un solo paso.
+enum SaleStatus {
+  PENDING_PAYMENT
+  PAID
+  DISPATCHED
+  CANCELLED
+}
+
+// Cómo trabaja la empresa: una persona hace todo, o se reparte entre vendedor, caja y despacho.
+enum SaleFlowMode {
+  DIRECT
+  SEPARATE_CASHIER
+  STAGED
+}
+
+// Lista de precios del cliente: la mayorista usa Producto.wholesalePrice cuando existe.
+enum PriceList {
+  RETAIL
+  WHOLESALE
+}
+
 enum EstadoCotizacion {
   PENDIENTE
   CONVERTIDO
@@ -71,12 +95,25 @@ model Usuario {
   role      Role     @default(VENDEDOR)
   modules   Json
   active    Boolean  @default(true)
+  // Clave temporal (creada por el sistema o un administrador): debe cambiarse al ingresar.
+  mustChangePassword Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   ventasAsignadas   Venta[]        @relation("VendedorVentas")
+  ventasDespachadas Venta[]        @relation("DespachadorVentas")
+  descuentosAplicados Venta[]      @relation("DescuentoVentas")
+  auditLogs           AuditLog[]
   entregasAsignadas Entrega[]      @relation("RepartidorEntregas")
   cajasChicas       CajaChica[]
+  cashSessions      CashSessionMember[]
+
+  // Sucursal donde trabaja: sus ventas, pedidos, compras y ajustes mueven el stock de esa sucursal.
+  // 1 = "Principal", creada por la migración 11 (las sucursales no se borran, solo se desactivan).
+  branchId Int    @default(1)
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  ventasCobradas    Venta[]        @relation("CobradorVentas")
+  transferencias    StockTransfer[]
   cotizaciones      Cotizacion[]   @relation("VendedorCotizaciones")
   movimientosKardex MovimientoKardex[] @relation("UsuarioKardex")
 
@@ -88,9 +125,15 @@ model Producto {
   code      String   @unique
   name      String
   unit      String   @default("Unidad")
-  stock     Int      @default(0)
-  minStock  Int      @default(10)
-  price     Float    @default(0.0)
+  // Se vende fraccionado (metros, kilos): acepta hasta 3 decimales; si no, solo enteros.
+  allowsFractions Boolean @default(false)
+  stock     Decimal      @default(0) @db.Decimal(12, 3)
+  // Unidades apartadas por pedidos aún no despachados; disponible = stock - reserved.
+  reserved  Decimal      @default(0) @db.Decimal(12, 3)
+  minStock  Decimal      @default(10) @db.Decimal(12, 3)
+  price     Decimal    @default(0.0) @db.Decimal(12, 2)
+  // Precio para clientes con lista mayorista; si falta, se usa el precio normal.
+  wholesalePrice Decimal? @db.Decimal(12, 2)
   category    String   @default("General")
   categoriaId Int?
   categoria   Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
@@ -103,8 +146,37 @@ model Producto {
   detallesEntrega    DetalleEntrega[]
   detallesCompra     DetalleCompra[]
   detallesCotizacion DetalleCotizacion[]
+  branchStocks       BranchStock[]
+  transferItems      StockTransferItem[]
+  // Otras formas de vender el mismo producto (paquete, ciento, kilo…); el stock sigue en `unit`.
+  saleUnits          ProductUnit[]
 
   @@map("productos")
+}
+
+// Presentación de venta de un producto. `factor` = cuántas unidades del stock contiene
+// (un "Ciento" de tornillos = 100). Se desactiva en vez de borrarse: las ventas la referencian.
+model ProductUnit {
+  id              Int      @id @default(autoincrement())
+  name            String
+  factor          Decimal  @db.Decimal(12, 3)
+  price           Decimal  @db.Decimal(12, 2)
+  wholesalePrice  Decimal? @db.Decimal(12, 2)
+  // Código de barras propio de la presentación (ej. el de la caja); opcional.
+  code            String?  @unique
+  allowsFractions Boolean  @default(false)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  detallesVenta      DetalleVenta[]
+  detallesCotizacion DetalleCotizacion[]
+
+  @@unique([productoId, name])
+  @@map("product_units")
 }
 
 model Categoria {
@@ -130,7 +202,8 @@ model Cliente {
   phone     String?
   email     String?
   address   String?
-  maxCredit Float       @default(1000.0)
+  maxCredit Decimal       @default(1000.0) @db.Decimal(12, 2)
+  priceList PriceList     @default(RETAIL)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
@@ -145,14 +218,23 @@ model Cliente {
 model Venta {
   id        Int             @id @default(autoincrement())
   docType   TipoComprobante @default(NOTA_VENTA)
-  numDoc    String          @unique
+  // Un pedido recibe su número de comprobante recién al cobrarse.
+  numDoc    String?         @unique
   payMethod MetodoPago      @default(EFECTIVO)
-  mixCash   Float?          @default(0)
-  mixDigital Float?         @default(0)
+  mixCash   Decimal?          @default(0) @db.Decimal(12, 2)
+  mixDigital Decimal?         @default(0) @db.Decimal(12, 2)
   payCode   String?
-  total     Float           @default(0)
-  status    String          @default("COMPLETADO")
+  total     Decimal           @default(0) @db.Decimal(12, 2)
+  // Descuento sobre la suma de las líneas: total = suma de subtotales - discount.
+  discount  Decimal           @default(0) @db.Decimal(12, 2)
+  status    SaleStatus      @default(DISPATCHED)
   createdAt DateTime        @default(now())
+  paidAt       DateTime?
+  dispatchedAt DateTime?
+  cancelledAt  DateTime?
+  cancelReason String?
+  // Un pedido sin cobrar vence al cierre del día y libera su stock reservado.
+  expiresAt    DateTime?
 
   clienteId Int?
   cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
@@ -163,19 +245,45 @@ model Venta {
   cajaId Int?
   caja   CajaChica? @relation(fields: [cajaId], references: [id], onDelete: SetNull)
 
-  detalles DetalleVenta[]
+  dispatchedById Int?
+  dispatchedBy   Usuario? @relation("DespachadorVentas", fields: [dispatchedById], references: [id], onDelete: SetNull)
 
+  discountById Int?
+  discountBy   Usuario? @relation("DescuentoVentas", fields: [discountById], references: [id], onDelete: SetNull)
+
+  // Sucursal de la que sale la mercadería (la de quien vende o registra el pedido).
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  // Quién cobró: en una caja compartida varios cajeros cobran en el mismo turno (cajaId).
+  paidById Int?
+  paidBy   Usuario? @relation("CobradorVentas", fields: [paidById], references: [id], onDelete: SetNull)
+
+  cotizacionId Int?
+  cotizacion   Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
+
+  detalles DetalleVenta[]
+  entrega  Entrega?
+
+  @@index([status])
   @@map("ventas")
 }
 
 model DetalleVenta {
   id        Int   @id @default(autoincrement())
-  quantity  Int
-  unitPrice Float
-  subtotal  Float
+  quantity  Decimal @db.Decimal(12, 3)
+  unitPrice Decimal @db.Decimal(12, 2)
+  subtotal  Decimal @db.Decimal(12, 2)
 
   ventaId Int
   venta   Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  // Presentación vendida (null = la unidad base). quantity y unitPrice están en esa presentación;
+  // lo que sale del stock es quantity × unitFactor.
+  unitId     Int?
+  unit       ProductUnit? @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  unitName   String?
+  unitFactor Decimal      @default(1) @db.Decimal(12, 3)
 
   productoId Int
   producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
@@ -186,8 +294,8 @@ model DetalleVenta {
 model MovimientoKardex {
   id         Int        @id @default(autoincrement())
   type       TipoKardex
-  qty        Int
-  stockAfter Int
+  qty        Decimal @db.Decimal(12, 3)
+  stockAfter Decimal @db.Decimal(12, 3)
   ref        String
   createdAt  DateTime   @default(now())
 
@@ -196,6 +304,10 @@ model MovimientoKardex {
 
   usuarioId  Int?
   usuario    Usuario? @relation("UsuarioKardex", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  // stockAfter es el stock de esta sucursal después del movimiento.
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   @@map("movimientos_kardex")
 }
@@ -207,9 +319,19 @@ model Entrega {
   status    EstadoEntrega @default(PENDIENTE)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
+  // Datos de contacto propios: el cliente puede no estar registrado o recibir otra persona.
+  contactName  String?
+  contactPhone String?
+  notes        String?
+  departedAt   DateTime?
+  deliveredAt  DateTime?
 
-  clienteId Int
-  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  clienteId Int?
+  cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+
+  // Venta que origina el envío. Las entregas anteriores a este vínculo no tienen venta.
+  ventaId Int?   @unique
+  venta   Venta? @relation(fields: [ventaId], references: [id], onDelete: SetNull)
 
   repartidorId Int?
   repartidor   Usuario? @relation("RepartidorEntregas", fields: [repartidorId], references: [id], onDelete: SetNull)
@@ -221,7 +343,7 @@ model Entrega {
 
 model DetalleEntrega {
   id       Int @id @default(autoincrement())
-  quantity Int
+  quantity Decimal @db.Decimal(12, 3)
 
   entregaId Int
   entrega   Entrega @relation(fields: [entregaId], references: [id], onDelete: Cascade)
@@ -234,8 +356,8 @@ model DetalleEntrega {
 
 model CreditoCliente {
   id           Int      @id @default(autoincrement())
-  debtTotal    Float    @default(0)
-  maxCredit    Float    @default(1000.0)
+  debtTotal    Decimal    @default(0) @db.Decimal(12, 2)
+  maxCredit    Decimal    @default(1000.0) @db.Decimal(12, 2)
   lastPurchase DateTime @default(now())
 
   clienteId Int     @unique
@@ -248,7 +370,7 @@ model CreditoCliente {
 
 model AbonoCredito {
   id        Int                   @id @default(autoincrement())
-  amount    Float
+  amount    Decimal @db.Decimal(12, 2)
   docRef    String
   desc      String?
   type      TipoMovimientoCredito @default(ABONO)
@@ -262,21 +384,60 @@ model AbonoCredito {
 
 model CajaChica {
   id               Int        @id @default(autoincrement())
-  montoInicial     Float      @default(0)
-  ventasEfectivo   Float      @default(0)
-  ventasDigital    Float      @default(0)
-  montoCierreConteo Float?   @default(0)
-  diferencia       Float?     @default(0)
+  montoInicial     Decimal      @default(0) @db.Decimal(12, 2)
+  ventasEfectivo   Decimal      @default(0) @db.Decimal(12, 2)
+  ventasDigital    Decimal      @default(0) @db.Decimal(12, 2)
+  montoCierreConteo Decimal?   @default(0) @db.Decimal(12, 2)
+  diferencia       Decimal?     @default(0) @db.Decimal(12, 2)
   estado           EstadoCaja @default(ABIERTA)
   createdAt        DateTime   @default(now())
   closedAt         DateTime?
 
+  // Quien abrió el turno. Los cajeros que se suman están en members.
   usuarioId Int
   usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
 
-  ventas Venta[]
+  // Null solo en turnos abiertos antes de existir las cajas compartidas.
+  cashRegisterId Int?
+  cashRegister   CashRegister? @relation(fields: [cashRegisterId], references: [id], onDelete: Restrict)
+
+  ventas  Venta[]
+  members CashSessionMember[]
 
   @@map("cajas_chicas")
+}
+
+// Caja física (gaveta). Cada caja tiene a lo más un turno abierto (índice parcial en la migración 10).
+model CashRegister {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Solo los usuarios de esta sucursal abren o se suman a sus turnos.
+  branchId Int    @default(1)
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  sessions CajaChica[]
+
+  @@map("cash_registers")
+}
+
+// Cajeros de un turno. Un usuario está en a lo más un turno abierto (leftAt null; índice parcial).
+model CashSessionMember {
+  id        Int       @id @default(autoincrement())
+  joinedAt  DateTime  @default(now())
+  leftAt    DateTime?
+
+  sessionId Int
+  session   CajaChica @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  userId Int
+  user   Usuario @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([sessionId])
+  @@map("cash_session_members")
 }
 
 model Proveedor {
@@ -295,11 +456,15 @@ model Proveedor {
 model Compra {
   id        Int      @id @default(autoincrement())
   numDoc    String
-  total     Float    @default(0)
+  total     Decimal    @default(0) @db.Decimal(12, 2)
   createdAt DateTime @default(now())
 
   proveedorId Int
   proveedor   Proveedor @relation(fields: [proveedorId], references: [id], onDelete: Restrict)
+
+  // Sucursal que recibió la mercadería.
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
 
   detalles DetalleCompra[]
 
@@ -308,9 +473,9 @@ model Compra {
 
 model DetalleCompra {
   id        Int   @id @default(autoincrement())
-  quantity  Int
-  unitPrice Float
-  subtotal  Float
+  quantity  Decimal @db.Decimal(12, 3)
+  unitPrice Decimal @db.Decimal(12, 2)
+  subtotal  Decimal @db.Decimal(12, 2)
 
   compraId Int
   compra   Compra @relation(fields: [compraId], references: [id], onDelete: Cascade)
@@ -324,7 +489,7 @@ model DetalleCompra {
 model Cotizacion {
   id        Int              @id @default(autoincrement())
   numDoc    String           @unique
-  total     Float            @default(0)
+  total     Decimal            @default(0) @db.Decimal(12, 2)
   validDays Int              @default(7)
   status    EstadoCotizacion @default(PENDIENTE)
   createdAt DateTime         @default(now())
@@ -336,21 +501,182 @@ model Cotizacion {
   vendedor   Usuario? @relation("VendedorCotizaciones", fields: [vendedorId], references: [id], onDelete: SetNull)
 
   detalles DetalleCotizacion[]
+  ventas   Venta[]
 
   @@map("cotizaciones")
 }
 
 model DetalleCotizacion {
   id        Int   @id @default(autoincrement())
-  quantity  Int
-  unitPrice Float
-  subtotal  Float
+  quantity  Decimal @db.Decimal(12, 3)
+  unitPrice Decimal @db.Decimal(12, 2)
+  subtotal  Decimal @db.Decimal(12, 2)
 
   cotizacionId Int
   cotizacion   Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+
+  // Presentación vendida (null = la unidad base). quantity y unitPrice están en esa presentación;
+  // lo que sale del stock es quantity × unitFactor.
+  unitId     Int?
+  unit       ProductUnit? @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  unitName   String?
+  unitFactor Decimal      @default(1) @db.Decimal(12, 3)
 
   productoId Int
   producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
 
   @@map("detalle_cotizaciones")
+}
+
+// Configuración de la empresa: una sola fila por instalación (id fijo = 1).
+model BusinessSettings {
+  id             Int      @id @default(1)
+  legalName      String
+  tradeName      String?
+  taxId          String?
+  address        String?
+  phone          String?
+  email          String?
+  currencySymbol String   @default("S/")
+  taxRate        Float    @default(18)
+  ticketFooter   String?
+  // Logo de la empresa, guardado como data URL (se muestra en el inicio de sesión, el menú y el ticket).
+  logo           String?  @db.Text
+  // Color principal (#RRGGBB) con el que se tiñe la interfaz; vacío usa el color por defecto.
+  primaryColor   String?  @db.VarChar(7)
+  // Color del menú lateral; con el anterior forma el estilo (backend/src/config/themes.json).
+  navColor       String?  @db.VarChar(7)
+  enabledModules Json
+  // Descuento máximo (%) que puede aplicar quien no es administrador; 0 = no puede descontar.
+  maxDiscountPercent Decimal @default(0) @db.Decimal(5, 2)
+  updatedAt      DateTime @updatedAt
+
+  @@map("business_settings")
+}
+
+// Series de comprobantes; lastNumber se incrementa de forma atómica al emitir.
+model DocumentSeries {
+  id           Int             @id @default(autoincrement())
+  documentType TipoComprobante
+  series       String          @unique
+  lastNumber   Int             @default(0)
+  isDefault    Boolean         @default(false)
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  // Cada sucursal (establecimiento) emite con sus propias series: T001/B001/F001, T002/B002/F002…
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@index([branchId, documentType])
+  @@map("document_series")
+}
+
+// Registro de auditoría: quién hizo qué y cuándo, con el antes/después en details.
+// action es texto (no enum) para agregar acciones nuevas sin migrar; las válidas están en services/audit.js.
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  action    String
+  entity    String
+  entityId  String?
+  summary   String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  userId   Int?
+  user     Usuario? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Se guarda el nombre para que el registro siga siendo legible si el usuario se elimina.
+  userName String
+
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// Sucursal o almacén. Una empresa con una sola sucursal no ve nada de esto en pantalla.
+enum DispatchRole {
+  SELLER
+  CASHIER
+  WAREHOUSE
+}
+
+model Branch {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  address   String?
+  active    Boolean  @default(true)
+  // Cada sucursal trabaja en su modo: una tienda chica en directo y otra grande por etapas.
+  saleFlowMode SaleFlowMode @default(DIRECT)
+  // Envíos a domicilio: se activan por sucursal, con cualquier modo de trabajo.
+  deliveriesEnabled Boolean @default(true)
+  // Quién atiende "Por despachar" (envíos a domicilio y, por etapas, todo lo cobrado).
+  // Null = según el modo: directo → vendedor, vendedor y caja → cajero, por etapas → almacén.
+  dispatchRole DispatchRole?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stocks        BranchStock[]
+  users         Usuario[]
+  cashRegisters CashRegister[]
+  ventas        Venta[]
+  compras       Compra[]
+  kardex        MovimientoKardex[]
+  transfersOut  StockTransfer[] @relation("TransferOrigin")
+  transfersIn   StockTransfer[] @relation("TransferDestination")
+  documentSeries DocumentSeries[]
+
+  @@map("branches")
+}
+
+// Stock de un producto en una sucursal. productos.stock/reserved son el total de la empresa y se
+// actualizan en la misma operación (services/stock.js): siempre igualan la suma de las sucursales.
+model BranchStock {
+  id       Int     @id @default(autoincrement())
+  stock    Decimal @default(0) @db.Decimal(12, 3)
+  reserved Decimal @default(0) @db.Decimal(12, 3)
+
+  branchId Int
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, productoId])
+  @@index([productoId])
+  @@map("branch_stock")
+}
+
+// Transferencia de stock entre sucursales. Se hace en un solo paso: sale del origen y entra al destino
+// en la misma transacción, con su movimiento de kardex en cada sucursal. El total de la empresa no cambia.
+model StockTransfer {
+  id        Int      @id @default(autoincrement())
+  notes     String?
+  createdAt DateTime @default(now())
+
+  fromBranchId Int
+  fromBranch   Branch @relation("TransferOrigin", fields: [fromBranchId], references: [id], onDelete: Restrict)
+  toBranchId   Int
+  toBranch     Branch @relation("TransferDestination", fields: [toBranchId], references: [id], onDelete: Restrict)
+
+  createdById Int?
+  createdBy   Usuario? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  items StockTransferItem[]
+
+  @@index([createdAt])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id       Int     @id @default(autoincrement())
+  quantity Decimal @db.Decimal(12, 3)
+
+  transferId Int
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+
+  @@map("stock_transfer_items")
 }

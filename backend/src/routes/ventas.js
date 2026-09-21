@@ -1,14 +1,14 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../db.js';
 import { procesarVenta, responderErrorVenta } from '../services/ventas.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // GET /api/ventas
 router.get('/', async (req, res) => {
   try {
     const sales = await prisma.venta.findMany({
+      where: { status: { in: ['PAID', 'DISPATCHED'] } },
       select: {
         id: true,
         docType: true,
@@ -18,6 +18,7 @@ router.get('/', async (req, res) => {
         mixDigital: true,
         payCode: true,
         total: true,
+        discount: true,
         status: true,
         createdAt: true,
         cliente: { select: { name: true, doc: true, type: true } },
@@ -27,6 +28,7 @@ router.get('/', async (req, res) => {
             quantity: true,
             unitPrice: true,
             subtotal: true,
+            unitName: true,
             producto: { select: { name: true, code: true } }
           }
         }
@@ -45,6 +47,7 @@ router.get('/', async (req, res) => {
       method: s.payMethod,
       payCode: s.payCode,
       total: s.total,
+      discount: s.discount,
       detalles: s.detalles,
     }));
 
@@ -57,7 +60,12 @@ router.get('/', async (req, res) => {
 // POST /api/ventas (Venta atómica con Kardex, control de stock y límite de crédito)
 router.post('/', async (req, res) => {
   try {
-    const venta = await procesarVenta(prisma, req.body);
+    // La caja es siempre la del usuario de la sesión; el vendedor puede elegirse en el POS.
+    const venta = await procesarVenta(prisma, {
+      ...req.body,
+      usuarioCajaId: req.user.id,
+      vendedorId: req.body.vendedorId || req.user.id,
+    }, req.user);
     res.status(201).json({ success: true, venta });
   } catch (error) {
     responderErrorVenta(res, error, 'ventas.js');

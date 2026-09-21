@@ -1,151 +1,77 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../db.js';
+import {
+  CashError, getCashStatus, openSession, joinSession, leaveSession, closeSession,
+  listRegisters, createRegister, updateRegister,
+} from '../services/cashRegisters.js';
+import { respondIfLicenseError } from '../services/license.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
-// GET /api/caja/estado-actual?usuarioId=1
-router.get('/estado-actual', async (req, res) => {
+const handle = (context, fn) => async (req, res) => {
   try {
-    const { usuarioId } = req.query;
-    if (!usuarioId) {
-      return res.status(400).json({ error: 'usuarioId requerido.' });
-    }
-
-    const uId = parseInt(usuarioId);
-
-    // Buscar caja abierta para este usuario
-    const cajaAbierta = await prisma.cajaChica.findFirst({
-      where: { usuarioId: uId, estado: 'ABIERTA' },
-      include: {
-        ventas: {
-          select: { total: true, payMethod: true, mixCash: true, mixDigital: true }
-        }
-      }
-    });
-
-    if (!cajaAbierta) {
-      return res.json({ abierta: false, caja: null });
-    }
-
-    // Calcular ventas acumuladas del turno
-    let ventasEfectivo = 0;
-    let ventasDigital = 0;
-
-    cajaAbierta.ventas.forEach(v => {
-      if (v.payMethod === 'EFECTIVO') ventasEfectivo += v.total;
-      else if (v.payMethod === 'PAGO_MIXTO') {
-        ventasEfectivo += v.mixCash || 0;
-        ventasDigital += v.mixDigital || 0;
-      } else if (v.payMethod !== 'FIADO') {
-        ventasDigital += v.total;
-      }
-    });
-
-    const saldoTeoricoEfectivo = cajaAbierta.montoInicial + ventasEfectivo;
-
-    res.json({
-      abierta: true,
-      caja: {
-        id: cajaAbierta.id,
-        montoInicial: cajaAbierta.montoInicial,
-        ventasEfectivo,
-        ventasDigital,
-        saldoTeoricoEfectivo,
-        createdAt: new Date(cajaAbierta.createdAt).toLocaleString('es-PE'),
-      }
-    });
+    await fn(req, res);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener estado de caja.' });
+    if (respondIfLicenseError(res, error)) return;
+    if (error instanceof CashError) return res.status(error.status).json({ error: error.message });
+    console.error(`[caja.js] ${context}:`, error);
+    res.status(500).json({ error: `Error al ${context}.` });
   }
-});
+};
 
-// POST /api/caja/apertura
-router.post('/apertura', async (req, res) => {
-  try {
-    const { usuarioId, montoInicial } = req.body;
-    const monto = parseFloat(montoInicial) || 0;
+const parseId = (value) => {
+  const id = parseInt(value, 10);
+  if (Number.isNaN(id)) throw new CashError('Identificador no válido.');
+  return id;
+};
 
-    if (!usuarioId) return res.status(400).json({ error: 'Usuario requerido.' });
+const requireAdmin = (req) => {
+  if (req.user.role !== 'ADMINISTRADOR') throw new CashError('Solo el administrador gestiona las cajas.', 403);
+};
 
-    const uId = parseInt(usuarioId);
+// GET /api/caja/estado-actual: turno del usuario o, si no tiene, cajas para abrir o unirse.
+router.get('/estado-actual', handle('obtener el estado de caja', async (req, res) => {
+  res.json(await getCashStatus(prisma, req.user));
+}));
 
-    // Verificar que no tenga ya una caja abierta
-    const existente = await prisma.cajaChica.findFirst({
-      where: { usuarioId: uId, estado: 'ABIERTA' }
-    });
+// POST /api/caja/apertura { cashRegisterId, montoInicial }
+router.post('/apertura', handle('abrir la caja', async (req, res) => {
+  const caja = await openSession(prisma, req.body, req.user);
+  res.status(201).json({ success: true, caja });
+}));
 
-    if (existente) {
-      return res.status(400).json({ error: 'Ya tienes una caja abierta para este turno.' });
-    }
+// POST /api/caja/turnos/:id/unirse
+router.post('/turnos/:id/unirse', handle('unirse al turno', async (req, res) => {
+  await joinSession(prisma, parseId(req.params.id), req.user);
+  res.json({ success: true });
+}));
 
-    const nuevaCaja = await prisma.cajaChica.create({
-      data: {
-        usuarioId: uId,
-        montoInicial: monto,
-        estado: 'ABIERTA',
-      }
-    });
+// POST /api/caja/turnos/:id/salir
+router.post('/turnos/:id/salir', handle('salir del turno', async (req, res) => {
+  await leaveSession(prisma, parseId(req.params.id), req.user);
+  res.json({ success: true });
+}));
 
-    res.status(201).json({ success: true, caja: nuevaCaja });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al abrir caja.' });
-  }
-});
+// POST /api/caja/cierre { cajaId, montoCierreConteo }
+router.post('/cierre', handle('cerrar la caja', async (req, res) => {
+  const result = await closeSession(prisma, { sessionId: parseId(req.body.cajaId), montoCierreConteo: req.body.montoCierreConteo }, req.user);
+  res.json({ success: true, ...result });
+}));
 
-// POST /api/caja/cierre
-router.post('/cierre', async (req, res) => {
-  try {
-    const { cajaId, montoCierreConteo } = req.body;
-    const conteo = parseFloat(montoCierreConteo) || 0;
+// Administración de cajas físicas (solo administrador).
+router.get('/registros', handle('listar las cajas', async (req, res) => {
+  requireAdmin(req);
+  res.json(await listRegisters(prisma));
+}));
 
-    if (!cajaId) return res.status(400).json({ error: 'cajaId requerido.' });
+router.post('/registros', handle('crear la caja', async (req, res) => {
+  requireAdmin(req);
+  res.status(201).json(await createRegister(prisma, req.body, req.user));
+}));
 
-    const cId = parseInt(cajaId);
-
-    const caja = await prisma.cajaChica.findUnique({
-      where: { id: cId },
-      include: {
-        ventas: { select: { total: true, payMethod: true, mixCash: true, mixDigital: true } }
-      }
-    });
-
-    if (!caja || caja.estado === 'CERRADA') {
-      return res.status(400).json({ error: 'La caja especificada no existe o ya está cerrada.' });
-    }
-
-    let ventasEfectivo = 0;
-    let ventasDigital = 0;
-
-    caja.ventas.forEach(v => {
-      if (v.payMethod === 'EFECTIVO') ventasEfectivo += v.total;
-      else if (v.payMethod === 'PAGO_MIXTO') {
-        ventasEfectivo += v.mixCash || 0;
-        ventasDigital += v.mixDigital || 0;
-      } else if (v.payMethod !== 'FIADO') {
-        ventasDigital += v.total;
-      }
-    });
-
-    const saldoTeorico = caja.montoInicial + ventasEfectivo;
-    const diferencia = conteo - saldoTeorico;
-
-    const cajaCerrada = await prisma.cajaChica.update({
-      where: { id: cId },
-      data: {
-        ventasEfectivo,
-        ventasDigital,
-        montoCierreConteo: conteo,
-        diferencia,
-        estado: 'CERRADA',
-        closedAt: new Date(),
-      }
-    });
-
-    res.json({ success: true, caja: cajaCerrada, saldoTeorico, diferencia });
-  } catch (error) {
-    res.status(500).json({ error: 'Error al cerrar caja.' });
-  }
-});
+router.put('/registros/:id', handle('actualizar la caja', async (req, res) => {
+  requireAdmin(req);
+  res.json(await updateRegister(prisma, parseId(req.params.id), req.body));
+}));
 
 export default router;

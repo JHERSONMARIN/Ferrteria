@@ -1,9 +1,11 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
-import { procesarVenta, responderErrorVenta, normalizarCarrito, cargarProductosActivos, VentaError } from '../services/ventas.js';
+import { prisma } from '../db.js';
+import { recordAudit } from '../services/audit.js';
+import {
+  procesarVenta, responderErrorVenta, normalizarCarrito, cargarProductosActivos, priceListFor, unitPriceFor, saleUnitOf, unitFields, unitColumns, VentaError,
+} from '../services/ventas.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // GET /api/cotizaciones
 router.get('/', async (req, res) => {
@@ -23,7 +25,10 @@ router.get('/', async (req, res) => {
             quantity: true,
             unitPrice: true,
             subtotal: true,
-            producto: { select: { id: true, name: true, code: true, price: true, stock: true } }
+            unitId: true,
+            unitName: true,
+            unitFactor: true,
+            producto: { select: { id: true, name: true, code: true, price: true, stock: true, reserved: true, unit: true, allowsFractions: true } }
           }
         }
       },
@@ -53,18 +58,23 @@ router.get('/', async (req, res) => {
 // POST /api/cotizaciones (Generar nueva Cotización / Proforma)
 router.post('/', async (req, res) => {
   try {
-    const { clienteId, vendedorId, validDays } = req.body;
+    const { clienteId, validDays } = req.body;
+    const vendedorId = req.user.id;
 
     const items = normalizarCarrito(req.body.cart);
     const productos = await cargarProductosActivos(prisma, items);
+    const priceList = await priceListFor(prisma, clienteId ? parseInt(clienteId, 10) : null);
 
     const detalles = items.map(item => {
-      const unitPrice = productos.get(item.id).price;
+      const producto = productos.get(item.id);
+      const unit = saleUnitOf(producto, item.unitId);
+      const unitPrice = unitPriceFor(producto, priceList, unit);
       return {
         productoId: item.id,
         quantity: item.qty,
         unitPrice,
         subtotal: Math.round(unitPrice * item.qty * 100) / 100,
+        ...unitColumns(unitFields(producto, unit, item.qty)),
       };
     });
     const total = Math.round(detalles.reduce((sum, d) => sum + d.subtotal, 0) * 100) / 100;
@@ -105,11 +115,12 @@ router.post('/:id/convertir', async (req, res) => {
 
     const cot = await prisma.cotizacion.findUnique({
       where: { id: cotId },
-      include: { detalles: { select: { productoId: true, quantity: true } } }
+      include: { detalles: { select: { productoId: true, quantity: true, unitId: true } } }
     });
     if (!cot) return res.status(404).json({ error: 'Cotización no encontrada.' });
 
-    const { docType, payMethod, mixCash, mixDigital, payCode, usuarioCajaId, vendedorId } = req.body;
+    const { docType, payMethod, mixCash, mixDigital, payCode, vendedorId } = req.body;
+    const usuarioCajaId = req.user.id;
 
     const venta = await procesarVenta(prisma, {
       docType,
@@ -121,8 +132,8 @@ router.post('/:id/convertir', async (req, res) => {
       vendedorId: vendedorId || cot.vendedorId,
       clienteId: cot.clienteId,
       cotizacionId: cot.id,
-      cart: cot.detalles.map(d => ({ id: d.productoId, qty: d.quantity })),
-    });
+      cart: cot.detalles.map(d => ({ id: d.productoId, qty: d.quantity, unitId: d.unitId })),
+    }, req.user);
 
     res.json({ success: true, venta });
   } catch (error) {
@@ -146,9 +157,20 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Esta cotización ya se encuentra cancelada.' });
     }
 
-    const updated = await prisma.cotizacion.update({
-      where: { id: cotId },
-      data: { status: 'CANCELADO' }
+    const updated = await prisma.$transaction(async (tx) => {
+      const quote = await tx.cotizacion.update({
+        where: { id: cotId },
+        data: { status: 'CANCELADO' }
+      });
+      await recordAudit(tx, {
+        action: 'QUOTE_CANCELLED',
+        entity: 'Cotizacion',
+        entityId: cotId,
+        summary: `Cotización ${cot.numDoc} de S/ ${Number(cot.total).toFixed(2)} anulada`,
+        details: { numDoc: cot.numDoc, total: cot.total },
+        user: req.user,
+      });
+      return quote;
     });
 
     res.json({ success: true, message: 'Cotización eliminada (cancelada) exitosamente.', cotizacion: updated });
