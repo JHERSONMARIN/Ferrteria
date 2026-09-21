@@ -1,7 +1,7 @@
 import { nextDocumentNumber } from './documentSeries.js';
 import { getSettings } from './settings.js';
 import { reserveStock, consumeReservedStock, releaseReservedStock } from './stock.js';
-import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers } from './deliveries.js';
+import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers, assertCanDeliver } from './deliveries.js';
 import { roundMoney } from '../utils/quantities.js';
 import { canDispatch } from '../config/dispatch.js';
 import { recordAudit } from './audit.js';
@@ -29,7 +29,12 @@ const ORDER_INCLUDE = {
   cliente: { select: { id: true, name: true, doc: true, type: true } },
   vendedor: { select: { name: true } },
   detalles: { select: { productoId: true, quantity: true, unitPrice: true, subtotal: true, producto: { select: { name: true, code: true } } } },
-  entrega: { select: { ref: true, address: true } },
+  entrega: {
+    select: {
+      id: true, ref: true, address: true, status: true,
+      repartidor: { select: { id: true, name: true } },
+    },
+  },
   branch: { select: { id: true, name: true, saleFlowMode: true, deliveriesEnabled: true, dispatchRole: true } },
 };
 
@@ -56,7 +61,14 @@ export function formatOrder(order) {
     customerType: order.cliente ? order.cliente.type : null,
     seller: order.vendedor ? order.vendedor.name : 'General',
     items: publicLines(linesOf(order)),
-    delivery: order.entrega ? { ref: order.entrega.ref, address: order.entrega.address } : null,
+    delivery: order.entrega ? {
+      id: order.entrega.id,
+      ref: order.entrega.ref,
+      address: order.entrega.address,
+      status: order.entrega.status,
+      // Quién lo solicitó (antes de despachar) o a quién se le entregó (después).
+      courier: order.entrega.repartidor ? { id: order.entrega.repartidor.id, name: order.entrega.repartidor.name } : null,
+    } : null,
     branch: order.branch,
   };
 }
@@ -187,12 +199,22 @@ export async function payOrder(db, orderId, payload, cashier) {
   });
 }
 
-export async function dispatchOrder(db, orderId, user) {
+export async function dispatchOrder(db, orderId, user, courierId = null) {
   return db.$transaction(async (tx) => {
     const order = await tx.venta.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE });
     if (!order) throw new VentaError('El pedido no existe.', 404);
     assertSameBranch(order, user);
     if (!canDispatch(user, order.branch)) throw new VentaError('En esta sucursal despacha otra persona.', 403);
+
+    // Con envío a domicilio, la mercadería se le entrega a un repartidor concreto: queda registrado.
+    if (order.entrega && order.entrega.status === 'PENDIENTE') {
+      const elegido = courierId ?? order.entrega.repartidor?.id ?? null;
+      if (!elegido) throw new VentaError('Indique a qué repartidor se le entrega el pedido.', 400);
+      await assertCanDeliver(tx, elegido, order.branchId);
+      if (elegido !== order.entrega.repartidor?.id) {
+        await tx.entrega.update({ where: { id: order.entrega.id }, data: { repartidorId: elegido } });
+      }
+    }
 
     await transition(tx, orderId, 'PAID', { status: 'DISPATCHED', dispatchedAt: new Date(), dispatchedById: user.id },
       order.status === 'PENDING_PAYMENT' ? 'El pedido todavía no fue cobrado.' : 'Este pedido ya fue despachado o anulado.');
@@ -265,6 +287,23 @@ export async function listOrders(db, status, user) {
     orderBy: { createdAt: 'asc' },
   });
   return orders.map(formatOrder);
+}
+
+// Lo que salió hoy del almacén: sirve de respaldo cuando alguien reclama un pedido.
+export async function listDispatchedToday(db, user) {
+  const inicio = new Date();
+  inicio.setHours(0, 0, 0, 0);
+  const orders = await db.venta.findMany({
+    where: { status: 'DISPATCHED', branchId: user.branchId, dispatchedAt: { gte: inicio } },
+    include: { ...ORDER_INCLUDE, dispatchedBy: { select: { name: true } } },
+    orderBy: { dispatchedAt: 'desc' },
+    take: 100,
+  });
+  return orders.map(order => ({
+    ...formatOrder(order),
+    dispatchedAt: order.dispatchedAt,
+    dispatchedBy: order.dispatchedBy?.name ?? null,
+  }));
 }
 
 export async function getOrder(db, orderId) {
