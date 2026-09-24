@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { api } from '../api.js';
 
-const PUERTO_INICIAL = 5301;
+const PUERTO_INICIAL = 23001;
 
 // Alta de una empresa: crea su base, su instancia y aplica el plan elegido.
 export default function NewCompanyModal({ plans, companies, onClose, onCreated }) {

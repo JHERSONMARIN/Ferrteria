@@ -1,0 +1,2 @@
+# Los scripts corren en Linux (dentro de la consola) aunque el repositorio se clone en Windows.
+*.sh text eol=lf

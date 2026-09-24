@@ -2,7 +2,7 @@
 # Crea una empresa nueva: base de datos limpia, usuario de BD propio, archivo .env e instancia.
 #
 #   Uso: deploy/create-company.sh <identificador> "<Razón social>" <puerto_web> [plan]
-#   Ej.: deploy/create-company.sh ferreteriax "Ferretería X S.A.C." 5301 profesional
+#   Ej.: deploy/create-company.sh ferreteriax "Ferretería X S.A.C." 23001 profesional
 #   Sin plan, la empresa queda con todos los módulos y sin límites (desarrollo y pruebas).
 set -euo pipefail
 
@@ -10,6 +10,7 @@ DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"
 INFRA_ENV="$DEPLOY_DIR/infra/.env"
 INFRA_COMPOSE="$DEPLOY_DIR/infra/docker-compose.yml"
 COMPANY_COMPOSE="$DEPLOY_DIR/company/docker-compose.yml"
+PLATFORM_ENV="$DEPLOY_DIR/platform/.env"
 DB_CONTAINER="ferresys-infra-db"
 
 fail() { echo "❌ $*" >&2; exit 1; }
@@ -65,12 +66,15 @@ REVOKE ALL ON DATABASE "$DB_NAME" FROM PUBLIC;
 SQL
 
 # 3. Configuración de la empresa (contiene claves: permisos solo para el dueño).
+# Queda visible igual que la consola: si la consola está en red, la empresa nueva también.
+WEB_BIND="$(grep -m1 '^CONSOLE_BIND=' "$PLATFORM_ENV" 2>/dev/null | cut -d= -f2- || true)"
 ADMIN_PASSWORD="$(random_secret 6)"
 umask 077
 mkdir -p "$COMPANY_DIR"
 cat > "$COMPANY_ENV" <<ENV
 COMPANY_NAME="$COMPANY_NAME"
 WEB_PORT=$WEB_PORT
+WEB_BIND=${WEB_BIND:-127.0.0.1}
 DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@$DB_CONTAINER:5432/$DB_NAME?schema=public&connection_limit=5
 DEMO_MODE=false
 LICENSED_MODULES=

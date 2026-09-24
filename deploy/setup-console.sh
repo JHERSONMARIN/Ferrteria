@@ -2,18 +2,25 @@
 # Prepara la consola de VALETEC: base de datos propia, archivo .env y puesta en marcha.
 # Es seguro repetirlo: no vuelve a crear la base si ya existe.
 #
-#   Uso: deploy/setup-console.sh [puerto]
+#   Uso: deploy/setup-console.sh [puerto] [local|red]
+#   En Windows se corre desde Git Bash, con Docker Desktop abierto.
 set -euo pipefail
 
 DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(cd "$DEPLOY_DIR/.." && pwd)"
+# En Git Bash, "pwd -W" da la ruta con letra de unidad (C:/...), que es la que entiende Docker Desktop.
+REPO_DIR="$(cd "$DEPLOY_DIR/.." && { pwd -W 2>/dev/null || pwd; })"
 INFRA_ENV="$DEPLOY_DIR/infra/.env"
 INFRA_COMPOSE="$DEPLOY_DIR/infra/docker-compose.yml"
 PLATFORM_COMPOSE="$DEPLOY_DIR/platform/docker-compose.yml"
 PLATFORM_ENV="$DEPLOY_DIR/platform/.env"
 DB_CONTAINER="ferresys-infra-db"
 DB_NAME="ferresys_control"
-PORT="${1:-4000}"
+PORT="${1:-23000}"
+case "${2:-local}" in
+  local) BIND=127.0.0.1 ;;
+  red)   BIND=0.0.0.0 ;;
+  *)     echo "❌ Uso: $0 [puerto] [local|red]" >&2; exit 1 ;;
+esac
 
 fail() { echo "❌ $*" >&2; exit 1; }
 random_secret() { openssl rand -hex "$1"; }
@@ -45,7 +52,7 @@ SQL
   cat > "$PLATFORM_ENV" <<ENV
 REPO_DIR=$REPO_DIR
 CONSOLE_PORT=$PORT
-CONSOLE_BIND=127.0.0.1
+CONSOLE_BIND=$BIND
 CONSOLE_DATABASE_URL=postgresql://$DB_NAME:$DB_PASSWORD@$DB_CONTAINER:5432/$DB_NAME?schema=public&connection_limit=5
 CONSOLE_JWT_SECRET=$(random_secret 32)
 CONSOLE_ADMIN_USER=valetec
