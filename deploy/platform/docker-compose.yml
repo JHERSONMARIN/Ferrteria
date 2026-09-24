@@ -27,7 +27,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       # En el servidor, el acceso público pasa por el proxy HTTPS del propio servidor.
-      - "${CONSOLE_BIND:-127.0.0.1}:${CONSOLE_PORT:-4000}:4000"
+      - "${CONSOLE_BIND:-127.0.0.1}:${CONSOLE_PORT:-23000}:4000"
     networks:
       - ferresys-infra
     logging:
