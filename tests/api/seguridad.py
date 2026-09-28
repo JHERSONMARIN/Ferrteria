@@ -131,4 +131,8 @@ verificar("6º intento, incluso con la clave correcta → 429", st == 429 and r.
 st, _ = Navegador().api("POST", "/auth/login", {"user": "ana", "pass": "Reinicio2026"})
 verificar("Otro usuario desde la misma IP puede seguir entrando", st == 200, st)
 
+# Para la prueba de interfaz que sigue: plan reducido de nuevo, y al reiniciar se olvidan los
+# intentos fallidos (el admin vuelve a poder entrar).
+reiniciar_backend(LICENSED_MODULES="pos,caja,inventory")
+
 resumen()

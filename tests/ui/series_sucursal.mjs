@@ -1,0 +1,22 @@
+import { URL, DIR, browser, errores, verificar, sesion, irA, resumen } from './lib.mjs';
+
+const admin = await sesion('admin', 'AdminSucursales2026');
+await irA(admin, 'Productos');
+const m = admin.locator('main');
+await m.getByText('Clavos').first().waitFor();
+verificar('Inventario: stock de mi sucursal y total de la empresa', await m.getByText('Stock (mi sucursal)').isVisible() && await m.getByText(/Empresa: \d/).first().isVisible());
+const detalle = await m.getByText(/Empresa: \d/).first().getAttribute('title');
+verificar('El detalle por sucursal aparece al pasar el mouse', detalle && detalle.includes('Sucursal Norte') && detalle.includes('Principal'), detalle);
+await admin.screenshot({ path: `${DIR}/f6-10-inventario.png` });
+await irA(admin, 'Kardex / Movimientos');
+await admin.locator('main').getByLabel('Sucursal').selectOption({ label: 'Sucursal Norte' });
+await admin.waitForTimeout(1000);
+const refs = await admin.locator('main tbody tr').allInnerTexts();
+verificar('Kardex filtrado por sucursal: solo movimientos del Norte', refs.length > 0 && refs.every(t => t.includes('Sucursal Norte')), refs.slice(0, 2));
+await irA(admin, 'Reportes');
+await admin.locator('main').getByRole('tab', { name: /Reportes por período/ }).click();
+await admin.waitForTimeout(800);
+await admin.locator('main').getByLabel('Sucursal').selectOption({ label: 'Sucursal Norte' });
+await admin.waitForTimeout(1000);
+verificar('Reportes: se elige la sucursal', await admin.locator('main').getByText('Ventas cobradas').isVisible());
+await resumen();

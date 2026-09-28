@@ -35,11 +35,13 @@ ENTORNO = {
 
 # Cada cadena empieza con la base vacía. El orden dentro de la cadena importa.
 CADENAS = [
-    ["api/seguridad.py"],
-    ["api/pedidos_por_estados.py", "api/envios.py"],
+    ["api/seguridad.py", "ui/seguridad.mjs"],
+    ["api/pedidos_por_estados.py", "api/envios.py", "ui/pedidos_por_estados.mjs", "ui/envios.mjs"],
     ["api/cantidades_y_precios.py", "api/modo_por_sucursal.py"],
-    ["api/cantidades_y_precios.py", "api/auditoria.py", "api/caja_compartida.py", "api/reportes.py"],
-    ["api/sucursales.py", "api/transferencias.py", "api/series_sucursal.py"],
+    ["api/cantidades_y_precios.py", "ui/una_sucursal.mjs", "api/auditoria.py", "api/caja_compartida.py", "api/reportes.py",
+     "ui/cantidades_y_precios.mjs", "ui/caja_compartida.mjs", "ui/auditoria.mjs", "ui/reportes.mjs"],
+    ["api/sucursales.py", "ui/sucursales.mjs", "api/transferencias.py", "api/series_sucursal.py",
+     "ui/transferencias.mjs", "ui/series_sucursal.mjs"],
 ]
 
 
@@ -113,7 +115,7 @@ def main():
     filas, total_ok, total, hubo_error = [], 0, 0, False
     try:
         for cadena in cadenas:
-            print(f"\n▶ Base vacía → {' → '.join(Path(p).stem for p in cadena)}", flush=True)
+            print(f"\n▶ Base vacía → {' → '.join(p.rsplit(".", 1)[0] for p in cadena)}", flush=True)
             base_vacia()
             for prueba in cadena:
                 ok, n, fallas, error, seg, log = correr(prueba)
