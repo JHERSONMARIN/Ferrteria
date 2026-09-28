@@ -42,18 +42,21 @@ class Navegador:
         self.cookies = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
         self.ultima_set_cookie = None
+        self.cabeceras = {}  # de la última respuesta, con nombres en minúsculas
         if user:
             self.api("POST", "/auth/login", {"user": user, "pass": clave})
 
-    def api(self, metodo, ruta, cuerpo=None):
+    def api(self, metodo, ruta, cuerpo=None, cabeceras=None):
         datos = json.dumps(cuerpo).encode() if cuerpo is not None else None
         req = urllib.request.Request(f"{URL}/api{ruta}", data=datos, method=metodo,
-                                     headers={"Content-Type": "application/json"})
+                                     headers={"Content-Type": "application/json", **(cabeceras or {})})
         try:
             with self.opener.open(req, timeout=30) as r:
                 self.ultima_set_cookie = r.headers.get("Set-Cookie")
+                self.cabeceras = {k.lower(): v for k, v in r.headers.items()}
                 return r.status, json.loads(r.read() or b"{}")
         except urllib.error.HTTPError as e:
+            self.cabeceras = {k.lower(): v for k, v in e.headers.items()}
             return e.code, json.loads(e.read() or b"{}")
 
     def cookie(self):
@@ -70,6 +73,19 @@ def sql(consulta):
     if r.stderr.strip():
         raise RuntimeError(r.stderr)
     return r.stdout.strip()
+
+
+def registro_backend(desde=None):
+    """Líneas JSON del registro del backend de pruebas (las que no son JSON se ignoran)."""
+    cmd = ["docker", "logs", "ferresys-tests-backend"] + (["--since", desde] if desde else [])
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    lineas = []
+    for linea in (r.stdout + r.stderr).splitlines():
+        try:
+            lineas.append(json.loads(linea))
+        except json.JSONDecodeError:
+            pass
+    return lineas
 
 
 def esperar_backend(segundos=90):

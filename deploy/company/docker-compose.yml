@@ -17,6 +17,8 @@ services:
       # Proxies delante del backend: 1 (frontend); 2 cuando se agregue el proxy HTTPS.
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
       COMPANY_NAME: ${COMPANY_NAME}
+      # Identificador de la empresa: aparece en cada línea del registro del backend.
+      COMPANY_SLUG: ${COMPANY_SLUG:-}
       # Módulos contratados; vacío = todos. Se cambia con deploy/set-modules.sh
       LICENSED_MODULES: ${LICENSED_MODULES:-}
       # Funciones y límites del plan contratado. Se cambian con deploy/set-plan.sh o desde la consola.

@@ -1,3 +1,5 @@
+// Primero: reemplaza console por el registro estructurado antes de que otros módulos escriban.
+import { requestLogger } from './src/utils/logger.js';
 import express from 'express';
 import dotenv from 'dotenv';
 import authRoutes from './src/routes/auth.js';
@@ -38,16 +40,13 @@ const PORT = process.env.PORT || 3000;
 // cualquiera podría falsear su IP en X-Forwarded-For.
 app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 
+// Cada petición: identificador (cabecera X-Request-Id) y una línea de registro con su resultado.
+app.use(requestLogger);
+
 // Sin CORS: el navegador siempre llega por el mismo dominio a través del proxy del frontend,
 // así que ningún otro sitio web puede llamar a la API con la sesión del usuario.
 // Hasta 2 MB: la importación de productos manda varios cientos de filas.
 app.use(express.json({ limit: '2mb' }));
-
-// Logging Middleware
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
 
 // ---------- Rutas públicas ----------
 app.use('/api/auth', authRoutes);

@@ -35,6 +35,7 @@ services:
       COOKIE_SECURE: "false"
       TRUST_PROXY_HOPS: 1
       COMPANY_NAME: Ferretería de Pruebas
+      COMPANY_SLUG: pruebas
       INITIAL_ADMIN_USER: admin
       INITIAL_ADMIN_PASSWORD: ${CLAVE_TEMPORAL:-ClaveTemporal2026}
       # Las pruebas de licencia reinician el backend con otros valores (ver tests/api/lib.py).
