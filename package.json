@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "docker:up": "docker compose up --build",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "test": "python3 tests/run.py",
+    "test:api": "python3 tests/run.py --sin-ui"
   }
 }
