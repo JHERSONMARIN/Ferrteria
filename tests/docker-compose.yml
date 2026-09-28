@@ -39,8 +39,8 @@ services:
       INITIAL_ADMIN_PASSWORD: ${CLAVE_TEMPORAL:-ClaveTemporal2026}
       # Las pruebas de licencia reinician el backend con otros valores (ver tests/api/lib.py).
       LICENSED_MODULES: ${LICENSED_MODULES:-}
-      # Sin definir = todas las funciones (vacío significaría ninguna).
-      LICENSED_FEATURES: ${LICENSED_FEATURES-split_flow,shared_cash,deliveries,wholesale,discounts,period_reports,branches,audit,sunat}
+      # Igual que en deploy/company: sin definir = todas ("*"); vacía = ninguna.
+      LICENSED_FEATURES: ${LICENSED_FEATURES-*}
       MAX_USERS: ${MAX_USERS:-0}
       MAX_BRANCHES: ${MAX_BRANCHES:-0}
       MAX_CASH_REGISTERS: ${MAX_CASH_REGISTERS:-0}

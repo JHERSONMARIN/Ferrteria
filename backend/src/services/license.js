@@ -29,7 +29,9 @@ export function getActiveModules(settings) {
 
 // ---------- Funciones y límites del plan ----------
 // El plan de la empresa llega en su .env (lo escribe deploy/set-plan.sh o la consola de VALETEC).
-// Sin LICENSED_FEATURES se habilitan todas: desarrollo, demo e instalaciones anteriores a los planes.
+// Sin LICENSED_FEATURES (o con "*") se habilitan todas: desarrollo, demo e instalaciones anteriores a
+// los planes. Vacía significa ninguna (plan Básico). El docker-compose de cada empresa pasa "*" cuando
+// su .env no la define, porque docker compose no puede dejar una variable sin definir.
 
 export class LicenseError extends Error {
   constructor(message) {
@@ -41,7 +43,7 @@ export class LicenseError extends Error {
 
 export function parseLicensedFeatures(rawValue) {
   const raw = rawValue?.trim();
-  if (raw === undefined || raw === null) return [...AVAILABLE_FEATURES];
+  if (raw === undefined || raw === null || raw === '*') return [...AVAILABLE_FEATURES];
   if (raw === '') return [];
   const requested = raw.split(',').map(f => f.trim()).filter(Boolean);
   const unknown = requested.filter(f => !AVAILABLE_FEATURES.includes(f));

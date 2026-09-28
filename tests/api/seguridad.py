@@ -122,6 +122,20 @@ verificar("No se puede activar un módulo no contratado → 400", st == 400 and 
 verificar("Los módulos contratados siguen funcionando", admin.api("GET", "/productos")[0] == 200)
 reiniciar_backend()
 
+print("\n=== Funciones del plan ===")
+reiniciar_backend(LICENSED_FEATURES="")
+admin = Navegador("admin", "AdminCentro2026")
+st, r = admin.api("GET", "/settings")
+verificar("Con LICENSED_FEATURES vacía (plan Básico) no hay funciones", r.get("licensedFeatures") == [], r.get("licensedFeatures"))
+st, r = admin.api("POST", "/caja/registros", {"name": "Caja Plan Básico"})
+verificar("…y se bloquea lo que no incluye (varias cajas) → 403", st == 403 and r.get("codigo") == "PLAN_NO_INCLUYE", (st, r))
+reiniciar_backend()
+admin = Navegador("admin", "AdminCentro2026")
+st, r = admin.api("GET", "/settings")
+verificar("Sin LICENSED_FEATURES (empresa sin plan) están todas", "branches" in r.get("licensedFeatures", []) and "audit" in r["licensedFeatures"], r.get("licensedFeatures"))
+st, r = admin.api("POST", "/caja/registros", {"name": "Caja Sin Plan"})
+verificar("…y se puede crear otra caja", st == 201, (st, r))
+
 print("\n=== Límite de intentos de login ===")
 atacante = Navegador()
 codigos = [atacante.api("POST", "/auth/login", {"user": "admin", "pass": f"mala{i}"})[0] for i in range(5)]
