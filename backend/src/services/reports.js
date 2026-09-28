@@ -6,8 +6,11 @@
 import { Prisma } from '@prisma/client';
 import { roundMoney, roundQuantity } from '../utils/quantities.js';
 import { requireFeature } from './license.js';
+import { AppError } from '../utils/errors.js';
 
-export class ReportError extends Error {}
+export class ReportError extends AppError {
+  static area = 'REPORTE';
+}
 
 const BUSINESS_TIME_ZONE = 'America/Lima';
 const BUSINESS_UTC_OFFSET = '-05:00';

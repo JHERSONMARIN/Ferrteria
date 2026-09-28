@@ -69,8 +69,11 @@ function OpcionUsuario({ icon, label, onClick, peligro = false }) {
 
 export default function Sidebar({
   activeTab, onSwitchTab, user, modules, businessName, businessLogo, open, onClose, onLogout,
-  onChangePassword, counts = {}, oculto = false,
+  onChangePassword, counts = {}, oculto = false, appVersion = null,
 }) {
+  // "FerreSys v4.8.0"; el commit va en el tooltip, para dictárselo a soporte si lo pide.
+  const version = appVersion?.number ? `v${appVersion.number}` : '';
+  const versionTitle = appVersion?.commit ? `Versión ${appVersion.number} · ${appVersion.commit}` : undefined;
   const allowedModules = modules || [];
   // Menú del usuario: se cierra al tocar fuera o con Escape.
   const [menuUsuario, setMenuUsuario] = useState(false);
@@ -112,8 +115,8 @@ export default function Sidebar({
               <span className="block font-bold text-base truncate leading-tight text-nav-ink">
                 {businessName || 'FerreSys'}
               </span>
-              <span className="block text-[11px] text-nav-muted truncate">
-                {businessName ? 'FerreSys v4.8' : 'v4.8'}
+              <span className="block text-[11px] text-nav-muted truncate" title={versionTitle}>
+                {businessName ? `FerreSys ${version}`.trim() : version}
               </span>
             </div>
           </div>

@@ -31,11 +31,15 @@ ENTORNO = {
     "CLAVE_TEMPORAL": os.environ.get("CLAVE_TEMPORAL", "ClaveTemporal2026"),
     "PYTHONPATH": str(RAIZ / "api"),
     "PYTHONUNBUFFERED": "1",
+    # La imagen de pruebas queda marcada con el commit, como la de una empresa.
+    "FERRESYS_COMMIT": subprocess.run(["bash", str(RAIZ.parent / "deploy" / "version.sh")],
+                                      capture_output=True, text=True).stdout.strip(),
 }
 
 # Cada cadena empieza con la base vacía. El orden dentro de la cadena importa.
 CADENAS = [
     ["api/seguridad.py", "ui/seguridad.mjs"],
+    ["api/observabilidad.py"],
     ["api/pedidos_por_estados.py", "api/envios.py", "ui/pedidos_por_estados.mjs", "ui/envios.mjs"],
     ["api/cantidades_y_precios.py", "api/modo_por_sucursal.py"],
     ["api/cantidades_y_precios.py", "ui/cantidades_y_precios.mjs", "ui/una_sucursal.mjs", "api/auditoria.py",

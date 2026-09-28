@@ -6,12 +6,10 @@ import { takeAvailableStock, addStock } from './stock.js';
 import { resolveBranchId } from './branches.js';
 import { quantityProblem, roundQuantity, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { recordAudit } from './audit.js';
+import { AppError } from '../utils/errors.js';
 
-export class TransferError extends Error {
-  constructor(message, status = 400) {
-    super(message);
-    this.status = status;
-  }
+export class TransferError extends AppError {
+  static area = 'TRANSFERENCIA';
 }
 
 const MAX_NOTES_LENGTH = 200;

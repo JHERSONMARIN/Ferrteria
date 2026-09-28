@@ -73,6 +73,7 @@ umask 077
 mkdir -p "$COMPANY_DIR"
 cat > "$COMPANY_ENV" <<ENV
 COMPANY_NAME="$COMPANY_NAME"
+COMPANY_SLUG=$SLUG
 WEB_PORT=$WEB_PORT
 WEB_BIND=${WEB_BIND:-127.0.0.1}
 DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@$DB_CONTAINER:5432/$DB_NAME?schema=public&connection_limit=5
@@ -86,6 +87,8 @@ chmod 600 "$COMPANY_ENV"
 
 # 4. Instancia: al arrancar aplica migraciones y crea la configuración y el administrador.
 echo "▶ Levantando la instancia $PROJECT (la primera vez construye las imágenes)…"
+# La imagen queda marcada con el commit del código, para saber qué versión corre cada empresa.
+export FERRESYS_COMMIT="$("$DEPLOY_DIR/version.sh")"
 docker compose -p "$PROJECT" -f "$COMPANY_COMPOSE" --env-file "$COMPANY_ENV" up -d --build >/dev/null
 
 # Se consulta dentro del propio contenedor: así funciona igual desde el servidor o desde la consola.

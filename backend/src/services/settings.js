@@ -1,6 +1,7 @@
 import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '../config/modules.js';
 import { isModuleLicensed } from './license.js';
 import { recordAudit, changedFields } from './audit.js';
+import { AppError } from '../utils/errors.js';
 
 export { AVAILABLE_MODULES };
 
@@ -18,7 +19,9 @@ const DEFAULT_SETTINGS = {
   enabledModules: AVAILABLE_MODULES,
 };
 
-export class SettingsValidationError extends Error {}
+export class SettingsValidationError extends AppError {
+  static area = 'CONFIGURACION';
+}
 
 export async function getSettings(db) {
   // Se consulta en cada petición (permisos): la lectura simple evita escribir en la base.

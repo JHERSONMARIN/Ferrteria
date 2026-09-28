@@ -3,6 +3,7 @@ import { prisma } from '../db.js';
 import { quantityProblem, roundQuantity } from '../utils/quantities.js';
 import { recordAudit, changedFields } from '../services/audit.js';
 import { resolveBranchId, BranchError } from '../services/branches.js';
+import { AppError, errorBody } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -21,7 +22,9 @@ const SALE_UNITS_SELECT = {
 };
 const MAX_SALE_UNITS = 10;
 
-class ProductError extends Error {}
+class ProductError extends AppError {
+  static area = 'PRODUCTO';
+}
 
 // Presentaciones de venta que manda el formulario: [{ id?, name, factor, price, wholesalePrice?, code?, allowsFractions? }].
 // undefined = no se tocan; [] = se quitan todas.
@@ -260,8 +263,8 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(product);
   } catch (error) {
-    if (error instanceof ProductError) return res.status(400).json({ error: error.message });
-    if (error instanceof BranchError) return res.status(error.status).json({ error: error.message });
+    if (error instanceof ProductError) return res.status(400).json(errorBody(error));
+    if (error instanceof BranchError) return res.status(error.status).json(errorBody(error));
     if (error.code === 'P2002') {
       return res.status(400).json({ error: 'Ya existe un producto registrado con este código.' });
     }
@@ -358,7 +361,7 @@ router.put('/:id', async (req, res) => {
 
     res.json(updated);
   } catch (error) {
-    if (error instanceof ProductError) return res.status(400).json({ error: error.message });
+    if (error instanceof ProductError) return res.status(400).json(errorBody(error));
     if (error.code === 'P2002') {
       return res.status(400).json({ error: 'Ya existe otro producto o presentación con este código.' });
     }
@@ -511,7 +514,7 @@ router.post('/importar', async (req, res) => {
 
     res.json({ success: true, ...result });
   } catch (error) {
-    if (error instanceof BranchError) return res.status(error.status).json({ error: error.message });
+    if (error instanceof BranchError) return res.status(error.status).json(errorBody(error));
     if (error.code === 'P2002') return res.status(409).json({ error: 'Otro usuario registró uno de estos códigos mientras se importaba. Vuelva a intentarlo.' });
     console.error('[productos.js] Error al importar productos:', error);
     res.status(500).json({ error: 'No se pudo completar la importación. No se guardó ningún producto.' });

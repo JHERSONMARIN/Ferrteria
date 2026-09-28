@@ -6,12 +6,10 @@
 import { recordAudit } from './audit.js';
 import { roundMoney } from '../utils/quantities.js';
 import { requireFeature, requireWithinLimit } from './license.js';
+import { AppError } from '../utils/errors.js';
 
-export class CashError extends Error {
-  constructor(message, status = 400) {
-    super(message);
-    this.status = status;
-  }
+export class CashError extends AppError {
+  static area = 'CAJA';
 }
 
 const MAX_AMOUNT = 1_000_000;
@@ -56,7 +54,7 @@ async function findActiveMembership(db, userId) {
 export async function requireOpenSession(db, userId) {
   const membership = await findActiveMembership(db, userId);
   if (!membership) {
-    throw new CashError('No tiene un turno de caja abierto. Abra una caja o únase a un turno en "Arqueo de Caja".');
+    throw new CashError('No tiene un turno de caja abierto. Abra una caja o únase a un turno en "Caja".', 400, 'CAJA_NO_ABIERTA');
   }
   return membership.sessionId;
 }

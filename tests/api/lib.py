@@ -21,6 +21,7 @@ DB_CONTAINER = os.environ.get("FERRESYS_DB", "ferresys-tests-db")
 CLAVE_TEMPORAL = os.environ.get("CLAVE_TEMPORAL", "ClaveTemporal2026")
 COMPOSE = Path(__file__).resolve().parents[1] / "docker-compose.yml"
 resultados = []
+errores_sin_codigo = []  # respuestas de error que no traen código o requestId (ver resumen)
 
 
 def verificar(nombre, condicion, detalle=""):
@@ -31,6 +32,7 @@ def verificar(nombre, condicion, detalle=""):
 
 def resumen():
     """Imprime el total y termina con código 1 si algo falló (así lo lee tests/run.py)."""
+    verificar("Toda respuesta de error trae código y requestId", not errores_sin_codigo, errores_sin_codigo[:5])
     print(f"\nResultado: {sum(resultados)}/{len(resultados)} pruebas OK")
     sys.exit(0 if all(resultados) else 1)
 
@@ -42,19 +44,25 @@ class Navegador:
         self.cookies = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
         self.ultima_set_cookie = None
+        self.cabeceras = {}  # de la última respuesta, con nombres en minúsculas
         if user:
             self.api("POST", "/auth/login", {"user": user, "pass": clave})
 
-    def api(self, metodo, ruta, cuerpo=None):
+    def api(self, metodo, ruta, cuerpo=None, cabeceras=None):
         datos = json.dumps(cuerpo).encode() if cuerpo is not None else None
         req = urllib.request.Request(f"{URL}/api{ruta}", data=datos, method=metodo,
-                                     headers={"Content-Type": "application/json"})
+                                     headers={"Content-Type": "application/json", **(cabeceras or {})})
         try:
             with self.opener.open(req, timeout=30) as r:
                 self.ultima_set_cookie = r.headers.get("Set-Cookie")
+                self.cabeceras = {k.lower(): v for k, v in r.headers.items()}
                 return r.status, json.loads(r.read() or b"{}")
         except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read() or b"{}")
+            self.cabeceras = {k.lower(): v for k, v in e.headers.items()}
+            cuerpo = json.loads(e.read() or b"{}")
+            if isinstance(cuerpo, dict) and "error" in cuerpo and not (cuerpo.get("codigo") and cuerpo.get("requestId")):
+                errores_sin_codigo.append(f"{metodo} {ruta} → {e.code}")
+            return e.code, cuerpo
 
     def cookie(self):
         return next((c.value for c in self.cookies if c.name == "ferresys_session"), None)
@@ -70,6 +78,19 @@ def sql(consulta):
     if r.stderr.strip():
         raise RuntimeError(r.stderr)
     return r.stdout.strip()
+
+
+def registro_backend(desde=None):
+    """Líneas JSON del registro del backend de pruebas (las que no son JSON se ignoran)."""
+    cmd = ["docker", "logs", "ferresys-tests-backend"] + (["--since", desde] if desde else [])
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    lineas = []
+    for linea in (r.stdout + r.stderr).splitlines():
+        try:
+            lineas.append(json.loads(linea))
+        except json.JSONDecodeError:
+            pass
+    return lineas
 
 
 def esperar_backend(segundos=90):

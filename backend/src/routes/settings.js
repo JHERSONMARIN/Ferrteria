@@ -9,6 +9,7 @@ import {
   AVAILABLE_MODULES,
   SettingsValidationError,
 } from '../services/settings.js';
+import { errorBody } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -43,7 +44,7 @@ router.put('/', async (req, res) => {
     res.json({ success: true, settings });
   } catch (error) {
     if (error instanceof SettingsValidationError) {
-      return res.status(400).json({ error: error.message });
+      return res.status(400).json(errorBody(error));
     }
     console.error('[settings.js] Error al guardar la configuración:', error);
     res.status(500).json({ error: 'No se pudo guardar la configuración de la empresa.' });

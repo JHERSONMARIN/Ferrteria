@@ -1,3 +1,6 @@
+// Primero: reemplaza console por el registro estructurado antes de que otros módulos escriban.
+import { requestLogger } from './src/utils/logger.js';
+import { errorEnvelope, finalErrorHandler } from './src/utils/errors.js';
 import express from 'express';
 import dotenv from 'dotenv';
 import authRoutes from './src/routes/auth.js';
@@ -27,6 +30,7 @@ import transferenciasRoutes from './src/routes/transferencias.js';
 import { expireOrders } from './src/services/saleOrders.js';
 import { authenticate, requirePasswordChanged } from './src/middleware/authenticate.js';
 import { allowModules } from './src/middleware/authorize.js';
+import { APP_VERSION, APP_COMMIT, APP_BUILT_AT, versionLabel } from './src/config/version.js';
 
 dotenv.config();
 
@@ -38,16 +42,15 @@ const PORT = process.env.PORT || 3000;
 // cualquiera podría falsear su IP en X-Forwarded-For.
 app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 
+// Cada petición: identificador (cabecera X-Request-Id) y una línea de registro con su resultado.
+app.use(requestLogger);
+// Toda respuesta de error sale como { error, codigo, requestId } (ver src/utils/errors.js).
+app.use(errorEnvelope);
+
 // Sin CORS: el navegador siempre llega por el mismo dominio a través del proxy del frontend,
 // así que ningún otro sitio web puede llamar a la API con la sesión del usuario.
 // Hasta 2 MB: la importación de productos manda varios cientos de filas.
 app.use(express.json({ limit: '2mb' }));
-
-// Logging Middleware
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
 
 // ---------- Rutas públicas ----------
 app.use('/api/auth', authRoutes);
@@ -87,11 +90,16 @@ app.get('/api/app-info', async (req, res) => {
   } catch (error) {
     console.error('[app-info] No se pudieron leer los datos de la empresa:', error);
   }
-  res.json({ demoMode: process.env.DEMO_MODE === 'true', quickLogin: QUICK_LOGIN_USERS, business });
+  res.json({
+    demoMode: process.env.DEMO_MODE === 'true',
+    quickLogin: QUICK_LOGIN_USERS,
+    business,
+    version: { number: APP_VERSION, commit: APP_COMMIT },
+  });
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', system: 'FerreSys v4.8 API', timestamp: new Date() });
+  res.json({ status: 'ok', version: APP_VERSION, commit: APP_COMMIT, builtAt: APP_BUILT_AT, timestamp: new Date() });
 });
 
 // ---------- A partir de aquí todo requiere sesión ----------
@@ -137,15 +145,8 @@ app.use('/api/pedidos', pedidosRoutes);
 // Cualquier otra ruta de la API
 app.use('/api', (req, res) => res.status(404).json({ error: 'Recurso no encontrado.' }));
 
-// Manejo Global de Errores
-app.use((err, req, res, next) => {
-  // Errores del propio cliente (JSON mal formado, cuerpo demasiado grande): no son fallas del servidor.
-  if (err.status >= 400 && err.status < 500) {
-    return res.status(err.status).json({ error: 'Solicitud inválida.' });
-  }
-  console.error(`❌ Error no capturado en ${req.method} ${req.originalUrl}:`, err);
-  res.status(500).json({ error: 'Error interno del servidor.' });
-});
+// Errores que ninguna ruta atendió.
+app.use(finalErrorHandler);
 
 // Si falla, el servidor arranca igual: las ventas responderán que no hay serie configurada.
 try {
@@ -168,5 +169,5 @@ await runOrderExpiration();
 setInterval(runOrderExpiration, 5 * 60 * 1000).unref();
 
 app.listen(PORT, () => {
-  console.log(`🚀 FerreSys Backend corriendo en el puerto ${PORT}`);
+  console.log(`FerreSys ${versionLabel()} corriendo en el puerto ${PORT}`);
 });

@@ -1,5 +1,6 @@
 import { prisma } from '../db.js';
 import { readSessionToken, passwordFingerprint, SESSION_MAX_AGE_SECONDS } from '../services/sessionTokens.js';
+import { setRequestUser } from '../utils/logger.js';
 
 export const SESSION_COOKIE = 'ferresys_session';
 
@@ -50,6 +51,7 @@ export async function authenticate(req, res, next) {
 
     const { pass: _password, ...publicUser } = user;
     req.user = { ...publicUser, modules: Array.isArray(user.modules) ? user.modules : [] };
+    setRequestUser(req.user);
     next();
   } catch (error) {
     console.error('[authenticate] Error al validar la sesión:', error);

@@ -83,6 +83,14 @@ export default function CompanyDetail({ company, plans, themes, modules, onClose
               <div><p className="text-[11px] text-slate-500">Ventas del mes</p><p className="font-bold">{company.usage?.salesThisMonth ?? '—'}</p></div>
             </div>
             <p className="text-[11px] text-slate-500 mt-2">
+              Versión: <span className="font-mono">{company.version?.commit || 'sin marcar (anterior a las versiones)'}</span>
+              {company.version?.outdated && (
+                <span className="ml-1 font-semibold text-amber-700">
+                  · el servidor tiene <span className="font-mono">{company.version.serverCommit}</span>: use «Actualizar» para ponerla al día
+                </span>
+              )}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">
               Contenedores: {company.docker.containers.map(c => `${c.name} (${c.state})`).join(' · ') || 'ninguno'}
             </p>
             {company.features.length > 0 && (

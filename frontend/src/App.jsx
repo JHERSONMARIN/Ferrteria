@@ -75,6 +75,8 @@ function Aplicacion() {
   const [quickUsers, setQuickUsers] = useState([]);
   // Marca de la empresa en la pantalla de inicio (viene sin sesión iniciada).
   const [loginBrand, setLoginBrand] = useState(null);
+  // Versión que corre el servidor ({ number, commit }): se muestra al pie del menú y en el inicio.
+  const [appVersion, setAppVersion] = useState(null);
   const [loginError, setLoginError] = useState('');
   const [loginFieldErrors, setLoginFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -109,7 +111,12 @@ function Aplicacion() {
   // Los usuarios de prueba solo se ofrecen en la instancia de demostración.
   useEffect(() => {
     api.get('/app-info')
-      .then(info => { setDemoMode(Boolean(info?.demoMode)); setQuickUsers(info?.quickLogin || []); setLoginBrand(info?.business || null); })
+      .then(info => {
+        setDemoMode(Boolean(info?.demoMode));
+        setQuickUsers(info?.quickLogin || []);
+        setLoginBrand(info?.business || null);
+        setAppVersion(info?.version || null);
+      })
       .catch(() => setDemoMode(false));
   }, []);
 
@@ -398,7 +405,7 @@ function Aplicacion() {
                 ? <img src={loginBrand.logo} alt="" className="h-14 mx-auto mb-2 object-contain" />
                 : <i className="fa-solid fa-screwdriver-wrench text-brand text-3xl mb-2"></i>}
               <h2 className="text-xl font-bold tracking-wide">
-                {loginBrand?.name || <>FerreSys <span className="text-xs text-brand align-top">v4.8</span></>}
+                {loginBrand?.name || <>FerreSys {appVersion?.number && <span className="text-xs text-brand align-top">v{appVersion.number}</span>}</>}
               </h2>
               <p className="text-muted text-xs mt-0.5">Inicio de sesión</p>
             </div>
@@ -502,6 +509,7 @@ function Aplicacion() {
             modules={navigableTabs}
             businessName={settings?.tradeName || settings?.legalName}
             businessLogo={settings?.logo || null}
+            appVersion={appVersion}
             open={sidebarOpen}
             onClose={() => setSidebarOpen(false)}
             onLogout={handleLogout}

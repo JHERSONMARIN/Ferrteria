@@ -1,3 +1,5 @@
+import { AppError } from '../utils/errors.js';
+
 // Series de comprobante por sucursal. Cada sucursal (establecimiento) emite con sus propias series:
 // la primera usa T001/B001/F001 (las originales del sistema) y las siguientes reciben el siguiente
 // número libre de cada letra (T002, B002, F002…).
@@ -7,7 +9,9 @@ const SERIES_PREFIX = {
   FACTURA: 'F',
 };
 
-export class DocumentSeriesError extends Error {}
+export class DocumentSeriesError extends AppError {
+  static area = 'SERIE';
+}
 
 const formatDocumentNumber = (series, number) => `${series}-${String(number).padStart(6, '0')}`;
 

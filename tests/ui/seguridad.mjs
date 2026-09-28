@@ -13,7 +13,7 @@ const login = async (usuario, clave) => {
 };
 
 // 1. Cambio obligatorio
-await page.goto(URL);
+await page.goto(URL, { waitUntil: 'domcontentloaded' });
 await login('ana', 'Reinicio2026');
 await page.getByText('Elija su contraseña').waitFor();
 verificar('Clave temporal: aparece la pantalla de cambio obligatorio', true);
@@ -51,6 +51,7 @@ await login('admin', 'AdminCentro2026');
 await page.locator('aside').waitFor();
 await page.waitForTimeout(1000);
 const menuAdmin = await page.locator('aside nav').innerText();
+verificar('El pie de la marca muestra la versión', /FerreSys v\d+\.\d+\.\d+/.test(await page.locator('aside').innerText()));
 verificar('Menú del admin sin módulos no contratados (Créditos, Movimientos…)',
   !menuAdmin.includes('Créditos') && !menuAdmin.includes('Movimientos') && menuAdmin.includes('Productos'), menuAdmin.replace(/\n/g, ' | '));
 

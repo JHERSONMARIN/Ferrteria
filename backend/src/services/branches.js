@@ -3,15 +3,13 @@ import { DISPATCH_ROLES } from '../config/dispatch.js';
 import { getSettings } from './settings.js';
 import { recordAudit } from './audit.js';
 import { requireFeature, requireWithinLimit } from './license.js';
+import { AppError } from '../utils/errors.js';
 
 // Sucursales o almacenes de la empresa. Las operaciones de stock usan la sucursal del usuario; el
 // administrador puede indicar otra (por ejemplo, registrar una compra que llegó a otro almacén).
 
-export class BranchError extends Error {
-  constructor(message, status = 400) {
-    super(message);
-    this.status = status;
-  }
+export class BranchError extends AppError {
+  static area = 'SUCURSAL';
 }
 
 const MAX_NAME_LENGTH = 60;

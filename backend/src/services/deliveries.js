@@ -3,12 +3,10 @@
 
 import { recordAudit } from './audit.js';
 import { roundQuantity } from '../utils/quantities.js';
+import { AppError } from '../utils/errors.js';
 
-export class DeliveryError extends Error {
-  constructor(message, status = 400) {
-    super(message);
-    this.status = status;
-  }
+export class DeliveryError extends AppError {
+  static area = 'ENVIO';
 }
 
 const DELIVERY_INCLUDE = {
