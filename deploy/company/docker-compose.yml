@@ -20,7 +20,8 @@ services:
       # Módulos contratados; vacío = todos. Se cambia con deploy/set-modules.sh
       LICENSED_MODULES: ${LICENSED_MODULES:-}
       # Funciones y límites del plan contratado. Se cambian con deploy/set-plan.sh o desde la consola.
-      LICENSED_FEATURES: ${LICENSED_FEATURES:-}
+      # Sin la variable en el .env (empresa sin plan) = todas ("*"); vacía = ninguna (plan Básico).
+      LICENSED_FEATURES: ${LICENSED_FEATURES-*}
       MAX_USERS: ${MAX_USERS:-0}
       MAX_BRANCHES: ${MAX_BRANCHES:-0}
       MAX_CASH_REGISTERS: ${MAX_CASH_REGISTERS:-0}
