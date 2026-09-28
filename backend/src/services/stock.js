@@ -7,11 +7,13 @@
 // Las fechas se escriben en UTC porque la sesión de PostgreSQL está en hora de Lima.
 
 import { roundQuantity } from '../utils/quantities.js';
+import { AppError } from '../utils/errors.js';
 
-export class StockError extends Error {
-  constructor(message) {
-    super(message);
-    this.status = 409;
+export class StockError extends AppError {
+  static area = 'STOCK';
+  // Casi siempre es falta de stock en la sucursal: 409 por defecto.
+  constructor(message, status = 409, codigo = null) {
+    super(message, status, codigo);
   }
 }
 
@@ -23,7 +25,7 @@ async function insufficientStock(tx, productId, branchId) {
     select: { stock: true, reserved: true },
   });
   const available = row ? Math.max(row.stock - row.reserved, 0) : 0;
-  return new StockError(`Stock insuficiente para ${product.name}. Disponible: ${available}.`);
+  return new StockError(`Stock insuficiente para ${product.name}. Disponible: ${available}.`, 409, 'STOCK_INSUFICIENTE');
 }
 
 const branchStockAfter = async (tx, productId, branchId) =>

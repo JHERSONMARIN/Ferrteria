@@ -1,5 +1,6 @@
 // Primero: reemplaza console por el registro estructurado antes de que otros módulos escriban.
 import { requestLogger } from './src/utils/logger.js';
+import { errorEnvelope, finalErrorHandler } from './src/utils/errors.js';
 import express from 'express';
 import dotenv from 'dotenv';
 import authRoutes from './src/routes/auth.js';
@@ -42,6 +43,8 @@ app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 
 // Cada petición: identificador (cabecera X-Request-Id) y una línea de registro con su resultado.
 app.use(requestLogger);
+// Toda respuesta de error sale como { error, codigo, requestId } (ver src/utils/errors.js).
+app.use(errorEnvelope);
 
 // Sin CORS: el navegador siempre llega por el mismo dominio a través del proxy del frontend,
 // así que ningún otro sitio web puede llamar a la API con la sesión del usuario.
@@ -136,15 +139,8 @@ app.use('/api/pedidos', pedidosRoutes);
 // Cualquier otra ruta de la API
 app.use('/api', (req, res) => res.status(404).json({ error: 'Recurso no encontrado.' }));
 
-// Manejo Global de Errores
-app.use((err, req, res, next) => {
-  // Errores del propio cliente (JSON mal formado, cuerpo demasiado grande): no son fallas del servidor.
-  if (err.status >= 400 && err.status < 500) {
-    return res.status(err.status).json({ error: 'Solicitud inválida.' });
-  }
-  console.error(`❌ Error no capturado en ${req.method} ${req.originalUrl}:`, err);
-  res.status(500).json({ error: 'Error interno del servidor.' });
-});
+// Errores que ninguna ruta atendió.
+app.use(finalErrorHandler);
 
 // Si falla, el servidor arranca igual: las ventas responderán que no hay serie configurada.
 try {

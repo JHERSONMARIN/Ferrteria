@@ -3,6 +3,7 @@ import { prisma } from '../db.js';
 import { listBranches, createBranch, updateBranch, BranchError } from '../services/branches.js';
 import { initializeDocumentSeries } from '../services/documentSeries.js';
 import { respondIfLicenseError } from '../services/license.js';
+import { errorBody } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ const handle = (context, fn) => async (req, res) => {
     await fn(req, res);
   } catch (error) {
     if (respondIfLicenseError(res, error)) return;
-    if (error instanceof BranchError) return res.status(error.status).json({ error: error.message });
+    if (error instanceof BranchError) return res.status(error.status).json(errorBody(error));
     console.error(`[sucursales.js] ${context}:`, error);
     res.status(500).json({ error: `No se pudo ${context}.` });
   }

@@ -4,6 +4,7 @@ import { hashPassword, validateNewPassword, PasswordPolicyError } from '../servi
 import { recordAudit, changedFields } from '../services/audit.js';
 import { requireWithinLimit, respondIfLicenseError, getActiveModules } from '../services/license.js';
 import { getSettings } from '../services/settings.js';
+import { errorBody } from '../utils/errors.js';
 
 // Solo se pueden asignar módulos que la empresa tenga contratados y activos.
 async function assertModulesAllowed(modules) {
@@ -112,9 +113,9 @@ router.post('/', async (req, res) => {
     res.status(201).json(created);
   } catch (error) {
     if (respondIfLicenseError(res, error)) return;
-    if (error.status === 400) return res.status(400).json({ error: error.message });
+    if (error.status === 400) return res.status(400).json(errorBody(error));
     if (error instanceof PasswordPolicyError) {
-      return res.status(400).json({ error: error.message });
+      return res.status(400).json(errorBody(error));
     }
     if (error.code === 'P2002') {
       return res.status(400).json({ error: 'El usuario ya se encuentra registrado.' });
@@ -225,7 +226,7 @@ router.put('/:id', async (req, res) => {
     res.json(updated);
   } catch (error) {
     if (respondIfLicenseError(res, error)) return;
-    if (error.status === 400) return res.status(400).json({ error: error.message });
+    if (error.status === 400) return res.status(400).json(errorBody(error));
     console.error('Error al actualizar usuario:', error);
     res.status(500).json({ error: 'Error al actualizar usuario en la base de datos.' });
   }

@@ -21,6 +21,7 @@ DB_CONTAINER = os.environ.get("FERRESYS_DB", "ferresys-tests-db")
 CLAVE_TEMPORAL = os.environ.get("CLAVE_TEMPORAL", "ClaveTemporal2026")
 COMPOSE = Path(__file__).resolve().parents[1] / "docker-compose.yml"
 resultados = []
+errores_sin_codigo = []  # respuestas de error que no traen código o requestId (ver resumen)
 
 
 def verificar(nombre, condicion, detalle=""):
@@ -31,6 +32,7 @@ def verificar(nombre, condicion, detalle=""):
 
 def resumen():
     """Imprime el total y termina con código 1 si algo falló (así lo lee tests/run.py)."""
+    verificar("Toda respuesta de error trae código y requestId", not errores_sin_codigo, errores_sin_codigo[:5])
     print(f"\nResultado: {sum(resultados)}/{len(resultados)} pruebas OK")
     sys.exit(0 if all(resultados) else 1)
 
@@ -57,7 +59,10 @@ class Navegador:
                 return r.status, json.loads(r.read() or b"{}")
         except urllib.error.HTTPError as e:
             self.cabeceras = {k.lower(): v for k, v in e.headers.items()}
-            return e.code, json.loads(e.read() or b"{}")
+            cuerpo = json.loads(e.read() or b"{}")
+            if isinstance(cuerpo, dict) and "error" in cuerpo and not (cuerpo.get("codigo") and cuerpo.get("requestId")):
+                errores_sin_codigo.append(f"{metodo} {ruta} → {e.code}")
+            return e.code, cuerpo
 
     def cookie(self):
         return next((c.value for c in self.cookies if c.name == "ferresys_session"), None)

@@ -219,7 +219,7 @@ export async function dispatchOrder(db, orderId, user, courierId = null) {
     // Con envío a domicilio, la mercadería se le entrega a un repartidor concreto: queda registrado.
     if (order.entrega && order.entrega.status === 'PENDIENTE') {
       const elegido = courierId ?? order.entrega.repartidor?.id ?? null;
-      if (!elegido) throw new VentaError('Indique a qué repartidor se le entrega el pedido.', 400);
+      if (!elegido) throw new VentaError('Indique a qué repartidor se le entrega el pedido.', 400, 'ENVIO_SIN_REPARTIDOR');
       await assertCanDeliver(tx, elegido, order.branchId);
       if (elegido !== order.entrega.repartidor?.id) {
         await tx.entrega.update({ where: { id: order.entrega.id }, data: { repartidorId: elegido } });

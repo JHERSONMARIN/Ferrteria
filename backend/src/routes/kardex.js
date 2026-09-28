@@ -4,6 +4,7 @@ import { quantityProblem, roundQuantity } from '../utils/quantities.js';
 import { recordAudit } from '../services/audit.js';
 import { takeAvailableStock, addStock, StockError } from '../services/stock.js';
 import { resolveBranchId, BranchError } from '../services/branches.js';
+import { errorBody } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -200,7 +201,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(result);
   } catch (error) {
-    if (error instanceof BranchError || error instanceof StockError) return res.status(error.status).json({ error: error.message });
+    if (error instanceof BranchError || error instanceof StockError) return res.status(error.status).json(errorBody(error));
     console.error('[kardex.js] Error al registrar movimiento:', error);
     res.status(400).json({ error: error.message || 'Error al procesar movimiento de Kardex.' });
   }

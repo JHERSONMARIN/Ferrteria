@@ -1,5 +1,6 @@
 import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '../config/modules.js';
 import { AVAILABLE_FEATURES } from '../config/features.js';
+import { AppError, errorBody } from '../utils/errors.js';
 
 // Módulos contratados por la empresa. Los define VALETEC en el .env de cada instancia
 // (LICENSED_MODULES=pos,caja,...); la empresa no puede cambiarlos. Sin la variable, se
@@ -33,11 +34,10 @@ export function getActiveModules(settings) {
 // los planes. Vacía significa ninguna (plan Básico). El docker-compose de cada empresa pasa "*" cuando
 // su .env no la define, porque docker compose no puede dejar una variable sin definir.
 
-export class LicenseError extends Error {
+export class LicenseError extends AppError {
+  static area = 'PLAN';
   constructor(message) {
-    super(message);
-    this.status = 403;
-    this.codigo = 'PLAN_NO_INCLUYE';
+    super(message, 403, 'PLAN_NO_INCLUYE');
   }
 }
 
@@ -106,6 +106,6 @@ export function licenseStatus() {
 // Respuesta uniforme desde cualquier ruta: devuelve true si el error era del plan.
 export function respondIfLicenseError(res, error) {
   if (!(error instanceof LicenseError)) return false;
-  res.status(error.status).json({ error: error.message, codigo: error.codigo });
+  res.status(error.status).json(errorBody(error));
   return true;
 }

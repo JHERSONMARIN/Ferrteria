@@ -4,6 +4,7 @@ import {
   DeliveryError, listDeliveries, assignCourier, markDeparted, markDelivered, cancelDelivery,
   scheduleDeliveryForExistingSale, findSaleForDelivery,
 } from '../services/deliveries.js';
+import { errorBody } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ const handle = (action) => async (req, res) => {
   try {
     await action(req, res);
   } catch (error) {
-    if (error instanceof DeliveryError) return res.status(error.status).json({ error: error.message });
+    if (error instanceof DeliveryError) return res.status(error.status).json(errorBody(error));
     console.error('[entregas.js] Error:', error);
     res.status(500).json({ error: 'No se pudo completar la operación de entrega.' });
   }

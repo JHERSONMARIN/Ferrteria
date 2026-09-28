@@ -1,5 +1,8 @@
+import json
 import subprocess
 import time
+import urllib.error
+import urllib.request
 
 from lib import *  # noqa: F401,F403
 
@@ -46,6 +49,38 @@ verificar("Sin sesión también se registra, sin usuario", linea and linea["stat
 admin.api("GET", "/auth/me")
 verificar("El latido de sesión no llena el registro (solo en modo debug)",
           not [l for l in lineas_de(admin.cabeceras["x-request-id"]) if l.get("msg") == "request"])
+
+print("\n=== Códigos de error ===")
+st, r = anonimo.api("GET", "/ventas")
+verificar("Sin sesión → SESION_INVALIDA, con el requestId de la cabecera",
+          st == 401 and r.get("codigo") == "SESION_INVALIDA" and r.get("requestId") == anonimo.cabeceras.get("x-request-id"), r)
+st, r = Navegador().api("POST", "/auth/login", {"user": "admin", "pass": "incorrecta"})
+verificar("Clave incorrecta → NO_AUTENTICADO (no SESION_INVALIDA: la pantalla no debe cerrar nada)",
+          st == 401 and r.get("codigo") == "NO_AUTENTICADO", r)
+st, r = admin.api("GET", "/no-existe")
+verificar("Ruta inexistente → NO_ENCONTRADO", st == 404 and r.get("codigo") == "NO_ENCONTRADO", r)
+req = urllib.request.Request(f"{URL}/api/productos", data=b"{no es json", method="POST", headers={"Content-Type": "application/json"})
+try:
+    urllib.request.urlopen(req, timeout=10)
+    st, r = 200, {}
+except urllib.error.HTTPError as e:
+    st, r = e.code, json.loads(e.read() or b"{}")
+verificar("JSON mal formado → 400 DATOS_INVALIDOS, sin error del servidor", st == 400 and r.get("codigo") == "DATOS_INVALIDOS", (st, r))
+
+admin.api("POST", "/productos", {"code": "COD", "name": "Codo PVC", "unit": "Unidad", "stock": 2, "price": 3, "category": "General"})
+pid = int(sql("select id from productos where code = 'COD'"))
+st, r = venta(admin, [(pid, 1)], 3)
+verificar("Vender sin turno de caja → CAJA_NO_ABIERTA", st == 400 and r.get("codigo") == "CAJA_NO_ABIERTA", r)
+caja = int(sql("select id from cash_registers where name = 'Caja Principal'"))
+admin.api("POST", "/caja/apertura", {"cashRegisterId": caja, "montoInicial": 0})
+st, r = venta(admin, [(pid, 5)], 15)
+verificar("Vender más de lo que hay → STOCK_INSUFICIENTE", st == 409 and r.get("codigo") == "STOCK_INSUFICIENTE", r)
+st, r = venta(admin, [(pid, 1)], 99)
+verificar("Total desactualizado → PRECIOS_CAMBIARON, con los precios nuevos", st == 409 and r.get("codigo") == "PRECIOS_CAMBIARON" and r.get("precios"), r)
+st, r = admin.api("POST", "/caja/apertura", {"cashRegisterId": caja, "montoInicial": 0})
+verificar("Los demás errores llevan el área y el tipo (CAJA_CONFLICTO)", st == 409 and r.get("codigo") == "CAJA_CONFLICTO", r)
+peticion = next((l for l in lineas_de(r.get("requestId")) if l.get("msg") == "request"), None)
+verificar("…y su requestId lleva a la línea del registro", peticion and peticion["status"] == 409, peticion)
 
 # Las migraciones de Prisma escriben texto al arrancar; desde que el servidor escucha, todo es JSON.
 salida = subprocess.run(["docker", "logs", "ferresys-tests-backend"], capture_output=True, text=True)

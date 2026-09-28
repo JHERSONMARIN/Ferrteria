@@ -3,6 +3,7 @@ import { prisma } from '../db.js';
 import { createTransfer, listTransfers, TransferError } from '../services/transfers.js';
 import { BranchError } from '../services/branches.js';
 import { StockError } from '../services/stock.js';
+import { errorBody } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ const handle = (context, fn) => async (req, res) => {
     await fn(req, res);
   } catch (error) {
     if (error instanceof TransferError || error instanceof BranchError || error instanceof StockError) {
-      return res.status(error.status).json({ error: error.message });
+      return res.status(error.status).json(errorBody(error));
     }
     console.error(`[transferencias.js] ${context}:`, error);
     res.status(500).json({ error: `No se pudo ${context}.` });

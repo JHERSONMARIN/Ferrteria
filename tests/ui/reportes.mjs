@@ -4,7 +4,7 @@ async function sesionAdmin(viewport) {
   const ctx = await browser.newContext({ viewport, acceptDownloads: true });
   const page = await ctx.newPage();
   page.on('pageerror', e => errores.push(e.message));
-  await page.goto(URL);
+  await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.locator('input').nth(0).fill('admin');
   await page.locator('input[type=password]').first().fill('AdminFase5_2026');
   await page.getByRole('button', { name: 'Ingresar al Sistema' }).click();

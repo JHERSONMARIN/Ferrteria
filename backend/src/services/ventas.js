@@ -1,19 +1,15 @@
-import { nextDocumentNumber, DocumentSeriesError } from './documentSeries.js';
-import { takeAvailableStock, reserveStock, StockError } from './stock.js';
+import { nextDocumentNumber } from './documentSeries.js';
+import { takeAvailableStock, reserveStock } from './stock.js';
 import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
-import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers, DeliveryError } from './deliveries.js';
+import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers } from './deliveries.js';
 import { recordAudit } from './audit.js';
-import { requireOpenSession, CashError } from './cashRegisters.js';
-import { requireFeature, LicenseError } from './license.js';
+import { requireOpenSession } from './cashRegisters.js';
+import { requireFeature } from './license.js';
+import { AppError, errorBody } from '../utils/errors.js';
 
-export class VentaError extends Error {
-  constructor(message, status = 400, codigo = null, extra = null) {
-    super(message);
-    this.status = status;
-    this.codigo = codigo;
-    this.extra = extra;
-  }
+export class VentaError extends AppError {
+  static area = 'VENTA';
 }
 
 const DOC_TYPES = { Factura: 'FACTURA', Boleta: 'BOLETA' };
@@ -250,7 +246,7 @@ export async function validatePayment(tx, { payMethodEnum, mixCash, mixDigital, 
     const limite = cliente.maxCredit || 1000.0;
     const disponible = limite - deudaActual;
     if (total > disponible) {
-      throw new VentaError(`Crédito insuficiente para ${cliente.name}. Límite: S/ ${limite.toFixed(2)}, Deuda Actual: S/ ${deudaActual.toFixed(2)}, Disponible: S/ ${disponible.toFixed(2)}. Intentó fiar: S/ ${total.toFixed(2)}.`);
+      throw new VentaError(`Crédito insuficiente para ${cliente.name}. Límite: S/ ${limite.toFixed(2)}, Deuda Actual: S/ ${deudaActual.toFixed(2)}, Disponible: S/ ${disponible.toFixed(2)}. Intentó fiar: S/ ${total.toFixed(2)}.`, 400, 'CREDITO_INSUFICIENTE');
     }
   }
   return { cash, digital };
@@ -419,26 +415,10 @@ export async function procesarVenta(prisma, payload, user) {
 }
 
 export function responderErrorVenta(res, error, contexto) {
-  if (error instanceof VentaError) {
-    return res.status(error.status).json({ error: error.message, codigo: error.codigo, ...error.extra });
-  }
-  if (error instanceof DocumentSeriesError) {
-    return res.status(400).json({ error: error.message });
-  }
-  if (error instanceof DeliveryError) {
-    return res.status(error.status).json({ error: error.message });
-  }
-  if (error instanceof LicenseError) {
-    return res.status(error.status).json({ error: error.message, codigo: error.codigo });
-  }
-  if (error instanceof CashError) {
-    return res.status(error.status).json({ error: error.message });
-  }
-  if (error instanceof StockError) {
-    return res.status(error.status).json({ error: error.message });
-  }
+  // Venta, caja, stock, envío, series y plan: todos son errores de negocio con su código.
+  if (error instanceof AppError) return res.status(error.status).json(errorBody(error));
   if (error.code === 'P2002') {
-    return res.status(409).json({ error: 'No se pudo generar el número de comprobante. Intente nuevamente.' });
+    return res.status(409).json({ error: 'No se pudo generar el número de comprobante. Intente nuevamente.', codigo: 'VENTA_NUMERO_DUPLICADO' });
   }
   console.error(`[${contexto}]`, error);
   return res.status(500).json({ error: 'Error interno al procesar la venta.' });

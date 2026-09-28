@@ -1,4 +1,5 @@
 import { requireFeature } from './license.js';
+import { AppError } from '../utils/errors.js';
 // Registro de auditoría. Se escribe con el mismo cliente (tx) que la operación auditada para que
 // ambas se confirmen o se descarten juntas.
 
@@ -56,7 +57,9 @@ const BUSINESS_UTC_OFFSET = '-05:00';
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const PAGE_SIZE = 50;
 
-export class AuditQueryError extends Error {}
+export class AuditQueryError extends AppError {
+  static area = 'AUDITORIA';
+}
 
 export async function listAuditLogs(db, query) {
   requireFeature('audit');

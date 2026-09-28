@@ -26,7 +26,8 @@ export async function sesion(usuario, clave, viewport = { width: 1440, height: 9
   page.on('pageerror', e => errores.push(`${usuario}: ${e.message}`));
   page.on('dialog', d => d.accept());
   await page.addInitScript(() => { window.print = () => {}; });
-  await page.goto(URL);
+  // Sin esperar a los recursos externos (fuentes, íconos): un CDN lento no debe tumbar la prueba.
+  await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.locator('input').nth(0).fill(usuario);
   await page.locator('input[type=password]').first().fill(clave);
   await page.getByRole('button', { name: 'Ingresar al Sistema' }).click();

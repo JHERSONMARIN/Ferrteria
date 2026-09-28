@@ -3,6 +3,7 @@ import { prisma } from '../db.js';
 import { quantityProblem, roundMoney } from '../utils/quantities.js';
 import { addStock } from '../services/stock.js';
 import { resolveBranchId, BranchError } from '../services/branches.js';
+import { errorBody } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -117,7 +118,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ success: true, compra: result });
   } catch (error) {
-    if (error instanceof BranchError) return res.status(error.status).json({ error: error.message });
+    if (error instanceof BranchError) return res.status(error.status).json(errorBody(error));
     res.status(400).json({ error: error.message || 'Error al registrar compra.' });
   }
 });

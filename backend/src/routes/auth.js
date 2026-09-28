@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword, validateNewPassword, PasswordPolicyError 
 import { createSessionToken } from '../services/sessionTokens.js';
 import { secondsBlocked, registerFailure, registerSuccess } from '../services/loginThrottle.js';
 import { authenticate, setSessionCookie, clearSessionCookie } from '../middleware/authenticate.js';
+import { errorBody } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -82,7 +83,7 @@ router.post('/change-password', authenticate, async (req, res) => {
     setSessionCookie(res, createSessionToken(updated));
     res.json({ success: true, user: { ...req.user, mustChangePassword: false } });
   } catch (error) {
-    if (error instanceof PasswordPolicyError) return res.status(400).json({ error: error.message });
+    if (error instanceof PasswordPolicyError) return res.status(400).json(errorBody(error));
     console.error('[auth.js] Error al cambiar la contraseña:', error);
     res.status(500).json({ error: 'No se pudo cambiar la contraseña.' });
   }

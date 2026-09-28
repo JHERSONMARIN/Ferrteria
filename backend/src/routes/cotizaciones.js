@@ -4,6 +4,7 @@ import { recordAudit } from '../services/audit.js';
 import {
   procesarVenta, responderErrorVenta, normalizarCarrito, cargarProductosActivos, priceListFor, unitPriceFor, saleUnitOf, unitFields, unitColumns, VentaError,
 } from '../services/ventas.js';
+import { errorBody } from '../utils/errors.js';
 
 const router = express.Router();
 
@@ -100,7 +101,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({ success: true, cotizacion });
   } catch (error) {
-    if (error instanceof VentaError) return res.status(error.status).json({ error: error.message });
+    if (error instanceof VentaError) return res.status(error.status).json(errorBody(error));
     if (error.code === 'P2002') return res.status(409).json({ error: 'No se pudo generar el número de cotización. Intente nuevamente.' });
     console.error('[cotizaciones.js] Error al generar cotización:', error);
     res.status(500).json({ error: 'Error al generar la cotización.' });

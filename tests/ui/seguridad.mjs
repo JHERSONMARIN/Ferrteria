@@ -13,7 +13,7 @@ const login = async (usuario, clave) => {
 };
 
 // 1. Cambio obligatorio
-await page.goto(URL);
+await page.goto(URL, { waitUntil: 'domcontentloaded' });
 await login('ana', 'Reinicio2026');
 await page.getByText('Elija su contraseña').waitFor();
 verificar('Clave temporal: aparece la pantalla de cambio obligatorio', true);
