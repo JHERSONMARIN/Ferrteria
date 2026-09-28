@@ -6,6 +6,10 @@
 #   En Windows se corre desde Git Bash, con Docker Desktop abierto.
 set -euo pipefail
 
+# Git Bash (Windows) no tiene una consola que Docker reconozca: sin esto la construcción falla con
+# "failed to get console". En Linux no cambia nada (la salida no se muestra).
+export COMPOSE_PROGRESS=plain BUILDKIT_PROGRESS=plain
+
 DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"
 # En Git Bash, "pwd -W" da la ruta con letra de unidad (C:/...), que es la que entiende Docker Desktop.
 REPO_DIR="$(cd "$DEPLOY_DIR/.." && { pwd -W 2>/dev/null || pwd; })"
