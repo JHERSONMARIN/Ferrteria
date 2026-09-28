@@ -3,6 +3,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 from lib import *  # noqa: F401,F403
 
@@ -81,6 +82,18 @@ st, r = admin.api("POST", "/caja/apertura", {"cashRegisterId": caja, "montoInici
 verificar("Los demás errores llevan el área y el tipo (CAJA_CONFLICTO)", st == 409 and r.get("codigo") == "CAJA_CONFLICTO", r)
 peticion = next((l for l in lineas_de(r.get("requestId")) if l.get("msg") == "request"), None)
 verificar("…y su requestId lleva a la línea del registro", peticion and peticion["status"] == 409, peticion)
+
+print("\n=== Versión visible ===")
+paquete = json.load(open(Path(__file__).resolve().parents[2] / "backend" / "package.json"))["version"]
+commit = subprocess.run(["bash", str(Path(__file__).resolve().parents[2] / "deploy" / "version.sh")], capture_output=True, text=True).stdout.strip()
+st, r = anonimo.api("GET", "/health")
+verificar("/api/health informa el número de versión", st == 200 and r.get("version") == paquete, r)
+verificar("…el commit con el que se construyó la imagen", commit and r.get("commit") == commit, (r.get("commit"), commit))
+verificar("…y cuándo se construyó", str(r.get("builtAt", "")).startswith("20"), r.get("builtAt"))
+st, r = anonimo.api("GET", "/app-info")
+verificar("La pantalla de inicio recibe la versión (sin sesión)", r.get("version") == {"number": paquete, "commit": commit}, r.get("version"))
+arranque = next((l for l in registro_backend() if "corriendo en el puerto" in l.get("msg", "")), None)
+verificar("El registro de arranque dice qué versión arrancó", arranque and f"{paquete} ({commit})" in arranque["msg"], arranque)
 
 # Las migraciones de Prisma escriben texto al arrancar; desde que el servidor escucha, todo es JSON.
 salida = subprocess.run(["docker", "logs", "ferresys-tests-backend"], capture_output=True, text=True)

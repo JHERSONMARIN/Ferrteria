@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { prisma } from '../db.js';
-import { DEPLOY_DIR, readPlans, readThemes, readModules, companySlugs, readCompanyEnv } from './companies.js';
+import { DEPLOY_DIR, readPlans, readThemes, readModules, companySlugs, readCompanyEnv, currentCommit } from './companies.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -175,7 +175,9 @@ async function compose({ slug, args, action, summary, user }) {
     ...args,
   ];
   try {
-    const { stdout, stderr } = await execFileAsync('docker', composeArgs, { timeout: TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024, env: SCRIPT_ENV });
+    // Al reconstruir, la imagen queda marcada con el commit del código (deploy/version.sh).
+    const env = args.includes('--build') ? { ...SCRIPT_ENV, FERRESYS_COMMIT: await currentCommit() } : SCRIPT_ENV;
+    const { stdout, stderr } = await execFileAsync('docker', composeArgs, { timeout: TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024, env });
     const output = `${stdout}${stderr}`.slice(-MAX_OUTPUT);
     await record({ action, slug, summary, details: { args, output }, ok: true, user });
     return output;

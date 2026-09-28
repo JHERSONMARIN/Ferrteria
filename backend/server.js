@@ -30,6 +30,7 @@ import transferenciasRoutes from './src/routes/transferencias.js';
 import { expireOrders } from './src/services/saleOrders.js';
 import { authenticate, requirePasswordChanged } from './src/middleware/authenticate.js';
 import { allowModules } from './src/middleware/authorize.js';
+import { APP_VERSION, APP_COMMIT, APP_BUILT_AT, versionLabel } from './src/config/version.js';
 
 dotenv.config();
 
@@ -89,11 +90,16 @@ app.get('/api/app-info', async (req, res) => {
   } catch (error) {
     console.error('[app-info] No se pudieron leer los datos de la empresa:', error);
   }
-  res.json({ demoMode: process.env.DEMO_MODE === 'true', quickLogin: QUICK_LOGIN_USERS, business });
+  res.json({
+    demoMode: process.env.DEMO_MODE === 'true',
+    quickLogin: QUICK_LOGIN_USERS,
+    business,
+    version: { number: APP_VERSION, commit: APP_COMMIT },
+  });
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', system: 'FerreSys v4.8 API', timestamp: new Date() });
+  res.json({ status: 'ok', version: APP_VERSION, commit: APP_COMMIT, builtAt: APP_BUILT_AT, timestamp: new Date() });
 });
 
 // ---------- A partir de aquí todo requiere sesión ----------
@@ -163,5 +169,5 @@ await runOrderExpiration();
 setInterval(runOrderExpiration, 5 * 60 * 1000).unref();
 
 app.listen(PORT, () => {
-  console.log(`🚀 FerreSys Backend corriendo en el puerto ${PORT}`);
+  console.log(`FerreSys ${versionLabel()} corriendo en el puerto ${PORT}`);
 });

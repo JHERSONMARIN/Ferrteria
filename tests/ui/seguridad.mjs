@@ -51,6 +51,7 @@ await login('admin', 'AdminCentro2026');
 await page.locator('aside').waitFor();
 await page.waitForTimeout(1000);
 const menuAdmin = await page.locator('aside nav').innerText();
+verificar('El pie de la marca muestra la versión', /FerreSys v\d+\.\d+\.\d+/.test(await page.locator('aside').innerText()));
 verificar('Menú del admin sin módulos no contratados (Créditos, Movimientos…)',
   !menuAdmin.includes('Créditos') && !menuAdmin.includes('Movimientos') && menuAdmin.includes('Productos'), menuAdmin.replace(/\n/g, ' | '));
 

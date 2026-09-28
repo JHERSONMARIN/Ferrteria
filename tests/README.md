@@ -49,6 +49,7 @@ Las cadenas están en `CADENAS`, en `tests/run.py`.
 | Tema | API | Interfaz |
 |---|---|---|
 | Sesiones, contraseñas, permisos y licencia | `seguridad.py` | `seguridad.mjs` |
+| Registro, códigos de error y versión | `observabilidad.py` | |
 | Pedidos, cobro, despacho y reservas de stock | `pedidos_por_estados.py` | `pedidos_por_estados.mjs` |
 | Envíos a domicilio y repartidores | `envios.py` | `envios.mjs` |
 | Fracciones, precios mayoristas y descuentos | `cantidades_y_precios.py` | `cantidades_y_precios.mjs` |
@@ -70,3 +71,6 @@ Las cadenas están en `CADENAS`, en `tests/run.py`.
   cadena nueva si parte de una empresa vacía.
 
 Si cambia un comportamiento a propósito, se actualiza la prueba en el mismo commit que el cambio.
+
+Toda prueba de API verifica además, al terminar, que cada respuesta de error que recibió traiga
+`codigo` y `requestId` (ver `backend/src/utils/errors.js`).

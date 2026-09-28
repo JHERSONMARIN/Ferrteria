@@ -4,6 +4,8 @@ services:
   backend:
     build:
       context: ../../backend
+      args:
+        APP_COMMIT: ${FERRESYS_COMMIT:-}
     image: ferresys-backend:local
     restart: unless-stopped
     environment:
