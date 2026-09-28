@@ -8,7 +8,7 @@ verificar('Inventario: stock de mi sucursal y total de la empresa', await m.getB
 const detalle = await m.getByText(/Empresa: \d/).first().getAttribute('title');
 verificar('El detalle por sucursal aparece al pasar el mouse', detalle && detalle.includes('Sucursal Norte') && detalle.includes('Principal'), detalle);
 await admin.screenshot({ path: `${DIR}/f6-10-inventario.png` });
-await irA(admin, 'Kardex / Movimientos');
+await irA(admin, 'Movimientos');
 await admin.locator('main').getByLabel('Sucursal').selectOption({ label: 'Sucursal Norte' });
 await admin.waitForTimeout(1000);
 const refs = await admin.locator('main tbody tr').allInnerTexts();

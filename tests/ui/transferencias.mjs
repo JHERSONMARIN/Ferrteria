@@ -8,11 +8,12 @@ await irA(an, 'Transferencias');
 const m = an.locator('main');
 verificar('El origen es su sucursal, fijo', await m.getByText('Sucursal Norte', { exact: true }).first().isVisible() && await m.locator('select').count() === 1);
 await m.locator('select').selectOption({ label: 'Principal' });
-await m.getByPlaceholder(/Buscar producto/).fill('CEM');
-await m.getByRole('button', { name: /Cemento/ }).click();
-await m.getByLabel('Cantidad de Cemento').fill('999');
+// Clavos: las pruebas de API dejan el Norte sin cemento, pero con clavos.
+await m.getByPlaceholder(/Buscar producto/).fill('CLA');
+await m.getByRole('button', { name: /Clavos/ }).click();
+await m.getByLabel('Cantidad de Clavos').fill('999');
 verificar('Avisa si pide más de lo disponible y bloquea el botón', await m.getByText(/Solo hay/).isVisible() && await m.getByRole('button', { name: /^.*Transferir$/ }).isDisabled());
-await m.getByLabel('Cantidad de Cemento').fill('1');
+await m.getByLabel('Cantidad de Clavos').fill('1');
 await m.getByPlaceholder(/Nota/).fill('Prueba de pantalla');
 await m.getByRole('button', { name: /^.*Transferir$/ }).click();
 await an.waitForTimeout(1200);
