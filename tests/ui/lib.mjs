@@ -41,6 +41,11 @@ const MENU_USUARIO = ['Configuración', 'Cambiar contraseña', 'Cerrar sesión']
 // Navega con el menú lateral por el nombre visible de la opción.
 export const irA = async (page, nombre) => {
   const aside = page.locator('aside');
+  // En el celular el menú está escondido a la izquierda: se abre con el botón ☰ del encabezado.
+  if (((await aside.boundingBox())?.x ?? 0) < 0) {
+    await page.locator('header button:has(.fa-bars)').click();
+    await page.waitForTimeout(400);
+  }
   if (MENU_USUARIO.includes(nombre)) {
     await aside.locator('button:has(.fa-circle-user)').click();
   }
@@ -56,4 +61,24 @@ export async function resumen() {
   console.log(`\nResultado: ${resultados.filter(Boolean).length}/${resultados.length} pruebas OK`);
   await browser.close();
   process.exit(resultados.every(Boolean) ? 0 : 1);
+}
+
+// Acepta una ventana de confirmación propia (no la del navegador): su botón se dibuja al final.
+export const confirmar = async (page, texto) => {
+  await page.getByRole('button', { name: texto }).last().click();
+  await page.waitForTimeout(800);
+};
+
+// La tarjeta (recuadro redondeado) más interna que contiene un título dado, por ejemplo la de una caja.
+export const tarjetaCon = (scope, titulo) =>
+  scope.locator('div.rounded-xl').filter({ has: scope.page().getByRole('heading', { name: new RegExp(`^[^\\p{L}]*${titulo}\\s*$`, 'u') }) }).last();
+
+// El modo es de cada sucursal: se elige en Configuración, se confirma y se guarda al momento.
+export async function cambiarModo(page, titulo) {
+  await irA(page, 'Configuración');
+  await page.getByText('Modo de trabajo').first().waitFor();
+  await page.locator('main').getByRole('button', { name: new RegExp(titulo) }).first().click();
+  await page.getByRole('button', { name: 'Cambiar', exact: true }).click();
+  await page.getByText(`Modo "${titulo}" guardado`, { exact: false }).waitFor();
+  await page.waitForTimeout(800);
 }

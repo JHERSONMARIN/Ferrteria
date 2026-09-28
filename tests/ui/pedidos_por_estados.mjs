@@ -1,16 +1,6 @@
-import { DIR, verificar, sesion, irA, resumen } from './lib.mjs';
+import { DIR, verificar, sesion, irA, resumen, cambiarModo } from './lib.mjs';
 
 const menu = async (page) => page.locator('aside nav').innerText();
-
-// El modo es de cada sucursal: se elige en Configuración, se confirma y se guarda al momento.
-async function cambiarModo(page, titulo) {
-  await irA(page, 'Configuración');
-  await page.getByText('Modo de trabajo').first().waitFor();
-  await page.locator('main').getByRole('button', { name: new RegExp(titulo) }).first().click();
-  await page.getByRole('button', { name: 'Cambiar', exact: true }).click();
-  await page.getByText(`Modo "${titulo}" guardado`, { exact: false }).waitFor();
-  await page.waitForTimeout(800);
-}
 
 // 1. El administrador elige "Por etapas" desde Configuración
 const admin = await sesion('admin', 'AdminRegresion2026');

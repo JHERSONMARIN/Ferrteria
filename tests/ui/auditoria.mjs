@@ -18,8 +18,8 @@ await admin.screenshot({ path: `${DIR}/f6-1-auditoria.png` });
 await main.getByRole('button', { name: /Limpiar filtros/ }).click();
 await admin.waitForTimeout(600);
 const movil = await sesion('admin', 'AdminFase5_2026', { width: 390, height: 844 });
-// La última pestaña abierta se recuerda: en celular ya aparece Auditoría.
-await movil.locator('main').getByText('Limpiar filtros').waitFor();
+await irA(movil, 'Auditoría');
+await movil.locator('main').getByLabel('Acción').waitFor();
 await movil.waitForTimeout(1000);
 const ancho = await movil.evaluate(() => document.documentElement.scrollWidth);
 verificar('En celular no hay scroll horizontal', ancho <= 390, ancho);

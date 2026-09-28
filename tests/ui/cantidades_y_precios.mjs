@@ -1,4 +1,8 @@
-import { URL, DIR, browser, errores, verificar, sesion, irA, resumen } from './lib.mjs';
+import { DIR, verificar, sesion, irA, resumen, cambiarModo } from './lib.mjs';
+
+// La prueba de API termina con la sucursal en "Vendedor y caja": aquí se vende en modo directo.
+const admin = await sesion('admin', 'AdminFase5_2026');
+await cambiarModo(admin, 'Directo');
 
 const vend = await sesion('vendedor', 'vendedorClave2026');
 await irA(vend, 'Vender');
@@ -29,8 +33,7 @@ await vend.waitForTimeout(1200);
 verificar('La venta se registra mostrando el descuento', await vend.getByText('Descuento aplicado').isVisible());
 await vend.screenshot({ path: `${DIR}/f5-2-venta-registrada.png` });
 
-const admin = await sesion('admin', 'AdminFase5_2026');
-await admin.locator('aside').getByRole('button', { name: /Configuración/ }).click();
+await irA(admin, 'Configuración');
 await admin.waitForTimeout(800);
 verificar('Configuración muestra la sección Descuentos', await admin.getByText('Descuento máximo (%)').isVisible());
 await admin.getByText('Descuento máximo (%)').scrollIntoViewIfNeeded();

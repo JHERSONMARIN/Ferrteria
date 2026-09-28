@@ -38,8 +38,8 @@ CADENAS = [
     ["api/seguridad.py", "ui/seguridad.mjs"],
     ["api/pedidos_por_estados.py", "api/envios.py", "ui/pedidos_por_estados.mjs", "ui/envios.mjs"],
     ["api/cantidades_y_precios.py", "api/modo_por_sucursal.py"],
-    ["api/cantidades_y_precios.py", "ui/una_sucursal.mjs", "api/auditoria.py", "api/caja_compartida.py", "api/reportes.py",
-     "ui/cantidades_y_precios.mjs", "ui/caja_compartida.mjs", "ui/auditoria.mjs", "ui/reportes.mjs"],
+    ["api/cantidades_y_precios.py", "ui/cantidades_y_precios.mjs", "ui/una_sucursal.mjs", "api/auditoria.py",
+     "api/caja_compartida.py", "api/reportes.py", "ui/caja_compartida.mjs", "ui/auditoria.mjs", "ui/reportes.mjs"],
     ["api/sucursales.py", "ui/sucursales.mjs", "api/transferencias.py", "api/series_sucursal.py",
      "ui/transferencias.mjs", "ui/series_sucursal.mjs"],
 ]
