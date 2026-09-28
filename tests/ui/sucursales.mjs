@@ -1,0 +1,34 @@
+import { URL, DIR, browser, errores, verificar, sesion, irA, resumen } from './lib.mjs';
+
+const admin = await sesion('admin', 'AdminSucursales2026');
+verificar('El encabezado muestra la sucursal del administrador', await admin.locator('header').getByText('Principal').isVisible());
+await irA(admin, 'Configuración');
+const ma = admin.locator('main');
+await ma.getByText('Agregar sucursal').scrollIntoViewIfNeeded();
+verificar('Configuración lista las sucursales', await ma.getByText('Sucursal Norte').first().isVisible() && await ma.getByText(/usuario\(s\)/).first().isVisible());
+await ma.getByPlaceholder(/Nombre \(ej\. Sucursal Norte/).fill('Almacén Central');
+await ma.getByPlaceholder('Dirección (opcional)').fill('Parque Industrial Mz. B');
+await ma.getByRole('button', { name: /Agregar sucursal/ }).click();
+await admin.waitForTimeout(900);
+verificar('Crea una sucursal nueva', await ma.getByText('Almacén Central creada.').isVisible());
+verificar('Las cajas muestran su sucursal', await ma.getByText('· Sucursal Norte').first().isVisible());
+verificar('Al crear una caja se puede elegir la sucursal', await ma.getByLabel('Sucursal de la caja').isVisible());
+await ma.getByText('Agregar sucursal').scrollIntoViewIfNeeded();
+await admin.screenshot({ path: `${DIR}/f6-7-sucursales.png` });
+await irA(admin, 'Personal');
+verificar('Personal muestra la sucursal de cada empleado', await admin.locator('main').getByText('Sucursal Norte').first().isVisible());
+await admin.locator('main').getByRole('button', { name: /Nuevo|Agregar|Registrar/ }).first().click();
+await admin.waitForTimeout(500);
+verificar('El formulario de personal ofrece elegir sucursal', await admin.getByText('La misma que la mía').count() === 1);
+
+const vn = await sesion('vendnorte', 'vendnorteClave2026');
+verificar('El vendedor del Norte ve su sucursal en el encabezado', await vn.locator('header').getByText('Sucursal Norte').isVisible());
+await irA(vn, 'Vender');
+const buscador = vn.getByPlaceholder(/Escanee o busque/);
+await buscador.waitFor();
+await buscador.fill('CLA');
+await vn.waitForTimeout(600);
+const tarjeta = await vn.locator('main').getByText(/disp\./).first().innerText();
+verificar('El POS muestra el disponible de su sucursal (16 en el Norte, no los 100 de Principal)', tarjeta.startsWith('16'), tarjeta);
+await vn.screenshot({ path: `${DIR}/f6-8-pos-norte.png` });
+await resumen();

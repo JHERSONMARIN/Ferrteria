@@ -1,0 +1,65 @@
+# Entorno aislado para la suite de pruebas: base, backend y web propios, con datos en memoria.
+# No comparte nada con las empresas ni con el PostgreSQL de deploy/. Lo levanta y lo limpia tests/run.py.
+name: ferresys-tests
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ferresys-tests-db
+    environment:
+      POSTGRES_USER: ferresys
+      POSTGRES_PASSWORD: ferresys
+      POSTGRES_DB: ferresys
+      TZ: America/Lima
+      PGTZ: America/Lima
+    # Los datos viven en memoria: la suite los borra entre cadenas de pruebas.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ferresys -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build:
+      context: ../backend
+    image: ferresys-backend:tests
+    container_name: ferresys-tests-backend
+    environment:
+      PORT: 3000
+      TZ: America/Lima
+      DATABASE_URL: postgresql://ferresys:ferresys@db:5432/ferresys?schema=public&connection_limit=10
+      DEMO_MODE: "false"
+      JWT_SECRET: clave-solo-para-pruebas-no-usar-en-produccion
+      COOKIE_SECURE: "false"
+      TRUST_PROXY_HOPS: 1
+      COMPANY_NAME: Ferretería de Pruebas
+      INITIAL_ADMIN_USER: admin
+      INITIAL_ADMIN_PASSWORD: ${CLAVE_TEMPORAL:-ClaveTemporal2026}
+      # Las pruebas de licencia reinician el backend con otros valores (ver tests/api/lib.py).
+      LICENSED_MODULES: ${LICENSED_MODULES:-}
+      # Sin definir = todas las funciones (vacío significaría ninguna).
+      LICENSED_FEATURES: ${LICENSED_FEATURES-split_flow,shared_cash,deliveries,wholesale,discounts,period_reports,branches,audit,sunat}
+      MAX_USERS: ${MAX_USERS:-0}
+      MAX_BRANCHES: ${MAX_BRANCHES:-0}
+      MAX_CASH_REGISTERS: ${MAX_CASH_REGISTERS:-0}
+      LICENSE_EXPIRES_AT: ${LICENSE_EXPIRES_AT:-}
+      PLAN: ${PLAN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../frontend
+    image: ferresys-web:tests
+    container_name: ferresys-tests-web
+    environment:
+      VITE_PORT: 5180
+      BACKEND_URL: http://backend:3000
+      TZ: America/Lima
+    ports:
+      - "127.0.0.1:${TEST_WEB_PORT:-23990}:5180"
+    depends_on:
+      - backend
