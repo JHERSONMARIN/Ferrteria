@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import FieldError from './FieldError.jsx';
+import FieldError from '../shared/ui/FieldError.tsx';
 import CustomerSelector from './CustomerSelector.jsx';
-import { borderClass } from '../utils/validators.js';
-import { formatSoles } from '../utils/currency.js';
-import { findCustomerByInput } from '../utils/customers.js';
+import { borderClass } from '../shared/utils/validators.ts';
+import { formatSoles } from '../shared/utils/currency.ts';
+import { findCustomerByInput } from '../shared/utils/customers.ts';
 
 const DOCUMENT_TYPES = [
   { id: 'Nota de Venta', icon: 'fa-receipt', hint: 'Sin datos' },

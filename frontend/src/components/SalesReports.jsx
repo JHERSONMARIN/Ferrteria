@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../api.js';
-import { formatSoles } from '../utils/currency.js';
-import { formatQuantity } from '../utils/quantities.js';
-import { downloadCsv, csvNumber } from '../utils/csv.js';
+import { api } from '../api/client.ts';
+import { formatSoles } from '../shared/utils/currency.ts';
+import { formatQuantity } from '../shared/utils/quantities.ts';
+import { downloadCsv, csvNumber } from '../shared/utils/csv.ts';
 
 const todayInLima = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit',

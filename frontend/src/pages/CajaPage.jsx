@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api.js';
-import FieldError from '../components/FieldError.jsx';
-import { borderClass } from '../utils/validators.js';
+import { api } from '../api/client.ts';
+import FieldError from '../shared/ui/FieldError.tsx';
+import { borderClass } from '../shared/utils/validators.ts';
 import ContadorEfectivo, { calcularTotalConteo } from '../components/ContadorEfectivo.jsx';
-import { useToast, useConfirm } from '../components/ui/index.js';
+import { useToast, useConfirm } from '../shared/ui/index.ts';
 
 function SelectorModo({ modo, onChange }) {
   const opciones = [

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api.js';
-import FieldError from '../components/FieldError.jsx';
-import { borderClass } from '../utils/validators.js';
-import { MODULE_OPTIONS as moduleOptions } from '../constants/modules.js';
-import { effectiveDispatchRole } from '../constants/dispatch.js';
-import { ROLE_OPTIONS, rolesForModules, roleLabel, presetModules, describeDuties } from '../constants/roles.js';
-import { useToast, useConfirm, Pagination, usePagination } from '../components/ui/index.js';
+import { api } from '../api/client.ts';
+import FieldError from '../shared/ui/FieldError.tsx';
+import { borderClass } from '../shared/utils/validators.ts';
+import { MODULE_OPTIONS as moduleOptions } from '../shared/constants/modules.ts';
+import { effectiveDispatchRole } from '../shared/constants/dispatch.ts';
+import { ROLE_OPTIONS, rolesForModules, roleLabel, presetModules, describeDuties } from '../shared/constants/roles.ts';
+import { useToast, useConfirm, Pagination, usePagination } from '../shared/ui/index.ts';
 
 export default function PersonalPage({ currentUser }) {
   const aviso = useToast();

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { roleLabel } from '../constants/roles.js';
-import { api } from '../api.js';
+import { roleLabel } from '../shared/constants/roles.ts';
+import { api } from '../api/client.ts';
 import SalesReports from '../components/SalesReports.jsx';
-import { useToast } from '../components/ui/index.js';
+import { useToast } from '../shared/ui/index.ts';
 
 export default function DashboardPage({ periodReports = true }) {
   const aviso = useToast();

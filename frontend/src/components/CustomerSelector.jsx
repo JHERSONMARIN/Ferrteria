@@ -1,6 +1,6 @@
 import React, { useId } from 'react';
-import FieldError from './FieldError.jsx';
-import { customerOptionLabel } from '../utils/customers.js';
+import FieldError from '../shared/ui/FieldError.tsx';
+import { customerOptionLabel } from '../shared/utils/customers.ts';
 
 export default function CustomerSelector({ clients, value, onChange, customer, error, inputRef }) {
   const listId = useId();

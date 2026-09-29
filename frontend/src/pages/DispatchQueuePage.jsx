@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../api.js';
-import { formatSoles } from '../utils/currency.js';
+import { api } from '../api/client.ts';
+import { formatSoles } from '../shared/utils/currency.ts';
 
 const REFRESH_MS = 5000;
 

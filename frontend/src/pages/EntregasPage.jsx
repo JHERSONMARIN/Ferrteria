@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { api } from '../api.js';
-import FieldError from '../components/FieldError.jsx';
-import { borderClass } from '../utils/validators.js';
-import { formatSoles } from '../utils/currency.js';
-import { useConfirm, Modal, Textarea, Field } from '../components/ui/index.js';
+import { api } from '../api/client.ts';
+import FieldError from '../shared/ui/FieldError.tsx';
+import { borderClass } from '../shared/utils/validators.ts';
+import { formatSoles } from '../shared/utils/currency.ts';
+import { useConfirm, Modal, Textarea, Field } from '../shared/ui/index.ts';
 
 const REFRESH_MS = 5000;
 

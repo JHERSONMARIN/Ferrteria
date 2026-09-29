@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api.js';
+import { api } from '../api/client.ts';
 
 // Sucursales o almacenes. Se guardan al momento. Una sucursal no se borra: se desactiva cuando no
 // tiene usuarios, stock ni pedidos abiertos (el servidor lo valida y explica qué falta).

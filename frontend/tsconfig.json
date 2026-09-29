@@ -1,0 +1,21 @@
+{
+  // Solo verifica tipos (npm run typecheck): Vite compila los .tsx sin esperar al chequeo.
+  // Los .jsx que todavía no se migraron se pueden importar desde .tsx, pero no se revisan.
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": false,
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}

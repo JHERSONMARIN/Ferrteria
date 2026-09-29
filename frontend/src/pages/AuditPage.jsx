@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../api.js';
-import { SkeletonTable } from '../components/ui/index.js';
+import { api } from '../api/client.ts';
+import { SkeletonTable } from '../shared/ui/index.ts';
 
 // Color por tipo de acción: rojo para anulaciones/bajas, ámbar para dinero y precios.
 const ACTION_STYLE = {

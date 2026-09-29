@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../api.js';
-import { Pagination, usePagination } from '../components/ui/index.js';
-import { formatQuantity, quantityProblem } from '../utils/quantities.js';
+import { api } from '../api/client.ts';
+import { Pagination, usePagination } from '../shared/ui/index.ts';
+import { formatQuantity, quantityProblem } from '../shared/utils/quantities.ts';
 
 const formatDateTime = (value) => new Date(value).toLocaleString('es-PE', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',

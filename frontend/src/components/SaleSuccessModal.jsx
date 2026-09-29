@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatSoles } from '../utils/currency.js';
+import { formatSoles } from '../shared/utils/currency.ts';
 
 // Confirmación de una operación terminada (venta cobrada, pedido enviado a caja…).
 export default function SaleSuccessModal({ icon = 'fa-check', title, highlight, subtitle, rows = [], change = null, buttonLabel, onClose }) {

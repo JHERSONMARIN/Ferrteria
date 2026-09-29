@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api.js';
-import FieldError from '../components/FieldError.jsx';
-import { borderClass } from '../utils/validators.js';
-import { useToast, useConfirm, SearchInput, EmptyState, Modal, Button, Field, Input, Pagination, usePagination } from '../components/ui/index.js';
+import { api } from '../api/client.ts';
+import FieldError from '../shared/ui/FieldError.tsx';
+import { borderClass } from '../shared/utils/validators.ts';
+import { useToast, useConfirm, SearchInput, EmptyState, Modal, Button, Field, Input, Pagination, usePagination } from '../shared/ui/index.ts';
 
 export default function ClientesPage({ initialSearch = '' }) {
   const aviso = useToast();
