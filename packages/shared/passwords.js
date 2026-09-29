@@ -1,6 +1,6 @@
 import { scrypt, randomBytes, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { AppError } from '../utils/errors.js';
+import { AppError } from './errors.js';
 
 const scryptAsync = promisify(scrypt);
 

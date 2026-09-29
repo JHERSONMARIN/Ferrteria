@@ -4,7 +4,7 @@ import {
   DeliveryError, listDeliveries, assignCourier, markDeparted, markDelivered, cancelDelivery,
   scheduleDeliveryForExistingSale, findSaleForDelivery,
 } from '../services/deliveries.js';
-import { errorBody } from '../utils/errors.js';
+import { errorBody } from '@ferresys/shared/errors';
 
 const router = express.Router();
 

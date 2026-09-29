@@ -18,11 +18,17 @@ docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -q true \
 
 TEMP_PASSWORD="$(openssl rand -hex 6)"
 
+# Carpeta del backend dentro del contenedor: /app/backend desde que la imagen incluye packages/shared;
+# /app en las imágenes anteriores (empresas que todavía no se actualizaron).
+app_dir() { docker exec "$CONTAINER" sh -c '[ -d /app/backend ] && echo /app/backend || echo /app'; }
+APP_DIR="$(app_dir)"
+if [ "$APP_DIR" = /app/backend ]; then PASSWORDS=/app/packages/shared/passwords.js; else PASSWORDS=/app/src/services/passwords.js; fi
+
 # Se ejecuta dentro del backend de la empresa para usar el mismo hash que la aplicación.
 docker exec -e TARGET_USER="$USERNAME" -e TEMP_PASSWORD="$TEMP_PASSWORD" "$CONTAINER" \
   node --input-type=module -e "
-    import { prisma } from '/app/src/db.js';
-    import { hashPassword } from '/app/src/services/passwords.js';
+    import { prisma } from '$APP_DIR/src/db.js';
+    import { hashPassword } from '$PASSWORDS';
     const user = await prisma.usuario.findUnique({ where: { user: process.env.TARGET_USER } });
     if (!user) { console.error('El usuario no existe en esta empresa.'); process.exit(2); }
     await prisma.usuario.update({

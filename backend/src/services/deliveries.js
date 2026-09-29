@@ -3,7 +3,7 @@
 
 import { recordAudit } from './audit.js';
 import { roundQuantity } from '../utils/quantities.js';
-import { AppError } from '../utils/errors.js';
+import { AppError } from '@ferresys/shared/errors';
 
 export class DeliveryError extends AppError {
   static area = 'ENVIO';

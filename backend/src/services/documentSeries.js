@@ -1,4 +1,4 @@
-import { AppError } from '../utils/errors.js';
+import { AppError } from '@ferresys/shared/errors';
 
 // Series de comprobante por sucursal. Cada sucursal (establecimiento) emite con sus propias series:
 // la primera usa T001/B001/F001 (las originales del sistema) y las siguientes reciben el siguiente

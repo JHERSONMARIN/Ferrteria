@@ -4,7 +4,7 @@ import { quantityProblem, roundQuantity } from '../utils/quantities.js';
 import { recordAudit } from '../services/audit.js';
 import { takeAvailableStock, addStock, StockError } from '../services/stock.js';
 import { resolveBranchId, BranchError } from '../services/branches.js';
-import { errorBody } from '../utils/errors.js';
+import { errorBody } from '@ferresys/shared/errors';
 
 const router = express.Router();
 

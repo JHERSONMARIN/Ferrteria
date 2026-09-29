@@ -5,7 +5,7 @@ import {
   listRegisters, createRegister, updateRegister,
 } from '../services/cashRegisters.js';
 import { respondIfLicenseError } from '../services/license.js';
-import { errorBody } from '../utils/errors.js';
+import { errorBody } from '@ferresys/shared/errors';
 
 const router = express.Router();
 

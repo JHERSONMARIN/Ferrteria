@@ -6,7 +6,7 @@ import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers } f
 import { recordAudit } from './audit.js';
 import { requireOpenSession } from './cashRegisters.js';
 import { requireFeature } from './license.js';
-import { AppError, errorBody } from '../utils/errors.js';
+import { AppError, errorBody } from '@ferresys/shared/errors';
 
 export class VentaError extends AppError {
   static area = 'VENTA';

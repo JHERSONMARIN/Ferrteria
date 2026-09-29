@@ -6,7 +6,7 @@ import { takeAvailableStock, addStock } from './stock.js';
 import { resolveBranchId } from './branches.js';
 import { quantityProblem, roundQuantity, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { recordAudit } from './audit.js';
-import { AppError } from '../utils/errors.js';
+import { AppError } from '@ferresys/shared/errors';
 
 export class TransferError extends AppError {
   static area = 'TRANSFERENCIA';

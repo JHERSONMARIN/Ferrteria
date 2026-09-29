@@ -1,0 +1,9 @@
+# Contexto: la raíz del repositorio. Solo entran el backend y las piezas comunes.
+*
+!backend
+!packages/shared
+**/node_modules
+**/.env
+**/.env.*
+**/npm-debug.log*
+backend/dist

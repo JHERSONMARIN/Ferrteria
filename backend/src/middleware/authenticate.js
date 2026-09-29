@@ -1,6 +1,6 @@
 import { prisma } from '../db.js';
-import { readSessionToken, passwordFingerprint, SESSION_MAX_AGE_SECONDS } from '../services/sessionTokens.js';
-import { setRequestUser } from '../utils/logger.js';
+import { readSessionToken, passwordFingerprint, SESSION_MAX_AGE_SECONDS } from '@ferresys/shared/sessionTokens';
+import { setRequestUser } from '@ferresys/shared/logger';
 
 export const SESSION_COOKIE = 'ferresys_session';
 

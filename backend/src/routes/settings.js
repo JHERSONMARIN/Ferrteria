@@ -9,7 +9,7 @@ import {
   AVAILABLE_MODULES,
   SettingsValidationError,
 } from '../services/settings.js';
-import { errorBody } from '../utils/errors.js';
+import { errorBody } from '@ferresys/shared/errors';
 
 const router = express.Router();
 

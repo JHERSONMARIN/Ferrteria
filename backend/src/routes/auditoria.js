@@ -2,7 +2,7 @@ import express from 'express';
 import { prisma } from '../db.js';
 import { listAuditLogs, AuditQueryError } from '../services/audit.js';
 import { respondIfLicenseError } from '../services/license.js';
-import { errorBody } from '../utils/errors.js';
+import { errorBody } from '@ferresys/shared/errors';
 
 const router = express.Router();
 
