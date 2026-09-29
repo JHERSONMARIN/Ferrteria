@@ -2,7 +2,7 @@
 import type { prisma } from '../../../db.ts';
 import { recordAudit } from '../../audit/index.ts';
 import { resolveBranchId } from '../../branches/index.ts';
-import { quantityProblem } from '../../../utils/quantities.js';
+import { quantityProblem } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { StockError, movementTotals, periodRange, type MovementType } from '../domain/inventory.ts';
 import { addStock, branchStockOf, takeAvailableStock } from '../infrastructure/stockOperations.ts';

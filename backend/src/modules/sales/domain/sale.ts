@@ -1,7 +1,7 @@
 // Ventas, pedidos y cotizaciones: reglas puras (carrito, precios, descuentos, pagos y estados).
 // Nunca se usa el precio que manda el navegador: el servidor calcula con sus propios precios.
 import { AppError } from '@ferresys/shared/errors';
-import { MAX_QUANTITY_DECIMALS, quantityProblem, roundMoney, roundQuantity } from '../../../utils/quantities.js';
+import { MAX_QUANTITY_DECIMALS, quantityProblem, roundMoney, roundQuantity } from '../../../utils/quantities.ts';
 
 export class SaleError extends AppError {
   static override area = 'VENTA';

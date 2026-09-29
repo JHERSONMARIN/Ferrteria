@@ -4,7 +4,7 @@ import { recordAudit } from '../../audit/index.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { nextQuoteNumber } from '../domain/documentNumber.ts';
 import { SaleError, normalizeCart, sumLines, unitColumns, unitFields, unitPriceFor } from '../domain/sale.ts';
-import { roundMoney } from '../../../utils/quantities.js';
+import { roundMoney } from '../../../utils/quantities.ts';
 import * as repo from '../infrastructure/saleRepository.ts';
 import { processSale, toId } from './directSale.ts';
 import { loadCartProducts } from './pricing.ts';

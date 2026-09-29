@@ -6,7 +6,7 @@
 // concurrentes no se bloqueen entre sí. Las fechas se escriben en UTC porque la sesión de PostgreSQL
 // está en hora de Lima.
 import type { prisma } from '../../../db.ts';
-import { roundQuantity } from '../../../utils/quantities.js';
+import { roundQuantity } from '../../../utils/quantities.ts';
 import { StockError, insufficientStockMessage } from '../domain/inventory.ts';
 
 /** El cliente de Prisma o una transacción. */

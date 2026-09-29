@@ -1,7 +1,7 @@
 // Cajas físicas y turnos compartidos: reglas puras. Un turno pertenece a una caja y puede tener varios
 // cajeros; el arqueo es del turno, no de cada persona.
 import { AppError } from '@ferresys/shared/errors';
-import { roundMoney } from '../../../utils/quantities.js';
+import { roundMoney } from '../../../utils/quantities.ts';
 
 export class CashError extends AppError {
   static override area = 'CAJA';

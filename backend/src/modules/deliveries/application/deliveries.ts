@@ -2,7 +2,7 @@
 import type { Prisma } from '@prisma/client';
 import type { prisma } from '../../../db.ts';
 import { recordAudit } from '../../audit/index.ts';
-import { roundQuantity } from '../../../utils/quantities.js';
+import { roundQuantity } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import {
   ACTIVE_STATUSES, DeliveryError, FINISHED_STATUSES, assertBranchDelivers, assertCourierChange, canDeliver,

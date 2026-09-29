@@ -4,7 +4,7 @@
 import type { prisma } from '../../../db.ts';
 import { recordAudit } from '../../audit/index.ts';
 import { resolveBranchId } from '../../branches/index.ts';
-import { quantityProblem } from '../../../utils/quantities.js';
+import { quantityProblem } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { TransferError, normalizeTransferItems, transferNotes, transferNumber } from '../domain/inventory.ts';
 import { addStock, takeAvailableStock } from '../infrastructure/stockOperations.ts';

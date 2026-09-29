@@ -1,6 +1,6 @@
 // Catálogo: productos, presentaciones de venta y categorías. Reglas puras.
 import { AppError } from '@ferresys/shared/errors';
-import { quantityProblem, roundMoney, roundQuantity } from '../../../utils/quantities.js';
+import { quantityProblem, roundMoney, roundQuantity } from '../../../utils/quantities.ts';
 
 export class ProductError extends AppError {
   static override area = 'PRODUCTO';

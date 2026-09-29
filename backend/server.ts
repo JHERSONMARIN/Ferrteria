@@ -1,5 +1,5 @@
 // Primero: reemplaza console por el registro estructurado antes de que otros módulos escriban.
-import './src/logging.js';
+import './src/logging.ts';
 import { requestLogger } from '@ferresys/shared/logger';
 import { errorEnvelope, finalErrorHandler } from '@ferresys/shared/errors';
 import express from 'express';
@@ -23,7 +23,7 @@ import {
 import {
   allowModules, authenticate, authRoutes, requirePasswordChanged, staffRoutes as personalRoutes,
 } from './src/modules/identity/index.ts';
-import { APP_VERSION, APP_COMMIT, APP_BUILT_AT, versionLabel } from './src/config/version.js';
+import { APP_VERSION, APP_COMMIT, APP_BUILT_AT, versionLabel } from './src/config/version.ts';
 
 dotenv.config();
 
@@ -37,7 +37,7 @@ app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 
 // Cada petición: identificador (cabecera X-Request-Id) y una línea de registro con su resultado.
 app.use(requestLogger);
-// Toda respuesta de error sale como { error, codigo, requestId } (ver src/utils/errors.js).
+// Toda respuesta de error sale como { error, codigo, requestId } (ver packages/shared/errors.js).
 app.use(errorEnvelope);
 
 // Sin CORS: el navegador siempre llega por el mismo dominio a través del proxy del frontend,
@@ -56,7 +56,7 @@ function quickLoginUsers() {
   return raw.split(',').map(entry => {
     const [user, pass, label] = entry.split(':').map(part => part?.trim());
     return user && pass ? { user, pass, label: label || user } : null;
-  }).filter(Boolean);
+  }).filter((entry): entry is { user: string; pass: string; label: string } => entry !== null);
 }
 
 const QUICK_LOGIN_USERS = quickLoginUsers();
@@ -66,7 +66,8 @@ if (QUICK_LOGIN_USERS.length > 0) {
 
 // Información pública para la pantalla de inicio de sesión (nombre y logo de la empresa).
 app.get('/api/app-info', async (req, res) => {
-  let business = { name: process.env.COMPANY_NAME || null, logo: null, primaryColor: null, navColor: null };
+  let business: { name: string | null; logo: string | null; primaryColor: string | null; navColor: string | null } =
+    { name: process.env.COMPANY_NAME || null, logo: null, primaryColor: null, navColor: null };
   try {
     const settings = await prisma.businessSettings.findUnique({
       where: { id: 1 },
