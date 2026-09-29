@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../api.js';
-import { exportToExcel } from '../utils/excelExport.js';
-import FieldError from '../components/FieldError.jsx';
-import { borderClass } from '../utils/validators.js';
-import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../utils/quantities.js';
-import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../components/ui/index.js';
+import { api } from '../api/client.ts';
+import { exportToExcel } from '../shared/utils/excelExport.ts';
+import FieldError from '../shared/ui/FieldError.tsx';
+import { borderClass } from '../shared/utils/validators.ts';
+import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../shared/utils/quantities.ts';
+import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../shared/ui/index.ts';
 import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
 import ImportModal from '../components/ImportModal.jsx';
-import { downloadTemplate } from '../utils/spreadsheet.js';
+import { downloadTemplate } from '../shared/utils/spreadsheet.ts';
 import SaleUnitsEditor, { toSaleUnitRow, toSaleUnitPayload, validateSaleUnits } from '../components/SaleUnitsEditor.jsx';
 
 // Columnas de la importación y de su plantilla. Los alias aceptan planillas con otros encabezados.

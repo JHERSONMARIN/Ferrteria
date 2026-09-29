@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { api } from '../api.js';
+import { api } from '../api/client.ts';
 import CustomerSelector from '../components/CustomerSelector.jsx';
 import CheckoutModal from '../components/CheckoutModal.jsx';
 import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
 import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
-import { formatSoles } from '../utils/currency.js';
-import { findCustomerByInput } from '../utils/customers.js';
-import { buildSaleTicket } from '../utils/tickets.js';
-import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../utils/quantities.js';
-import { useToast, useConfirm, SkeletonCards, Modal } from '../components/ui/index.js';
+import { formatSoles } from '../shared/utils/currency.ts';
+import { findCustomerByInput } from '../shared/utils/customers.ts';
+import { buildSaleTicket } from '../shared/utils/tickets.ts';
+import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../shared/utils/quantities.ts';
+import { useToast, useConfirm, SkeletonCards, Modal } from '../shared/ui/index.ts';
 
 // Stock que se puede vender: lo reservado por pedidos sin despachar ya tiene dueño.
 const availableStock = (product) => roundQuantity(product.stock - (product.reserved || 0));

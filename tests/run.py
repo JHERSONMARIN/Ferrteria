@@ -103,11 +103,11 @@ def consola_vacia():
     esperar(f"{ENTORNO['CONSOLA_URL']}/api/health", "consola")
 
 
-def en_imagen(nombre, *cmd):
-    """Corre un chequeo dentro de la imagen de pruebas del backend (tiene TypeScript y las dependencias):
-    así no depende de lo que haya instalado en este equipo."""
+def en_imagen(nombre, imagen, *cmd):
+    """Corre un chequeo dentro de una imagen de pruebas (backend o web: tienen TypeScript y las
+    dependencias), así no depende de lo que haya instalado en este equipo."""
     inicio = time.time()
-    r = sh("docker", "run", "--rm", "ferresys-backend:tests", *cmd)
+    r = sh("docker", "run", "--rm", imagen, *cmd)
     salida = r.stdout + r.stderr
     (SALIDA / f"{nombre}.log").write_text(salida)
     return r.returncode == 0, salida, time.time() - inicio
@@ -116,13 +116,14 @@ def en_imagen(nombre, *cmd):
 def chequeos_estaticos():
     """Tipos (TypeScript) y pruebas unitarias del dominio: rápidos, van antes que todo lo demás."""
     hubo_error = False
-    ok, salida, seg = en_imagen("tipos", "npx", "--no-install", "tsc", "-p", ".")
-    errores = [l for l in salida.splitlines() if "error TS" in l]
-    print(f"  {'OK   ' if ok else 'FALLA'} {'tipos (TypeScript)':<32} {len(errores):>3} errores {seg:5.1f}s", flush=True)
-    for linea in errores[:10]:
-        print(f"        {linea}")
-    hubo_error |= not ok
-    ok, salida, seg = en_imagen("unitarias", "node", "--test", "src/**/*.test.ts")
+    for parte, imagen in (("backend", "ferresys-backend:tests"), ("frontend", "ferresys-web:tests")):
+        ok, salida, seg = en_imagen(f"tipos-{parte}", imagen, "npx", "--no-install", "tsc", "-p", ".")
+        errores = [l for l in salida.splitlines() if "error TS" in l]
+        print(f"  {'OK   ' if ok else 'FALLA'} {f'tipos del {parte} (TypeScript)':<32} {len(errores):>3} errores {seg:5.1f}s", flush=True)
+        for linea in errores[:10]:
+            print(f"        {linea}")
+        hubo_error |= not ok
+    ok, salida, seg = en_imagen("unitarias", "ferresys-backend:tests", "node", "--test", "src/**/*.test.ts")
     # Formato TAP ("# pass 7") fuera de una terminal; "ℹ pass 7" en una.
     n = {k: int(v) for k, v in re.findall(r"^(?:#|ℹ) (pass|fail) (\d+)$", salida, re.M)}
     print(f"  {'OK   ' if ok else 'FALLA'} {'pruebas unitarias':<32} {n.get('pass', 0):>3}/{n.get('pass', 0) + n.get('fail', 0):<3} {seg:5.1f}s", flush=True)

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../api.js';
-import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../components/ui/index.js';
+import { api } from '../api/client.ts';
+import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../shared/ui/index.ts';
 
 const STATUS_STYLE = {
   PENDIENTE: { label: 'Pendiente', badge: 'bg-warning-soft text-warning border-warning/30' },

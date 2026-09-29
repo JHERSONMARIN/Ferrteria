@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../api.js';
+import { api } from '../api/client.ts';
 import CashRegistersSettings from '../components/CashRegistersSettings.jsx';
 import BranchesSettings from '../components/BranchesSettings.jsx';
-import { DISPATCH_ROLE_OPTIONS, effectiveDispatchRole } from '../constants/dispatch.js';
-import { FEATURE_LABELS, FEATURE_ORDER } from '../constants/features.js';
-import FieldError from '../components/FieldError.jsx';
-import { borderClass } from '../utils/validators.js';
-import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../constants/modules.js';
-import { useConfirm } from '../components/ui/index.js';
+import { DISPATCH_ROLE_OPTIONS, effectiveDispatchRole } from '../shared/constants/dispatch.ts';
+import { FEATURE_LABELS, FEATURE_ORDER } from '../shared/constants/features.ts';
+import FieldError from '../shared/ui/FieldError.tsx';
+import { borderClass } from '../shared/utils/validators.ts';
+import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../shared/constants/modules.ts';
+import { useConfirm } from '../shared/ui/index.ts';
 
 const DOCUMENT_TYPE_LABELS = {
   NOTA_VENTA: 'Nota de venta',

@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
-import Modal from './ui/Modal.jsx';
-import Button from './ui/Button.jsx';
-import { readSpreadsheet, rowsToObjects, downloadTemplate, normalizeHeader } from '../utils/spreadsheet.js';
+import Modal from '../shared/ui/Modal.tsx';
+import Button from '../shared/ui/Button.tsx';
+import { readSpreadsheet, rowsToObjects, downloadTemplate, normalizeHeader } from '../shared/utils/spreadsheet.ts';
 
 const PAGE_SIZE = 25;
 const MAX_ROWS = 2000;

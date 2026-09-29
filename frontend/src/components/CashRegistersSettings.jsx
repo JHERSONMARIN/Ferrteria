@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api.js';
+import { api } from '../api/client.ts';
 
 // Cajas físicas de la empresa. Los cambios se guardan al momento (no dependen del botón Guardar).
 export default function CashRegistersSettings() {

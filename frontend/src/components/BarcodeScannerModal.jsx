@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import Modal from './ui/Modal.jsx';
+import Modal from '../shared/ui/Modal.tsx';
 
 // La cámara del navegador solo funciona en HTTPS o en este mismo equipo (localhost).
 const cameraAllowed = () => window.isSecureContext && !!navigator.mediaDevices?.getUserMedia;

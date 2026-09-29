@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../api.js';
-import { exportToExcel } from '../utils/excelExport.js';
-import FieldError from '../components/FieldError.jsx';
-import { borderClass } from '../utils/validators.js';
-import { quantityProblem, roundQuantity, formatQuantity } from '../utils/quantities.js';
-import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../components/ui/index.js';
+import { api } from '../api/client.ts';
+import { exportToExcel } from '../shared/utils/excelExport.ts';
+import FieldError from '../shared/ui/FieldError.tsx';
+import { borderClass } from '../shared/utils/validators.ts';
+import { quantityProblem, roundQuantity, formatQuantity } from '../shared/utils/quantities.ts';
+import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../shared/ui/index.ts';
 
 const COMMON_REASONS = {
   ENTRADA: [

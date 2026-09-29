@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { api } from '../api.js';
+import { api } from '../api/client.ts';
 import CheckoutModal from '../components/CheckoutModal.jsx';
 import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
-import { formatSoles } from '../utils/currency.js';
-import { customerOptionLabel } from '../utils/customers.js';
-import { buildSaleTicket } from '../utils/tickets.js';
-import { useConfirm } from '../components/ui/index.js';
+import { formatSoles } from '../shared/utils/currency.ts';
+import { customerOptionLabel } from '../shared/utils/customers.ts';
+import { buildSaleTicket } from '../shared/utils/tickets.ts';
+import { useConfirm } from '../shared/ui/index.ts';
 
 const REFRESH_MS = 5000;
 
