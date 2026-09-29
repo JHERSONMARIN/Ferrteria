@@ -1,10 +1,11 @@
 // La licencia llega en las variables de entorno de la instancia: las escribe deploy/set-plan.sh o la
 // consola de VALETEC en el .env de la empresa. Se lee una vez al arrancar; cambiarla requiere reiniciar.
 import { z } from 'zod';
-import { parseFeatures, parseLimit, parseModules, type License } from '../domain/license.ts';
+import { parseFeatures, parseIndustry, parseLimit, parseModules, type License } from '../domain/license.ts';
 
 const LicenseEnvironment = z.object({
   PLAN: z.string().optional(),
+  INDUSTRY: z.string().optional(),
   LICENSED_MODULES: z.string().optional(),
   LICENSED_FEATURES: z.string().optional(),
   MAX_USERS: z.string().optional(),
@@ -25,11 +26,15 @@ export function readLicense(
   const vars = LicenseEnvironment.parse(env);
   const modules = parseModules(vars.LICENSED_MODULES, availableModules, alwaysEnabledModules);
   const features = parseFeatures(vars.LICENSED_FEATURES);
+  const industry = parseIndustry(vars.INDUSTRY);
   if (modules.unknown.length > 0) {
     console.warn(`[license] Se ignoran módulos desconocidos en LICENSED_MODULES: ${modules.unknown.join(', ')}`);
   }
   if (features.unknown.length > 0) {
     console.warn(`[license] Se ignoran funciones desconocidas en LICENSED_FEATURES: ${features.unknown.join(', ')}`);
+  }
+  if (industry.unknown) {
+    console.warn(`[license] Rubro desconocido en INDUSTRY (${industry.unknown}): se usa ${industry.industry}.`);
   }
 
   let expiresAt = vars.LICENSE_EXPIRES_AT?.trim() || null;
@@ -40,6 +45,7 @@ export function readLicense(
 
   return {
     plan: vars.PLAN?.trim() || null,
+    industry: industry.industry,
     modules: modules.licensed,
     features: features.licensed,
     limits: {

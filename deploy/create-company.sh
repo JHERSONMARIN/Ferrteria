@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Crea una empresa nueva: base de datos limpia, usuario de BD propio, archivo .env e instancia.
 #
-#   Uso: deploy/create-company.sh <identificador> "<Razón social>" <puerto_web> [plan]
+#   Uso: deploy/create-company.sh <identificador> "<Razón social>" <puerto_web> [plan] [--rubro <rubro>]
 #   Ej.: deploy/create-company.sh ferreteriax "Ferretería X S.A.C." 23001 profesional
 #   Sin plan, la empresa queda con todos los módulos y sin límites (desarrollo y pruebas).
+#   Sin rubro, ferretería. Los rubros están en packages/shared/industries.js.
 set -euo pipefail
 
 DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -16,14 +17,31 @@ DB_CONTAINER="ferresys-infra-db"
 fail() { echo "❌ $*" >&2; exit 1; }
 random_secret() { openssl rand -hex "$1"; }
 
-[ $# -ge 3 ] && [ $# -le 4 ] || fail "Uso: $0 <identificador> \"<Razón social>\" <puerto_web> [plan]"
+USO="Uso: $0 <identificador> \"<Razón social>\" <puerto_web> [plan] [--rubro <rubro>]"
+[ $# -ge 3 ] || fail "$USO"
 SLUG="$1"
 COMPANY_NAME="$2"
 WEB_PORT="$3"
-PLAN="${4:-}"
+shift 3
+PLAN=""; INDUSTRY="ferreteria"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --rubro) INDUSTRY="${2:-}"; shift 2 ;;
+    -*) fail "Opción desconocida: $1" ;;
+    *) [ -z "$PLAN" ] || fail "$USO"; PLAN="$1"; shift ;;
+  esac
+done
 
 [[ "$SLUG" =~ ^[a-z][a-z0-9-]{1,30}$ ]] || fail "Identificador inválido: use minúsculas, números y guiones (2 a 31 caracteres, empieza con letra)."
 [[ "$WEB_PORT" =~ ^[0-9]{2,5}$ ]] && [ "$WEB_PORT" -ge 1024 ] && [ "$WEB_PORT" -le 65535 ] || fail "Puerto inválido: use un número entre 1024 y 65535."
+# El catálogo de rubros se lee con node para no duplicarlo en bash.
+node -e '
+  import(process.argv[1]).then(({ INDUSTRIES }) => {
+    if (!Object.hasOwn(INDUSTRIES, process.argv[2])) {
+      console.error(`Rubro desconocido. Disponibles: ${Object.keys(INDUSTRIES).join(", ")}`); process.exit(1);
+    }
+  });
+' "$DEPLOY_DIR/../packages/shared/industries.js" "$INDUSTRY" || fail "Rubro inválido: $INDUSTRY"
 [ -n "${COMPANY_NAME// }" ] || fail "La razón social no puede estar vacía."
 [[ "$COMPANY_NAME" != *\"* && "$COMPANY_NAME" != *'$'* && "$COMPANY_NAME" != *\\* ]] || fail "La razón social no puede contener comillas dobles, \$ ni barras invertidas."
 
@@ -78,6 +96,7 @@ WEB_PORT=$WEB_PORT
 WEB_BIND=${WEB_BIND:-127.0.0.1}
 DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@$DB_CONTAINER:5432/$DB_NAME?schema=public&connection_limit=5
 DEMO_MODE=false
+INDUSTRY=$INDUSTRY
 LICENSED_MODULES=
 JWT_SECRET=$(random_secret 32)
 INITIAL_ADMIN_USER=admin
@@ -115,6 +134,7 @@ cat <<INFO
    Usuario:     admin
    Contraseña:  $ADMIN_PASSWORD   (temporal: se pedirá cambiarla al ingresar)
    Plan:        ${PLAN:-sin plan (todos los módulos)}
+   Rubro:       $INDUSTRY
    Base datos:  $DB_NAME
    Config.:     $COMPANY_ENV
 INFO

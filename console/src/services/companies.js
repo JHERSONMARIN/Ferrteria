@@ -4,6 +4,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { DEFAULT_INDUSTRY } from '@ferresys/shared/industries';
 
 const execFileAsync = promisify(execFile);
 
@@ -146,6 +147,7 @@ export async function getCompany(slug, { withUsage = false } = {}) {
     port: Number(env.WEB_PORT) || null,
     url: env.WEB_PORT ? `http://127.0.0.1:${env.WEB_PORT}` : null,
     plan: env.PLAN || null,
+    industry: env.INDUSTRY || DEFAULT_INDUSTRY,
     modules: list(env.LICENSED_MODULES),
     features: list(env.LICENSED_FEATURES),
     limits: {

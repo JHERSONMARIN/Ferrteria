@@ -2,12 +2,16 @@
   "name": "@ferresys/shared",
   "version": "1.0.0",
   "private": true,
-  "description": "Piezas comunes del backend de las empresas y de la consola de VALETEC: contraseñas, sesiones, límite de intentos, registro y errores.",
+  "description": "Piezas comunes del backend de las empresas y de la consola de VALETEC: contraseñas, sesiones, límite de intentos, registro, errores y rubros.",
   "type": "module",
   "exports": {
     "./errors": {
       "types": "./errors.d.ts",
       "default": "./errors.js"
+    },
+    "./industries": {
+      "types": "./industries.d.ts",
+      "default": "./industries.js"
     },
     "./logger": {
       "types": "./logger.d.ts",

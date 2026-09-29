@@ -1,6 +1,7 @@
 // Licencia de la empresa: qué módulos y funciones tiene contratados, con qué límites y hasta cuándo.
 // Reglas puras: no leen el entorno ni conocen HTTP (eso está en infrastructure/ e interface/).
 import { AppError } from '@ferresys/shared/errors';
+import { DEFAULT_INDUSTRY, isIndustry, type Industry } from '@ferresys/shared/industries';
 
 // Funciones licenciables que no son módulos del menú. El catálogo de planes está en deploy/plans.json.
 export const FEATURES = [
@@ -24,6 +25,8 @@ export type Limits = Record<LimitName, number | null>;
 
 export interface License {
   plan: string | null;
+  /** Rubro de la empresa: decide qué paquete extiende al núcleo. */
+  industry: Industry;
   modules: readonly string[];
   features: readonly Feature[];
   limits: Limits;
@@ -93,6 +96,15 @@ export function parseFeatures(raw: string | undefined): ParsedList<Feature> {
     licensed: FEATURES.filter(f => requested.includes(f)),
     unknown: requested.filter(f => !(FEATURES as readonly string[]).includes(f)),
   };
+}
+
+// Rubro (INDUSTRY=ferreteria). Sin valor: ferretería, como todas las empresas anteriores a los rubros.
+// Un rubro desconocido no se adivina: quien lee el entorno avisa y la empresa sigue como ferretería.
+export function parseIndustry(raw: string | undefined): { industry: Industry; unknown: string | null } {
+  const value = raw?.trim().toLowerCase();
+  if (!value) return { industry: DEFAULT_INDUSTRY, unknown: null };
+  if (isIndustry(value)) return { industry: value, unknown: null };
+  return { industry: DEFAULT_INDUSTRY, unknown: value };
 }
 
 /** 0, vacío o un valor inválido = sin límite. */

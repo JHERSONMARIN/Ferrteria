@@ -2,7 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  FEATURES, LicenseError, assertFeature, assertWithinLimit, licenseStatus, parseFeatures, parseLimit, parseModules,
+  FEATURES, LicenseError, assertFeature, assertWithinLimit, licenseStatus, parseFeatures, parseIndustry, parseLimit,
+  parseModules,
   type License,
 } from './license.ts';
 
@@ -11,6 +12,7 @@ const ALWAYS = ['personal'];
 
 const license = (overrides: Partial<License> = {}): License => ({
   plan: 'profesional',
+  industry: 'ferreteria',
   modules: AVAILABLE,
   features: [...FEATURES],
   limits: { maxUsers: null, maxBranches: null, maxCashRegisters: null },
@@ -35,6 +37,12 @@ test('funciones: sin variable o "*", todas; vacía, ninguna (plan Básico)', () 
   assert.deepEqual(parseFeatures('*').licensed, [...FEATURES]);
   assert.deepEqual(parseFeatures('').licensed, []);
   assert.deepEqual(parseFeatures('audit,branches,magia'), { licensed: ['branches', 'audit'], unknown: ['magia'] });
+});
+
+test('rubro: sin valor, ferretería; uno desconocido se informa y queda ferretería', () => {
+  assert.deepEqual(parseIndustry(undefined), { industry: 'ferreteria', unknown: null });
+  assert.deepEqual(parseIndustry(' Ferreteria '), { industry: 'ferreteria', unknown: null });
+  assert.deepEqual(parseIndustry('panaderia'), { industry: 'ferreteria', unknown: 'panaderia' });
 });
 
 test('límites: 0, vacío o inválido = sin límite', () => {

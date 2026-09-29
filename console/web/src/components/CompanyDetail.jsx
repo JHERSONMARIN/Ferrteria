@@ -83,6 +83,9 @@ export default function CompanyDetail({ company, plans, themes, modules, onClose
               <div><p className="text-[11px] text-slate-500">Ventas del mes</p><p className="font-bold">{company.usage?.salesThisMonth ?? '—'}</p></div>
             </div>
             <p className="text-[11px] text-slate-500 mt-2">
+              Rubro: <span className="font-semibold">{plans?.rubros?.[company.industry]?.nombre ?? company.industry}</span>
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">
               Versión: <span className="font-mono">{company.version?.commit || 'sin marcar (anterior a las versiones)'}</span>
               {company.version?.outdated && (
                 <span className="ml-1 font-semibold text-amber-700">

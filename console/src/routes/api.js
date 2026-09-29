@@ -7,6 +7,7 @@ import {
 } from '../services/commands.js';
 import { login, userFromToken, changePassword, sessionCookie, clearedCookie, readCookie, SESSION_COOKIE } from '../services/auth.js';
 import { AppError, errorBody } from '@ferresys/shared/errors';
+import { INDUSTRIES } from '@ferresys/shared/industries';
 import { secondsBlocked, registerFailure, registerSuccess } from '@ferresys/shared/loginThrottle';
 import { setRequestUser } from '@ferresys/shared/logger';
 
@@ -75,9 +76,10 @@ router.post('/auth/change-password', handle('cambiar la contraseña', async (req
 }));
 
 // ---------- Planes ----------
+// Con los rubros: se eligen junto con el plan al crear la empresa.
 router.get('/planes', handle('listar los planes', async (req, res) => {
   const { planes, adicionales } = readPlans();
-  res.json({ planes, adicionales });
+  res.json({ planes, adicionales, rubros: INDUSTRIES });
 }));
 
 // ---------- Módulos ----------
