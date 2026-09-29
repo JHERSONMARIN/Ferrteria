@@ -4,7 +4,7 @@ import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } fro
 import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers } from './deliveries.js';
 import { recordAudit } from './audit.js';
-import { requireOpenSession } from './cashRegisters.js';
+import { requireOpenSession } from '../modules/cash/index.ts';
 import { requireFeature } from '../modules/licensing/index.ts';
 import { AppError, errorBody } from '@ferresys/shared/errors';
 

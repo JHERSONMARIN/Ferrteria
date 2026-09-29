@@ -25,6 +25,11 @@ const SYSTEM_USER_NAME = 'Sistema';
 const MAX_SUMMARY_LENGTH = 300;
 
 // user: quien hizo la operación; sin usuario se registra como "Sistema" (ej. pedidos vencidos).
+/**
+ * @param {{ auditLog: { create: (args: any) => Promise<unknown> } }} db El cliente de Prisma o una transacción.
+ * @param {{ action: string, entity: string, entityId?: string | number | null, summary: string,
+ *           details?: Record<string, unknown> | null, user?: { id: number, name: string } | null }} entry
+ */
 export async function recordAudit(db, { action, entity, entityId = null, summary, details = null, user = null }) {
   if (!AUDIT_ACTIONS[action]) throw new Error(`Acción de auditoría desconocida: ${action}`);
   await db.auditLog.create({
