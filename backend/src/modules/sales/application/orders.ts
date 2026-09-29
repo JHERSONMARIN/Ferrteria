@@ -9,6 +9,7 @@ import type { SessionUser } from '../../../types/express.d.ts';
 import { requireOpenSession } from '../../cash/index.ts';
 import { assertBranchDelivers, assertCanDeliver, parseDeliveryRequest, scheduleDeliveryForSale } from '../../deliveries/index.ts';
 import { consumeReservedStock, releaseReservedStock, reserveStock } from '../../inventory/index.ts';
+import { industryHooks } from '../../../industries/index.ts';
 import { canDispatch } from '../domain/dispatch.ts';
 import {
   EXPIRED_REASON, SaleError, assertCanCancel, assertExpectedTotal, assertSameBranch, endOfBusinessDay, normalizeCart,
@@ -18,7 +19,7 @@ import { nextDocumentNumber } from '../infrastructure/documentSeries.ts';
 import * as repo from '../infrastructure/saleRepository.ts';
 import type { Db, OrderRow } from '../infrastructure/saleRepository.ts';
 import { toId } from './directSale.ts';
-import { applyDiscount, auditDiscount, paymentFor, priceLines } from './pricing.ts';
+import { applyDiscount, auditDiscount, paymentFor, priceLines, saleLinesFor } from './pricing.ts';
 
 type Client = typeof prisma;
 
@@ -74,8 +75,10 @@ const orderBranch = (order: OrderRow) => ({ branchId: order.branchId, branchName
 async function dispatchLines(tx: Tx, order: OrderRow, numDoc: string | null, userId: number) {
   for (const line of repo.linesOf(order)) {
     const stockAfter = await consumeReservedStock(tx, line.id, line.baseQty, order.branchId);
-    await repo.writeKardexExit(tx, {
-      productId: line.id, qty: line.baseQty, stockAfter, ref: `Venta ${numDoc} (despacho)`, userId, branchId: order.branchId,
+    const ref = `Venta ${numDoc} (despacho)`;
+    await repo.writeKardexExit(tx, { productId: line.id, qty: line.baseQty, stockAfter, ref, userId, branchId: order.branchId });
+    await industryHooks.onStockMovement(tx, {
+      direction: 'out', source: 'sale', productId: line.id, qty: line.baseQty, branchId: order.branchId, ref, userId,
     });
   }
 }
@@ -95,6 +98,7 @@ export async function createOrder(client: Client, payload: Record<string, unknow
     const { lines, total: subtotal } = await priceLines(tx, items, quoteId, clienteId);
     const { discount, total } = applyDiscount(subtotal, discountRequest, user, Number(settings.maxDiscountPercent));
     assertExpectedTotal(payload.totalEsperado, lines, total);
+    await industryHooks.beforeSale(tx, { kind: 'order', branchId: user.branchId, customerId: clienteId, lines: saleLinesFor(lines), user });
 
     const order = await tx.venta.create({
       data: {

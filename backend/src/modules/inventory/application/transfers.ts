@@ -3,6 +3,7 @@
 // de kardex en cada sucursal. El total de la empresa no cambia.
 import type { prisma } from '../../../db.ts';
 import { recordAudit } from '../../audit/index.ts';
+import { industryHooks } from '../../../industries/index.ts';
 import { resolveBranchId } from '../../branches/index.ts';
 import { quantityProblem } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
@@ -87,6 +88,9 @@ export async function createTransfer(client: Client, input: TransferInput, user:
           { productoId: item.id, type: 'ENTRADA', qty: item.qty, stockAfter: destinationAfter, ref: `${number} desde ${from.name}`, usuarioId: user.id, branchId: toBranchId },
         ],
       });
+      const movement = { source: 'transfer', productId: item.id, qty: item.qty, userId: user.id } as const;
+      await industryHooks.onStockMovement(tx, { ...movement, direction: 'out', branchId: fromBranchId, ref: `${number} a ${to.name}` });
+      await industryHooks.onStockMovement(tx, { ...movement, direction: 'in', branchId: toBranchId, ref: `${number} desde ${from.name}` });
     }
 
     const describe = (id: number) => {

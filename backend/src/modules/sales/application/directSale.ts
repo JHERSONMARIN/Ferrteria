@@ -5,13 +5,14 @@ import type { SessionUser } from '../../../types/express.d.ts';
 import { requireOpenSession } from '../../cash/index.ts';
 import { assertBranchDelivers, parseDeliveryRequest, scheduleDeliveryForSale, type DeliveryRequest } from '../../deliveries/index.ts';
 import { reserveStock, takeAvailableStock } from '../../inventory/index.ts';
+import { industryHooks } from '../../../industries/index.ts';
 import {
   SaleError, assertExpectedTotal, normalizeCart, parseDiscountRequest, publicLines, toDocType, toPayMethod, unitColumns,
   type CartItem, type DiscountRequest, type DocType, type PayMethod,
 } from '../domain/sale.ts';
 import { nextDocumentNumber } from '../infrastructure/documentSeries.ts';
 import * as repo from '../infrastructure/saleRepository.ts';
-import { applyDiscount, auditDiscount, markQuoteConverted, paymentFor, priceLines } from './pricing.ts';
+import { applyDiscount, auditDiscount, markQuoteConverted, paymentFor, priceLines, saleLinesFor } from './pricing.ts';
 
 type Client = typeof prisma;
 
@@ -40,6 +41,9 @@ async function executeSale(tx: Tx, data: SaleData) {
   const { lines, total: subtotal } = await priceLines(tx, data.items, data.quoteId, data.clienteId);
   const { discount, total } = applyDiscount(subtotal, data.discountRequest, data.user, data.maxDiscountPercent);
   assertExpectedTotal(data.expectedTotal, lines, total);
+  await industryHooks.beforeSale(tx, {
+    kind: 'direct', branchId: data.user.branchId, customerId: data.clienteId, lines: saleLinesFor(lines), user: data.user,
+  });
   if (data.quoteId) await markQuoteConverted(tx, data.quoteId);
 
   const payment = await paymentFor(tx, { payMethod: data.payMethod, total, mixCash: data.mixCash, mixDigital: data.mixDigital, clienteId: data.clienteId });
@@ -89,13 +93,10 @@ async function executeSale(tx: Tx, data: SaleData) {
       continue;
     }
     const stockAfter = await takeAvailableStock(tx, line.id, line.baseQty, data.user.branchId);
-    await repo.writeKardexExit(tx, {
-      productId: line.id,
-      qty: line.baseQty,
-      stockAfter,
-      ref: data.quoteId ? `Venta ${numDoc} (por cotización)` : `Venta ${numDoc}`,
-      userId: data.sellerId,
-      branchId: data.user.branchId,
+    const ref = data.quoteId ? `Venta ${numDoc} (por cotización)` : `Venta ${numDoc}`;
+    await repo.writeKardexExit(tx, { productId: line.id, qty: line.baseQty, stockAfter, ref, userId: data.sellerId, branchId: data.user.branchId });
+    await industryHooks.onStockMovement(tx, {
+      direction: 'out', source: 'sale', productId: line.id, qty: line.baseQty, branchId: data.user.branchId, ref, userId: data.sellerId,
     });
   }
 

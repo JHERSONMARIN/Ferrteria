@@ -1,10 +1,11 @@
 // Precios, descuentos y cobro: lo que comparten la venta directa, los pedidos y las cotizaciones.
 import { recordAudit } from '../../audit/index.ts';
 import { requireFeature } from '../../licensing/index.ts';
+import type { SaleLine } from '../../../industries/index.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import {
   SaleError, assertCreditAvailable, assertSellable, computeDiscount, isQuoteValid, lineKey, priceLine, splitPayment,
-  sumLines, unitPriceFor, type CartItem, type DiscountRequest, type PayMethod,
+  sumLines, unitPriceFor, type CartItem, type DiscountRequest, type PayMethod, type PricedLine,
 } from '../domain/sale.ts';
 import * as repo from '../infrastructure/saleRepository.ts';
 import type { Db } from '../infrastructure/saleRepository.ts';
@@ -41,6 +42,10 @@ export async function priceLines(db: Db, items: CartItem[], quoteId: number | nu
   });
   return { lines, total: sumLines(lines) };
 }
+
+// Las líneas como las ve un paquete de rubro (industries/hooks.ts).
+export const saleLinesFor = (lines: readonly PricedLine[]): SaleLine[] =>
+  lines.map(l => ({ productId: l.id, unitId: l.unitId, qty: l.qty, baseQty: l.baseQty, name: l.name }));
 
 export async function markQuoteConverted(db: Db, quoteId: number): Promise<void> {
   if (!(await repo.convertQuoteIfPending(db, quoteId))) throw new SaleError('La cotización ya fue procesada.', 409);

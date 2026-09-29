@@ -6,6 +6,7 @@ import { resolveBranchId } from '../branches/index.ts';
 import { quantityProblem, roundMoney } from '../../utils/quantities.ts';
 import type { SessionUser } from '../../types/express.d.ts';
 import { addStock } from '../inventory/index.ts';
+import { industryHooks } from '../../industries/index.ts';
 
 type Client = typeof prisma;
 
@@ -86,11 +87,12 @@ export async function registerPurchase(client: Client, input: PurchaseInput, use
         data: { compraId: purchase.id, productoId: line.id, quantity: line.qty, unitPrice: line.cost, subtotal: line.subtotal },
       });
       const stockAfter = await addStock(tx, line.id, line.qty, branchId);
+      const ref = `Compra a Proveedor (Doc: ${numDoc})`;
       await tx.movimientoKardex.create({
-        data: {
-          productoId: line.id, type: 'ENTRADA', qty: line.qty, stockAfter, ref: `Compra a Proveedor (Doc: ${numDoc})`,
-          usuarioId: user.id, branchId,
-        },
+        data: { productoId: line.id, type: 'ENTRADA', qty: line.qty, stockAfter, ref, usuarioId: user.id, branchId },
+      });
+      await industryHooks.onStockMovement(tx, {
+        direction: 'in', source: 'purchase', productId: line.id, qty: line.qty, branchId, ref, userId: user.id,
       });
     }
     return purchase;
