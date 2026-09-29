@@ -27,8 +27,9 @@ Termina con código 0 si todo pasa y 1 si algo falla, así que sirve igual en un
 
 ## Qué hace
 
-1. Levanta `tests/docker-compose.yml`: PostgreSQL con los datos en memoria, backend y web, en
-   `http://127.0.0.1:23990` (se cambia con `TEST_WEB_PORT`).
+1. Levanta `tests/docker-compose.yml`: PostgreSQL con los datos en memoria, backend y web en
+   `http://127.0.0.1:23990` (`TEST_WEB_PORT`), y la consola de VALETEC en `http://127.0.0.1:23991`
+   (`TEST_CONSOLE_PORT`). La consola de pruebas no tiene acceso a Docker ni ve las empresas reales.
 2. Antes de cada **cadena** borra la base: la empresa queda recién creada, con el administrador `admin`
    y la clave temporal `ClaveTemporal2026`.
 3. Corre en orden las pruebas de la cadena. Dentro de una cadena comparten la base: cada prueba parte
@@ -50,6 +51,7 @@ Las cadenas están en `CADENAS`, en `tests/run.py`.
 |---|---|---|
 | Sesiones, contraseñas, permisos y licencia | `seguridad.py` | `seguridad.mjs` |
 | Registro, códigos de error y versión | `observabilidad.py` | |
+| Consola de VALETEC: sesión, permisos, límite de intentos | `consola.py` | |
 | Pedidos, cobro, despacho y reservas de stock | `pedidos_por_estados.py` | `pedidos_por_estados.mjs` |
 | Envíos a domicilio y repartidores | `envios.py` | `envios.mjs` |
 | Fracciones, precios mayoristas y descuentos | `cantidades_y_precios.py` | `cantidades_y_precios.mjs` |
