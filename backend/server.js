@@ -10,8 +10,7 @@ import { creditRoutes as creditosRoutes, customerRoutes as clientesRoutes } from
 import { deliveryRoutes as entregasRoutes } from './src/modules/deliveries/index.ts';
 import dashboardRoutes from './src/routes/dashboard.js';
 import { cashRoutes as cajaRoutes } from './src/modules/cash/index.ts';
-import proveedoresRoutes from './src/routes/proveedores.js';
-import comprasRoutes from './src/routes/compras.js';
+import { purchaseRoutes as comprasRoutes, supplierRoutes as proveedoresRoutes } from './src/modules/purchasing/index.ts';
 import { categoryRoutes as categoriesRoutes, productRoutes as productosRoutes } from './src/modules/catalog/index.ts';
 import settingsRoutes from './src/routes/settings.js';
 import auditoriaRoutes from './src/routes/auditoria.js';
