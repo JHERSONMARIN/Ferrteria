@@ -53,6 +53,8 @@ services:
       MAX_CASH_REGISTERS: ${MAX_CASH_REGISTERS:-0}
       LICENSE_EXPIRES_AT: ${LICENSE_EXPIRES_AT:-}
       PLAN: ${PLAN:-}
+      # Rubro de la empresa (packages/shared/industries.js). Se elige al crearla; sin valor, ferretería.
+      INDUSTRY: ${INDUSTRY:-ferreteria}
     depends_on:
       db:
         condition: service_healthy

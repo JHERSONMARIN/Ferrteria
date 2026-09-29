@@ -136,6 +136,16 @@ verificar("Sin LICENSED_FEATURES (empresa sin plan) están todas", "branches" in
 st, r = admin.api("POST", "/caja/registros", {"name": "Caja Sin Plan"})
 verificar("…y se puede crear otra caja", st == 201, (st, r))
 
+print("\n=== Rubro ===")
+st, r = admin.api("GET", "/settings")
+verificar("Sin INDUSTRY la empresa es ferretería", r.get("industry") == "ferreteria", r.get("industry"))
+reiniciar_backend(INDUSTRY="panaderia")
+admin = Navegador("admin", "AdminCentro2026")
+st, r = admin.api("GET", "/settings")
+verificar("Un rubro desconocido no deja a la empresa sin sistema: sigue como ferretería", st == 200 and r.get("industry") == "ferreteria", (st, r.get("industry")))
+reiniciar_backend()
+admin = Navegador("admin", "AdminCentro2026")
+
 print("\n=== Límite de intentos de login ===")
 atacante = Navegador()
 codigos = [atacante.api("POST", "/auth/login", {"user": "admin", "pass": f"mala{i}"})[0] for i in range(5)]

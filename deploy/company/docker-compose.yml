@@ -33,6 +33,8 @@ services:
       MAX_CASH_REGISTERS: ${MAX_CASH_REGISTERS:-0}
       LICENSE_EXPIRES_AT: ${LICENSE_EXPIRES_AT:-}
       PLAN: ${PLAN:-}
+      # Rubro de la empresa (packages/shared/industries.js). Se elige al crearla; sin valor, ferretería.
+      INDUSTRY: ${INDUSTRY:-ferreteria}
       # Accesos rápidos en la pantalla de inicio, solo para entornos de prueba (usuario:clave:Etiqueta,…).
       QUICK_LOGIN: ${QUICK_LOGIN:-}
       INITIAL_ADMIN_USER: ${INITIAL_ADMIN_USER:-admin}

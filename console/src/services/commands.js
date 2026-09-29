@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { prisma } from '../db.js';
 import { AppError } from '@ferresys/shared/errors';
+import { DEFAULT_INDUSTRY, INDUSTRIES, isIndustry } from '@ferresys/shared/industries';
 import { DEPLOY_DIR, readPlans, readThemes, readModules, companySlugs, readCompanyEnv, currentCommit } from './companies.js';
 
 const execFileAsync = promisify(execFile);
@@ -72,7 +73,7 @@ async function run({ script, args, action, slug, summary, user }) {
 
 // ---------- Acciones ----------
 
-export async function createCompany({ slug, name, port, plan, contact, phone, email, notes }, user) {
+export async function createCompany({ slug, name, port, plan, industry = DEFAULT_INDUSTRY, contact, phone, email, notes }, user) {
   assertSlug(slug);
   if (companySlugs().includes(slug)) throw new CommandError(`La empresa '${slug}' ya existe.`, 409);
   const legalName = String(name ?? '').trim();
@@ -81,11 +82,13 @@ export async function createCompany({ slug, name, port, plan, contact, phone, em
   if (!Number.isInteger(webPort) || webPort < 1024 || webPort > 65535) throw new CommandError('Puerto inválido (1024 a 65535).');
   const plans = readPlans().planes;
   if (plan && !plans[plan]) throw new CommandError(`Plan desconocido: ${plan}.`);
+  if (!isIndustry(industry)) throw new CommandError(`Rubro desconocido: ${industry}.`);
 
   const output = await run({
     script: 'create-company.sh',
-    args: plan ? [slug, legalName, String(webPort), plan] : [slug, legalName, String(webPort)],
-    action: 'COMPANY_CREATED', slug, summary: `Empresa ${slug} creada (${legalName})${plan ? `, plan ${plan}` : ''}`, user,
+    args: [slug, legalName, String(webPort), ...(plan ? [plan] : []), '--rubro', industry],
+    action: 'COMPANY_CREATED', slug,
+    summary: `Empresa ${slug} creada (${legalName}, ${INDUSTRIES[industry].nombre})${plan ? `, plan ${plan}` : ''}`, user,
   });
 
   await prisma.managedCompany.upsert({

@@ -17,6 +17,7 @@ export const LICENSED_MODULES = license.modules;
 export const LICENSED_FEATURES = license.features;
 export const LIMITS = license.limits;
 export const PLAN_NAME = license.plan;
+export const INDUSTRY = license.industry;
 
 export const isModuleLicensed = (moduleId: string) => hasModule(license, moduleId);
 export const isFeatureLicensed = (feature: Feature) => hasFeature(license, feature);

@@ -49,6 +49,9 @@ export interface Theme {
 
 export type LimitName = 'maxUsers' | 'maxBranches' | 'maxCashRegisters';
 
+/** Rubro de la empresa (packages/shared/industries.js). */
+export type Industry = 'ferreteria';
+
 export interface LicenseStatus {
   plan: string | null;
   /** AAAA-MM-DD; null = sin vencimiento. */
@@ -68,6 +71,7 @@ export interface SettingsResponse {
   /** null = sin límite. */
   limits: Record<LimitName, number | null>;
   license: LicenseStatus;
+  industry: Industry;
 }
 
 /** PUT /api/settings (solo los campos que se cambian). */
