@@ -70,3 +70,5 @@ pantallas que usan el campo cambiado.
 
 Cada módulo indica al inicio de su `index.ts` si es del **núcleo** (igual para cualquier comercio) o
 propio de **ferretería**. Lo propio del rubro es lo que un paquete de rubro podrá reemplazar o extender.
+Los paquetes de rubro viven en `src/industries/` y se enganchan en pasos concretos de `application/`
+(ver su README).

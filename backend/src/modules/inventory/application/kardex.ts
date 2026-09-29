@@ -1,6 +1,7 @@
 // Kardex: historial de movimientos de stock y ajustes manuales (entradas, mermas, conteos).
 import type { prisma } from '../../../db.ts';
 import { recordAudit } from '../../audit/index.ts';
+import { industryHooks } from '../../../industries/index.ts';
 import { resolveBranchId } from '../../branches/index.ts';
 import { quantityProblem } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
@@ -94,6 +95,11 @@ export async function recordManualMovement(client: Client, input: ManualMovement
         usuarioId: user.id,
         branchId,
       },
+    });
+
+    await industryHooks.onStockMovement(tx, {
+      direction: input.type === 'ENTRADA' ? 'in' : 'out', source: 'manual', productId: product.id, qty: input.qty, branchId,
+      ref: km.ref, userId: user.id,
     });
 
     await recordAudit(tx, {
