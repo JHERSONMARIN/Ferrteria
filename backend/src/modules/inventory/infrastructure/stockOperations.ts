@@ -1,37 +1,37 @@
-// Operaciones de stock atómicas por sucursal. Disponible = stock - reserved (reserved: pedidos sin
-// despachar). Cada operación es un UPDATE condicional sobre la fila de la sucursal: si otra transacción
-// tomó las unidades antes, no se actualiza ninguna fila y se informa el disponible real. Después se
-// ajusta el total de la empresa (productos.stock/reserved) con la misma cantidad, en la misma
-// transacción, así el total siempre es la suma de las sucursales. El orden (sucursal y luego producto)
-// es el mismo en todas las operaciones para que las transacciones concurrentes no se bloqueen entre sí.
-// Las fechas se escriben en UTC porque la sesión de PostgreSQL está en hora de Lima.
+// Operaciones de stock atómicas por sucursal. Cada una es un UPDATE condicional sobre la fila de la
+// sucursal: si otra transacción tomó las unidades antes, no se actualiza ninguna fila y se informa el
+// disponible real. Después se ajusta el total de la empresa (productos.stock/reserved) con la misma
+// cantidad, en la misma transacción, así el total siempre es la suma de las sucursales. El orden
+// (sucursal y luego producto) es el mismo en todas las operaciones para que las transacciones
+// concurrentes no se bloqueen entre sí. Las fechas se escriben en UTC porque la sesión de PostgreSQL
+// está en hora de Lima.
+import type { prisma } from '../../../db.ts';
+import { roundQuantity } from '../../../utils/quantities.js';
+import { StockError, insufficientStockMessage } from '../domain/inventory.ts';
 
-import { roundQuantity } from '../utils/quantities.js';
-import { AppError } from '@ferresys/shared/errors';
+/** El cliente de Prisma o una transacción. */
+export type Tx = Pick<typeof prisma, '$executeRaw' | '$queryRaw' | 'producto' | 'branchStock' | 'branch'>;
 
-export class StockError extends AppError {
-  static area = 'STOCK';
-  // Casi siempre es falta de stock en la sucursal: 409 por defecto.
-  constructor(message, status = 409, codigo = null) {
-    super(message, status, codigo);
-  }
-}
-
-async function insufficientStock(tx, productId, branchId) {
+async function insufficientStock(tx: Tx, productId: number, branchId: number) {
   const product = await tx.producto.findUnique({ where: { id: productId }, select: { name: true, active: true } });
   if (!product || !product.active) return new StockError('El producto no existe o no está activo.');
   const row = await tx.branchStock.findUnique({
     where: { branchId_productoId: { branchId, productoId: productId } },
     select: { stock: true, reserved: true },
   });
-  const available = row ? Math.max(row.stock - row.reserved, 0) : 0;
-  return new StockError(`Stock insuficiente para ${product.name}. Disponible: ${available}.`, 409, 'STOCK_INSUFICIENTE');
+  const available = row ? Math.max(Number(row.stock) - Number(row.reserved), 0) : 0;
+  return new StockError(insufficientStockMessage(product.name, available), 409, 'STOCK_INSUFICIENTE');
 }
 
-const branchStockAfter = async (tx, productId, branchId) =>
-  (await tx.branchStock.findUnique({ where: { branchId_productoId: { branchId, productoId: productId } }, select: { stock: true } })).stock;
+async function branchStockAfter(tx: Tx, productId: number, branchId: number): Promise<number> {
+  const row = await tx.branchStock.findUnique({
+    where: { branchId_productoId: { branchId, productoId: productId } },
+    select: { stock: true },
+  });
+  return Number(row?.stock ?? 0);
+}
 
-async function adjustProductTotals(tx, productId, stockDelta, reservedDelta) {
+async function adjustProductTotals(tx: Tx, productId: number, stockDelta: number, reservedDelta: number) {
   await tx.$executeRaw`
     UPDATE "productos" SET "stock" = "stock" + ${stockDelta}, "reserved" = "reserved" + ${reservedDelta},
       "updatedAt" = (NOW() AT TIME ZONE 'UTC')
@@ -39,7 +39,7 @@ async function adjustProductTotals(tx, productId, stockDelta, reservedDelta) {
 }
 
 // Venta inmediata o salida manual: descuenta del disponible de la sucursal. Devuelve el stock de la sucursal.
-export async function takeAvailableStock(tx, productId, qty, branchId) {
+export async function takeAvailableStock(tx: Tx, productId: number, qty: number, branchId: number): Promise<number> {
   const updated = await tx.$executeRaw`
     UPDATE "branch_stock" SET "stock" = "stock" - ${qty}
     WHERE "branchId" = ${branchId} AND "productoId" = ${productId} AND "stock" - "reserved" >= ${qty}
@@ -51,17 +51,17 @@ export async function takeAvailableStock(tx, productId, qty, branchId) {
 
 // Compra, entrada manual o transferencia recibida: suma al stock de la sucursal (crea la fila si no
 // existía). Devuelve el stock de la sucursal.
-export async function addStock(tx, productId, qty, branchId) {
-  const [row] = await tx.$queryRaw`
+export async function addStock(tx: Tx, productId: number, qty: number, branchId: number): Promise<number> {
+  const [row] = await tx.$queryRaw<{ stock: number }[]>`
     INSERT INTO "branch_stock" ("branchId", "productoId", "stock") VALUES (${branchId}, ${productId}, ${qty})
     ON CONFLICT ("branchId", "productoId") DO UPDATE SET "stock" = "branch_stock"."stock" + EXCLUDED."stock"
     RETURNING "stock"::float8 AS stock`;
   await adjustProductTotals(tx, productId, qty, 0);
-  return row.stock;
+  return row!.stock;
 }
 
 // Pedido: aparta unidades de la sucursal sin sacarlas todavía del almacén.
-export async function reserveStock(tx, productId, qty, branchId) {
+export async function reserveStock(tx: Tx, productId: number, qty: number, branchId: number): Promise<void> {
   const updated = await tx.$executeRaw`
     UPDATE "branch_stock" SET "reserved" = "reserved" + ${qty}
     WHERE "branchId" = ${branchId} AND "productoId" = ${productId} AND "stock" - "reserved" >= ${qty}
@@ -71,7 +71,7 @@ export async function reserveStock(tx, productId, qty, branchId) {
 }
 
 // Despacho de un pedido: las unidades reservadas salen del almacén de la sucursal.
-export async function consumeReservedStock(tx, productId, qty, branchId) {
+export async function consumeReservedStock(tx: Tx, productId: number, qty: number, branchId: number): Promise<number> {
   const updated = await tx.$executeRaw`
     UPDATE "branch_stock" SET "stock" = "stock" - ${qty}, "reserved" = "reserved" - ${qty}
     WHERE "branchId" = ${branchId} AND "productoId" = ${productId} AND "reserved" >= ${qty} AND "stock" >= ${qty}`;
@@ -84,8 +84,8 @@ export async function consumeReservedStock(tx, productId, qty, branchId) {
 
 // Pedido anulado o vencido: devuelve las unidades apartadas al disponible de la sucursal. Se libera
 // en el total exactamente lo que se liberó en la sucursal, para que sigan cuadrando.
-export async function releaseReservedStock(tx, productId, qty, branchId) {
-  const [row] = await tx.$queryRaw`
+export async function releaseReservedStock(tx: Tx, productId: number, qty: number, branchId: number): Promise<void> {
+  const [row] = await tx.$queryRaw<{ reserved: number }[]>`
     SELECT "reserved"::float8 AS reserved FROM "branch_stock"
     WHERE "branchId" = ${branchId} AND "productoId" = ${productId} FOR UPDATE`;
   const released = row ? roundQuantity(Math.min(qty, row.reserved)) : 0;
@@ -96,15 +96,18 @@ export async function releaseReservedStock(tx, productId, qty, branchId) {
   await adjustProductTotals(tx, productId, 0, -released);
 }
 
+// Stock de un producto en una sucursal (0 si nunca tuvo).
+export const branchStockOf = (tx: Tx, productId: number, branchId: number) => branchStockAfter(tx, productId, branchId);
+
 // Sucursal principal: la primera activa. Recibe el stock de productos que aún no tienen fila.
-export async function mainBranchId(db) {
+export async function mainBranchId(db: Tx): Promise<number> {
   const branch = await db.branch.findFirst({ where: { active: true }, orderBy: { id: 'asc' }, select: { id: true } });
   return branch?.id ?? 1;
 }
 
 // Red de seguridad al arrancar: productos creados por otra vía (datos de demostración, scripts) sin
 // fila de stock por sucursal reciben una en la principal con su stock actual.
-export async function ensureBranchStockRows(db) {
+export async function ensureBranchStockRows(db: Tx): Promise<void> {
   const branchId = await mainBranchId(db);
   const inserted = await db.$executeRaw`
     INSERT INTO "branch_stock" ("branchId", "productoId", "stock", "reserved")

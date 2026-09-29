@@ -11,9 +11,10 @@ import * as cash from '../application/cashService.ts';
 const router = express.Router();
 
 // Los montos los valida el dominio (con su mensaje); aquí se revisa la forma de lo demás.
-const OpenBody = z.object({ cashRegisterId: optionalId('Caja no válida.'), montoInicial: z.unknown() });
-const CloseBody = z.object({ cajaId: id('Identificador no válido.'), montoCierreConteo: z.unknown() });
-const RegisterBody = z.object({ name: z.unknown(), branchId: optionalId('Sucursal no válida.') });
+// (en Zod 4 un campo z.unknown() sin .optional() exige que la clave venga).
+const OpenBody = z.object({ cashRegisterId: optionalId('Caja no válida.'), montoInicial: z.unknown().optional() });
+const CloseBody = z.object({ cajaId: id('Identificador no válido.'), montoCierreConteo: z.unknown().optional() });
+const RegisterBody = z.object({ name: z.unknown().optional(), branchId: optionalId('Sucursal no válida.') });
 const RegisterUpdate = z.object({
   name: z.unknown().optional(),
   branchId: optionalId('Sucursal no válida.'),

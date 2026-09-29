@@ -3,6 +3,9 @@
 import { z } from 'zod';
 import { AppError } from '@ferresys/shared/errors';
 
+// Los mensajes que Zod arma solo (cuando un esquema no trae el suyo) salen en español: llegan al usuario.
+z.config(z.locales.es());
+
 // makeError: el error del módulo (CashError, VentaError…), para que el código lleve su área.
 export function parseInput<S extends z.ZodType>(
   schema: S,
@@ -18,5 +21,6 @@ export function parseInput<S extends z.ZodType>(
 export const id = (message: string) => z.coerce.number({ error: message }).int({ error: message }).positive({ error: message });
 
 // Igual, pero opcional: vacío, null o ausente = sin valor.
+// El .optional() de afuera hace que la clave pueda faltar; el de adentro acepta el undefined del preprocess.
 export const optionalId = (message: string) =>
-  z.preprocess(value => (value === '' || value === null ? undefined : value), id(message).optional());
+  z.preprocess(value => (value === '' || value === null ? undefined : value), id(message).optional()).optional();

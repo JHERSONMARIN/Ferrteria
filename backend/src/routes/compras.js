@@ -1,7 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { quantityProblem, roundMoney } from '../utils/quantities.js';
-import { addStock } from '../services/stock.js';
+import { addStock } from '../modules/inventory/index.ts';
 import { resolveBranchId, BranchError } from '../services/branches.js';
 import { errorBody } from '@ferresys/shared/errors';
 

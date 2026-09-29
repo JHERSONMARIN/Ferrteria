@@ -48,7 +48,7 @@ export async function getCashStatus(db: Db, user: CashUser) {
   return { abierta: false, caja: null, registers: await repo.registersToJoin(db, user.branchId) };
 }
 
-export async function openSession(client: Client, input: { cashRegisterId?: number; montoInicial: unknown }, user: CashUser) {
+export async function openSession(client: Client, input: { cashRegisterId?: number; montoInicial?: unknown }, user: CashUser) {
   const openingAmount = parseAmount(input.montoInicial, 'El monto inicial');
 
   return client.$transaction(async (tx) => {
@@ -151,7 +151,7 @@ async function activeBranch(db: Db, branchId: number): Promise<number> {
   return branchId;
 }
 
-export async function createRegister(db: Db, input: { name: unknown; branchId?: number }, user: CashUser) {
+export async function createRegister(db: Db, input: { name?: unknown; branchId?: number }, user: CashUser) {
   // La primera caja viene con cualquier plan; varias cajas y turnos compartidos, con el plan Profesional.
   requireFeature('shared_cash');
   requireWithinLimit('maxCashRegisters', await repo.countActiveRegisters(db), 'caja(s)');
