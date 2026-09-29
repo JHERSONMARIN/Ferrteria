@@ -1,6 +1,6 @@
 import { prisma } from '../db.js';
 import { getSettings } from '../services/settings.js';
-import { getActiveModules } from '../services/license.js';
+import { getActiveModules } from '../modules/licensing/index.ts';
 
 const isAdmin = (user) => user.role === 'ADMINISTRADOR';
 

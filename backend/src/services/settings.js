@@ -1,5 +1,5 @@
 import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '../config/modules.js';
-import { isModuleLicensed } from './license.js';
+import { isModuleLicensed } from '../modules/licensing/index.ts';
 import { recordAudit, changedFields } from './audit.js';
 import { AppError } from '@ferresys/shared/errors';
 

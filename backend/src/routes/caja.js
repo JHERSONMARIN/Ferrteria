@@ -4,7 +4,7 @@ import {
   CashError, getCashStatus, openSession, joinSession, leaveSession, closeSession,
   listRegisters, createRegister, updateRegister,
 } from '../services/cashRegisters.js';
-import { respondIfLicenseError } from '../services/license.js';
+import { respondIfLicenseError } from '../modules/licensing/index.ts';
 import { errorBody } from '@ferresys/shared/errors';
 
 const router = express.Router();

@@ -2,7 +2,7 @@ import { SALE_FLOW_MODES } from '../config/modules.js';
 import { DISPATCH_ROLES } from '../config/dispatch.js';
 import { getSettings } from './settings.js';
 import { recordAudit } from './audit.js';
-import { requireFeature, requireWithinLimit } from './license.js';
+import { requireFeature, requireWithinLimit } from '../modules/licensing/index.ts';
 import { AppError } from '@ferresys/shared/errors';
 
 // Sucursales o almacenes de la empresa. Las operaciones de stock usan la sucursal del usuario; el

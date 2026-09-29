@@ -1,0 +1,22 @@
+{
+  // Solo verifica tipos (npm run typecheck): Node 22 ejecuta los .ts directamente, quitando los tipos,
+  // así que no hay paso de compilación. Por eso solo se admite TypeScript "borrable": sin enum,
+  // namespace ni parameter properties, y los imports llevan la extensión .ts.
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    // Los .js que todavía no se migraron se pueden importar desde .ts, pero no se revisan.
+    "allowJs": true,
+    "checkJs": false,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

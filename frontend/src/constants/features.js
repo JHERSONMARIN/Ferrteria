@@ -1,4 +1,4 @@
-// Nombres en castellano de las funciones del plan (espejo de backend/src/config/features.js).
+// Nombres en castellano de las funciones del plan (espejo de backend/src/modules/licensing/domain/license.ts).
 // Sirven para mostrarle al cliente qué incluye su plan y qué no.
 export const FEATURE_LABELS = {
   split_flow: 'Vendedor y caja separados (pedidos y flujo por etapas)',

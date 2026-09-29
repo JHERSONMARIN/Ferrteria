@@ -1,7 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { recordAudit, changedFields } from '../services/audit.js';
-import { requireFeature, respondIfLicenseError } from '../services/license.js';
+import { requireFeature, respondIfLicenseError } from '../modules/licensing/index.ts';
 
 const router = express.Router();
 

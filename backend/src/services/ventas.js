@@ -5,7 +5,7 @@ import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers } from './deliveries.js';
 import { recordAudit } from './audit.js';
 import { requireOpenSession } from './cashRegisters.js';
-import { requireFeature } from './license.js';
+import { requireFeature } from '../modules/licensing/index.ts';
 import { AppError, errorBody } from '@ferresys/shared/errors';
 
 export class VentaError extends AppError {

@@ -1,5 +1,5 @@
 {
-  "_comentario": "Catálogo de planes de FerreSys. Lo usan deploy/set-plan.sh, create-company.sh y la consola de VALETEC. Los módulos son los de backend/src/config/modules.js; las funciones y límites, los de backend/src/config/features.js.",
+  "_comentario": "Catálogo de planes de FerreSys. Lo usan deploy/set-plan.sh, create-company.sh y la consola de VALETEC. Los módulos son los de backend/src/config/modules.js; las funciones y límites, los de backend/src/modules/licensing/domain/license.ts.",
   "planes": {
     "basico": {
       "nombre": "Básico",
