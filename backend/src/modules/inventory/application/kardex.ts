@@ -1,7 +1,7 @@
 // Kardex: historial de movimientos de stock y ajustes manuales (entradas, mermas, conteos).
 import type { prisma } from '../../../db.ts';
 import { recordAudit } from '../../audit/index.ts';
-import { resolveBranchId } from '../../../services/branches.js';
+import { resolveBranchId } from '../../branches/index.ts';
 import { quantityProblem } from '../../../utils/quantities.js';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { StockError, movementTotals, periodRange, type MovementType } from '../domain/inventory.ts';

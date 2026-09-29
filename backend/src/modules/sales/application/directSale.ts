@@ -1,6 +1,6 @@
 // Venta directa (modo Directo): se cobra, se emite el comprobante y se entrega en un solo paso.
 import type { prisma, Tx } from '../../../db.ts';
-import { getSettings } from '../../../services/settings.js';
+import { getSettings } from '../../settings/index.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { requireOpenSession } from '../../cash/index.ts';
 import { assertBranchDelivers, parseDeliveryRequest, scheduleDeliveryForSale, type DeliveryRequest } from '../../deliveries/index.ts';

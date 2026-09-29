@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../src/db.js';
-import { AVAILABLE_MODULES } from '../src/services/settings.js';
+import { AVAILABLE_MODULES } from '../src/config/modules.js';
 import { hashPassword } from '@ferresys/shared/passwords';
 
 // Prepara una base recién creada para una empresa nueva: configuración y administrador inicial.
