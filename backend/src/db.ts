@@ -24,3 +24,7 @@ export const prisma = new PrismaClient().$extends({
     },
   },
 });
+
+// Lo que recibe el callback de prisma.$transaction: el mismo cliente sin las operaciones de conexión.
+// Úsese cuando una transacción pasa por varios módulos (venta → caja, inventario, auditoría).
+export type Tx = Omit<typeof prisma, '$transaction' | '$connect' | '$disconnect' | '$on' | '$extends' | '$use'>;
