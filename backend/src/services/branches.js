@@ -1,7 +1,7 @@
 import { SALE_FLOW_MODES } from '../config/modules.js';
 import { DISPATCH_ROLES } from '../modules/sales/index.ts';
 import { getSettings } from './settings.js';
-import { recordAudit } from './audit.js';
+import { recordAudit } from '../modules/audit/index.ts';
 import { requireFeature, requireWithinLimit } from '../modules/licensing/index.ts';
 import { AppError } from '@ferresys/shared/errors';
 

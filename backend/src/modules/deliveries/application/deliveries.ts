@@ -1,7 +1,7 @@
 // Casos de uso de envíos: programar, asignar repartidor, salir, entregar y cancelar.
 import type { Prisma } from '@prisma/client';
 import type { prisma } from '../../../db.ts';
-import { recordAudit } from '../../../services/audit.js';
+import { recordAudit } from '../../audit/index.ts';
 import { roundQuantity } from '../../../utils/quantities.js';
 import type { SessionUser } from '../../../types/express.d.ts';
 import {

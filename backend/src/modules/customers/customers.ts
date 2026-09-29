@@ -1,7 +1,7 @@
 // Clientes, su crédito (fiado) y sus abonos. Módulo simple: reglas y acceso a datos en un solo archivo.
 import type { prisma } from '../../db.ts';
 import { AppError } from '@ferresys/shared/errors';
-import { changedFields, recordAudit } from '../../services/audit.js';
+import { changedFields, recordAudit } from '../audit/index.ts';
 import { requireFeature } from '../licensing/index.ts';
 import type { SessionUser } from '../../types/express.d.ts';
 

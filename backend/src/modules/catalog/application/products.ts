@@ -1,7 +1,7 @@
 // Casos de uso de productos: listar, registrar (con su stock inicial), editar, importar y buscar por código.
 import type { Prisma } from '@prisma/client';
 import type { prisma, Tx } from '../../../db.ts';
-import { changedFields, recordAudit } from '../../../services/audit.js';
+import { changedFields, recordAudit } from '../../audit/index.ts';
 import { resolveBranchId } from '../../../services/branches.js';
 import { quantityProblem } from '../../../utils/quantities.js';
 import type { SessionUser } from '../../../types/express.d.ts';

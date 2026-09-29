@@ -1,5 +1,5 @@
 // Precios, descuentos y cobro: lo que comparten la venta directa, los pedidos y las cotizaciones.
-import { recordAudit } from '../../../services/audit.js';
+import { recordAudit } from '../../audit/index.ts';
 import { requireFeature } from '../../licensing/index.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import {

@@ -1,7 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { hashPassword, validateNewPassword, PasswordPolicyError } from '@ferresys/shared/passwords';
-import { recordAudit, changedFields } from '../services/audit.js';
+import { recordAudit, changedFields } from '../modules/audit/index.ts';
 import { requireWithinLimit, respondIfLicenseError, getActiveModules } from '../modules/licensing/index.ts';
 import { getSettings } from '../services/settings.js';
 import { errorBody } from '@ferresys/shared/errors';

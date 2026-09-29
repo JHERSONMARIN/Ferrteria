@@ -2,7 +2,7 @@
 // del disponible del origen (nunca de lo reservado para pedidos) y entran al destino, con su movimiento
 // de kardex en cada sucursal. El total de la empresa no cambia.
 import type { prisma } from '../../../db.ts';
-import { recordAudit } from '../../../services/audit.js';
+import { recordAudit } from '../../audit/index.ts';
 import { resolveBranchId } from '../../../services/branches.js';
 import { quantityProblem } from '../../../utils/quantities.js';
 import type { SessionUser } from '../../../types/express.d.ts';

@@ -1,6 +1,6 @@
 // Cotizaciones (proformas): precios congelados por unos días. Se convierten en venta desde el POS o se anulan.
 import type { prisma } from '../../../db.ts';
-import { recordAudit } from '../../../services/audit.js';
+import { recordAudit } from '../../audit/index.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { nextQuoteNumber } from '../domain/documentNumber.ts';
 import { SaleError, normalizeCart, sumLines, unitColumns, unitFields, unitPriceFor } from '../domain/sale.ts';
