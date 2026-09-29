@@ -124,5 +124,7 @@ export function licenseStatus(license: License, now: Date): LicenseStatus {
   if (!license.expiresAt) return { plan: license.plan, expiresAt: null, daysLeft: null, expired: false };
   const end = new Date(`${license.expiresAt}T23:59:59-05:00`);
   const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86400000);
-  return { plan: license.plan, expiresAt: license.expiresAt, daysLeft, expired: daysLeft < 0 };
+  // Se compara con la hora exacta: con daysLeft < 0 la licencia seguía vigente hasta un día después
+  // (ceil de una fracción negativa da -0, y -0 no es menor que 0).
+  return { plan: license.plan, expiresAt: license.expiresAt, daysLeft, expired: now.getTime() > end.getTime() };
 }
