@@ -1,5 +1,5 @@
 // Espejo de backend/src/modules/sales/domain/dispatch.ts: quién atiende "Por despachar" en cada sucursal.
-import type { DispatchRole, SaleFlowMode } from '../../api/types.ts';
+import type { DispatchRole, SaleFlowMode } from '@ferresys/contracts/identity';
 
 export interface DispatchRoleOption {
   id: DispatchRole;

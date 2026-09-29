@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { api } from '../api/client.ts';
 import FieldError from '../shared/ui/FieldError.tsx';
 import { borderClass } from '../shared/utils/validators.ts';
-import type { SessionUser } from '../api/types.ts';
+import type { ChangePasswordRequest, LoginResponse, SessionUser } from '@ferresys/contracts/identity';
 
 const MIN_LENGTH = 8;
 
@@ -76,7 +76,7 @@ export default function ChangePasswordForm({ mandatory = false, onDone, onCancel
 
     try {
       setSaving(true);
-      const res = await api.post<{ user: SessionUser }>('/auth/change-password', { currentPassword, newPassword });
+      const res = await api.post<LoginResponse>('/auth/change-password', { currentPassword, newPassword } satisfies ChangePasswordRequest);
       onDone(res.user);
     } catch (err) {
       setServerError((err as Error).message || 'No se pudo cambiar la contraseña.');

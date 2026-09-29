@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { roleLabel } from '../shared/constants/roles.ts';
-import type { AppInfo, SessionUser } from '../api/types.ts';
+import type { AppInfo } from '@ferresys/contracts/app';
+import type { SessionUser } from '@ferresys/contracts/identity';
 import type { ScreenId } from './screens.ts';
 
 type Badge = 'cobros' | 'despacho';
@@ -107,7 +108,7 @@ interface Props {
   onChangePassword: () => void;
   counts?: Partial<Record<Badge, number>>;
   oculto?: boolean;
-  appVersion?: AppInfo['version'];
+  appVersion?: AppInfo['version'] | null;
 }
 
 export default function Sidebar({

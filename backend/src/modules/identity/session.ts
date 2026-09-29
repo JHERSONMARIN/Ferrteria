@@ -5,8 +5,7 @@ import { setRequestUser } from '@ferresys/shared/logger';
 import { prisma } from '../../db.ts';
 import { getActiveModules } from '../licensing/index.ts';
 import { getSettings } from '../settings/index.ts';
-import type { SessionUser } from '../../types/express.d.ts';
-import { canUseAnyModule, isAdmin } from './permissions.ts';
+import { canUseAnyModule, isAdmin, moduleList } from './permissions.ts';
 
 export const SESSION_COOKIE = 'ferresys_session';
 
@@ -51,7 +50,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     }
 
     const { pass: _password, ...publicUser } = user;
-    req.user = { ...publicUser, modules: Array.isArray(user.modules) ? user.modules as string[] : [] } as SessionUser;
+    req.user = { ...publicUser, modules: moduleList(user.modules) };
     setRequestUser(req.user);
     next();
   } catch (error) {

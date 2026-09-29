@@ -59,7 +59,8 @@ services:
 
   web:
     build:
-      context: ../frontend
+      context: ..
+      dockerfile: frontend/Dockerfile
     image: ferresys-web:tests
     container_name: ferresys-tests-web
     environment:

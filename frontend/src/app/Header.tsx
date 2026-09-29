@@ -1,5 +1,5 @@
 import Badge from '../shared/ui/Badge.tsx';
-import type { SessionUser } from '../api/types.ts';
+import type { SessionUser } from '@ferresys/contracts/identity';
 
 interface Props {
   pageTitle: string;

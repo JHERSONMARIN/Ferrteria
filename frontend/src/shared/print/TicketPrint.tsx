@@ -1,5 +1,5 @@
 // Ticket de 80 mm: queda oculto en la pantalla y es lo único que sale al imprimir.
-import type { BusinessSettings } from '../../api/types.ts';
+import type { BusinessSettings } from '@ferresys/contracts/settings';
 import type { TicketData } from '../utils/tickets.ts';
 
 type Business = Pick<BusinessSettings, 'tradeName' | 'legalName' | 'taxId' | 'currencySymbol' | 'taxRate' | 'address' | 'phone' | 'ticketFooter'>;

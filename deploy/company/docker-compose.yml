@@ -47,7 +47,8 @@ services:
 
   web:
     build:
-      context: ../../frontend
+      context: ../..
+      dockerfile: frontend/Dockerfile
     image: ferresys-web:local
     restart: unless-stopped
     environment:

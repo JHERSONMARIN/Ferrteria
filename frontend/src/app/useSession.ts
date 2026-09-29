@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client.ts';
 import { queryKeys } from '../api/queryClient.ts';
-import type { SessionUser } from '../api/types.ts';
+import type { MeResponse, SessionUser } from '@ferresys/contracts/identity';
 
 const STORAGE_KEY = 'ferre_user';
 const HEARTBEAT_MS = 8000;
@@ -34,7 +34,7 @@ export function useSession(onExpired: () => void) {
 
   const heartbeat = useQuery({
     queryKey: queryKeys.me,
-    queryFn: () => api.get<{ user: SessionUser }>('/auth/me'),
+    queryFn: () => api.get<MeResponse>('/auth/me'),
     enabled: Boolean(user?.id),
     refetchInterval: HEARTBEAT_MS,
     retry: false,
