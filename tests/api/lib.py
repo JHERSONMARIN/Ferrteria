@@ -3,6 +3,7 @@
 Cada prueba corre contra el entorno aislado de tests/docker-compose.yml (lo levanta tests/run.py).
 Se configura con variables de entorno, así que funciona igual en cualquier equipo:
   FERRESYS_URL       dirección de la web de pruebas            (http://127.0.0.1:23990)
+  CONSOLA_URL        dirección de la consola de VALETEC         (http://127.0.0.1:23991)
   FERRESYS_DB        contenedor de PostgreSQL de las pruebas     (ferresys-tests-db)
   CLAVE_TEMPORAL     clave inicial del administrador            (ClaveTemporal2026)
 """
@@ -17,6 +18,7 @@ import urllib.request
 from pathlib import Path
 
 URL = os.environ.get("FERRESYS_URL", "http://127.0.0.1:23990")
+CONSOLA_URL = os.environ.get("CONSOLA_URL", "http://127.0.0.1:23991")
 DB_CONTAINER = os.environ.get("FERRESYS_DB", "ferresys-tests-db")
 CLAVE_TEMPORAL = os.environ.get("CLAVE_TEMPORAL", "ClaveTemporal2026")
 COMPOSE = Path(__file__).resolve().parents[1] / "docker-compose.yml"
@@ -40,7 +42,8 @@ def resumen():
 class Navegador:
     """Cliente HTTP con su propio almacén de cookies, como un navegador independiente."""
 
-    def __init__(self, user=None, clave=None):
+    def __init__(self, user=None, clave=None, base=None):
+        self.base = base or URL  # CONSOLA_URL para hablar con la consola de VALETEC
         self.cookies = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
         self.ultima_set_cookie = None
@@ -50,7 +53,7 @@ class Navegador:
 
     def api(self, metodo, ruta, cuerpo=None, cabeceras=None):
         datos = json.dumps(cuerpo).encode() if cuerpo is not None else None
-        req = urllib.request.Request(f"{URL}/api{ruta}", data=datos, method=metodo,
+        req = urllib.request.Request(f"{self.base}/api{ruta}", data=datos, method=metodo,
                                      headers={"Content-Type": "application/json", **(cabeceras or {})})
         try:
             with self.opener.open(req, timeout=30) as r:
@@ -80,9 +83,9 @@ def sql(consulta):
     return r.stdout.strip()
 
 
-def registro_backend(desde=None):
-    """Líneas JSON del registro del backend de pruebas (las que no son JSON se ignoran)."""
-    cmd = ["docker", "logs", "ferresys-tests-backend"] + (["--since", desde] if desde else [])
+def registro_backend(desde=None, contenedor="ferresys-tests-backend"):
+    """Líneas JSON del registro del backend de pruebas, o de otro contenedor (las que no son JSON se ignoran)."""
+    cmd = ["docker", "logs", contenedor] + (["--since", desde] if desde else [])
     r = subprocess.run(cmd, capture_output=True, text=True)
     lineas = []
     for linea in (r.stdout + r.stderr).splitlines():

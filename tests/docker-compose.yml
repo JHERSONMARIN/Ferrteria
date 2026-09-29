@@ -15,6 +15,8 @@ services:
     # Los datos viven en memoria: la suite los borra entre cadenas de pruebas.
     tmpfs:
       - /var/lib/postgresql/data
+    volumes:
+      - ./sql/consola.sql:/docker-entrypoint-initdb.d/consola.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ferresys -d postgres"]
       interval: 2s
@@ -68,3 +70,33 @@ services:
       - "127.0.0.1:${TEST_WEB_PORT:-23990}:5180"
     depends_on:
       - backend
+
+  # Consola de VALETEC. Sin acceso a Docker (no puede crear ni tocar empresas) y sin el repositorio:
+  # solo los catálogos que lee, y una carpeta de empresas vacía.
+  consola:
+    build:
+      context: ..
+      dockerfile: console/Dockerfile
+    image: ferresys-console:tests
+    container_name: ferresys-tests-consola
+    environment:
+      PORT: 4000
+      TZ: America/Lima
+      DATABASE_URL: postgresql://ferresys:ferresys@db:5432/consola?schema=public
+      JWT_SECRET: otra-clave-solo-para-pruebas-de-la-consola-no-usar
+      COOKIE_SECURE: "false"
+      CONSOLE_ADMIN_USER: valetec
+      CONSOLE_ADMIN_PASSWORD: ${CLAVE_TEMPORAL:-ClaveTemporal2026}
+      DEPLOY_DIR: /repo/deploy
+    volumes:
+      - ../deploy/plans.json:/repo/deploy/plans.json:ro
+      - ../deploy/version.sh:/repo/deploy/version.sh:ro
+      - ../backend/src/config/themes.json:/repo/backend/src/config/themes.json:ro
+      - ../backend/src/config/modules.js:/repo/backend/src/config/modules.js:ro
+    tmpfs:
+      - /repo/deploy/companies
+    ports:
+      - "127.0.0.1:${TEST_CONSOLE_PORT:-23991}:4000"
+    depends_on:
+      db:
+        condition: service_healthy

@@ -23,10 +23,13 @@ RAIZ = Path(__file__).resolve().parent
 COMPOSE = RAIZ / "docker-compose.yml"
 SALIDA = RAIZ / ".salida"
 PUERTO = os.environ.get("TEST_WEB_PORT", "23990")
+PUERTO_CONSOLA = os.environ.get("TEST_CONSOLE_PORT", "23991")
 ENTORNO = {
     **os.environ,
     "TEST_WEB_PORT": PUERTO,
     "FERRESYS_URL": f"http://127.0.0.1:{PUERTO}",
+    "TEST_CONSOLE_PORT": PUERTO_CONSOLA,
+    "CONSOLA_URL": f"http://127.0.0.1:{PUERTO_CONSOLA}",
     "FERRESYS_DB": "ferresys-tests-db",
     "CLAVE_TEMPORAL": os.environ.get("CLAVE_TEMPORAL", "ClaveTemporal2026"),
     "PYTHONPATH": str(RAIZ / "api"),
@@ -40,6 +43,7 @@ ENTORNO = {
 CADENAS = [
     ["api/seguridad.py", "ui/seguridad.mjs"],
     ["api/observabilidad.py"],
+    ["api/consola.py"],
     ["api/pedidos_por_estados.py", "api/envios.py", "ui/pedidos_por_estados.mjs", "ui/envios.mjs"],
     ["api/cantidades_y_precios.py", "api/modo_por_sucursal.py"],
     ["api/cantidades_y_precios.py", "ui/cantidades_y_precios.mjs", "ui/una_sucursal.mjs", "api/auditoria.py",
@@ -60,28 +64,40 @@ def compose(*args):
     return r
 
 
-def esperar_backend():
+def esperar(url, *servicios):
     for _ in range(120):
         try:
-            with urllib.request.urlopen(f"{ENTORNO['FERRESYS_URL']}/api/health", timeout=2) as r:
+            with urllib.request.urlopen(url, timeout=2) as r:
                 if r.status == 200:
                     return
         except Exception:
             pass
         time.sleep(1)
-    registro = sh("docker", "compose", "-f", str(COMPOSE), "logs", "--tail", "30", "backend", "web").stdout
-    sys.exit(f"El backend de pruebas no respondió. Últimas líneas del registro:\n{registro}")
+    registro = sh("docker", "compose", "-f", str(COMPOSE), "logs", "--tail", "30", *servicios).stdout
+    sys.exit(f"{' y '.join(servicios)} no respondió. Últimas líneas del registro:\n{registro}")
+
+
+def reiniciar(servicio, base):
+    """Borra y vuelve a crear la base del servicio y lo recrea: al arrancar aplica las migraciones y
+    crea su usuario inicial con la clave temporal."""
+    compose("stop", servicio)  # que nadie esté conectado mientras se borra la base
+    for q in (f"DROP DATABASE IF EXISTS {base} WITH (FORCE)", f"CREATE DATABASE {base}"):
+        r = sh("docker", "exec", "ferresys-tests-db", "psql", "-U", "ferresys", "-d", "postgres", "-qc", q)
+        if r.returncode != 0:
+            sys.exit(f"No se pudo reiniciar la base {base}:\n{r.stderr}")
+    compose("up", "-d", "--no-build", "--force-recreate", servicio)
 
 
 def base_vacia():
-    """Borra y vuelve a crear la base, y recrea el backend: aplica migraciones y crea el admin inicial."""
-    compose("stop", "backend")  # que nadie esté conectado mientras se borra la base
-    for q in ("DROP DATABASE IF EXISTS ferresys WITH (FORCE)", "CREATE DATABASE ferresys"):
-        r = sh("docker", "exec", "ferresys-tests-db", "psql", "-U", "ferresys", "-d", "postgres", "-qc", q)
-        if r.returncode != 0:
-            sys.exit(f"No se pudo reiniciar la base:\n{r.stderr}")
-    compose("up", "-d", "--no-build", "--force-recreate", "backend")
-    esperar_backend()
+    """Empresa recién creada."""
+    reiniciar("backend", "ferresys")
+    esperar(f"{ENTORNO['FERRESYS_URL']}/api/health", "backend", "web")
+
+
+def consola_vacia():
+    """Consola de VALETEC recién instalada."""
+    reiniciar("consola", "consola")
+    esperar(f"{ENTORNO['CONSOLA_URL']}/api/health", "consola")
 
 
 def correr(prueba):
@@ -114,13 +130,15 @@ def main():
 
     print("▶ Levantando el entorno de pruebas…", flush=True)
     compose("up", "-d", "--wait", "db")
-    compose("up", "-d", *([] if "--sin-build" in opciones else ["--build"]), "backend", "web")
+    compose("up", "-d", *([] if "--sin-build" in opciones else ["--build"]), "backend", "web", "consola")
 
     filas, total_ok, total, hubo_error = [], 0, 0, False
     try:
         for cadena in cadenas:
             print(f"\n▶ Base vacía → {' → '.join(p.rsplit(".", 1)[0] for p in cadena)}", flush=True)
             base_vacia()
+            if any("consola" in p for p in cadena):
+                consola_vacia()
             for prueba in cadena:
                 ok, n, fallas, error, seg, log = correr(prueba)
                 total_ok, total = total_ok + ok, total + n
