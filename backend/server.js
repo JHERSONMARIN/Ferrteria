@@ -6,10 +6,8 @@ import express from 'express';
 import dotenv from 'dotenv';
 import authRoutes from './src/routes/auth.js';
 import personalRoutes from './src/routes/personal.js';
-import clientesRoutes from './src/routes/clientes.js';
-import consultaDocRoutes from './src/routes/consultaDoc.js';
+import { creditRoutes as creditosRoutes, customerRoutes as clientesRoutes } from './src/modules/customers/index.ts';
 import { deliveryRoutes as entregasRoutes } from './src/modules/deliveries/index.ts';
-import creditosRoutes from './src/routes/creditos.js';
 import dashboardRoutes from './src/routes/dashboard.js';
 import { cashRoutes as cajaRoutes } from './src/modules/cash/index.ts';
 import proveedoresRoutes from './src/routes/proveedores.js';
@@ -117,7 +115,7 @@ app.use('/api/clientes', allowModules({
   GET: ['pos', 'caja', 'cotizaciones', 'client-dir', 'customers', 'deliveries'],
   PUT: ['client-dir', 'customers'],
   default: ['client-dir'],
-}), consultaDocRoutes, clientesRoutes);
+}), clientesRoutes);
 app.use('/api/productos', allowModules({ GET: CATALOG_READERS, default: ['inventory'] }), productosRoutes);
 app.use('/api/categorias', allowModules({ GET: CATALOG_READERS, default: ['categories', 'inventory'] }), categoriesRoutes);
 app.use('/api/kardex', allowModules({ default: ['kardex', 'inventory'] }), kardexRoutes);
