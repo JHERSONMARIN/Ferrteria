@@ -5,6 +5,7 @@ import { changedFields, recordAudit } from '../../audit/index.ts';
 import { resolveBranchId } from '../../branches/index.ts';
 import { quantityProblem } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
+import { industryDataOf, parseProductData } from '../../../industries/index.ts';
 import {
   DEFAULT_MIN_STOCK, MAX_PRODUCT_IMPORT_ROWS, ProductError, assertUnitCodesDiffer, checkImportRows, hasDecimalStock,
   parseProductImportRow, parseSaleUnits, parseWholesalePrice, type SaleUnitInput,
@@ -38,11 +39,11 @@ export async function listProducts(client: Client, user: SessionUser) {
     where: { active: true },
     select: {
       id: true, code: true, name: true, unit: true, allowsFractions: true, stock: true, reserved: true, wholesalePrice: true,
-      minStock: true, price: true, category: true, branchStocks: BRANCH_STOCK_SELECT, saleUnits: SALE_UNITS_SELECT,
+      minStock: true, price: true, category: true, industryData: true, branchStocks: BRANCH_STOCK_SELECT, saleUnits: SALE_UNITS_SELECT,
     },
     orderBy: { name: 'asc' },
   });
-  return products.map(p => withBranchStock(p, user.branchId));
+  return products.map(p => ({ ...withBranchStock(p, user.branchId), industryData: industryDataOf(p.industryData) }));
 }
 
 // Nombres de categoría para los formularios: las registradas y las que ya usan los productos.
@@ -132,13 +133,14 @@ export async function createProduct(client: Client, input: Record<string, unknow
   const unit = text(input.unit) || 'Unidad';
   const category = text(input.category) || 'General';
   const saleUnits = parseSaleUnits(input.saleUnits, unit);
+  const industryData = parseProductData(input.industryData) ?? {};
   await assertUnitCodesFree(client, saleUnits);
   await assertProductCodeFree(client, code);
   const categoriaId = await categoryIdFor(client, input.categoriaId, category);
 
   return client.$transaction(async (tx) => {
     const product = await tx.producto.create({
-      data: { code, name, unit, allowsFractions, wholesalePrice: wholesale, stock, minStock, price, category, categoriaId },
+      data: { code, name, unit, allowsFractions, wholesalePrice: wholesale, stock, minStock, price, category, categoriaId, industryData },
     });
     await tx.branchStock.create({ data: { branchId, productoId: product.id, stock } });
     await syncSaleUnits(tx, product.id, saleUnits, product.code);
@@ -165,6 +167,7 @@ export async function updateProduct(client: Client, id: number, input: Record<st
   const wholesale = parseWholesalePrice(input.wholesalePrice);
   if (wholesale === false) throw new ProductError('El precio mayorista debe ser mayor a 0.');
   const saleUnits = parseSaleUnits(input.saleUnits, unit);
+  const industryData = parseProductData(input.industryData);
   await assertUnitCodesFree(client, saleUnits, id);
   await assertProductCodeFree(client, code, id);
 
@@ -182,13 +185,13 @@ export async function updateProduct(client: Client, id: number, input: Record<st
     const product = await tx.producto.update({
       where: { id },
       data: {
-        code, name, unit, price, category, categoriaId, minStock,
+        code, name, unit, price, category, categoriaId, minStock, industryData,
         allowsFractions: typeof input.allowsFractions === 'boolean' ? input.allowsFractions : undefined,
         wholesalePrice: input.wholesalePrice === undefined ? undefined : wholesale,
       },
       select: {
         id: true, code: true, name: true, unit: true, allowsFractions: true, wholesalePrice: true,
-        stock: true, minStock: true, price: true, category: true, categoriaId: true,
+        stock: true, minStock: true, price: true, category: true, categoriaId: true, industryData: true,
       },
     });
     await syncSaleUnits(tx, id, saleUnits, product.code);

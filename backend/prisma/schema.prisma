@@ -138,6 +138,8 @@ model Producto {
   categoriaId Int?
   categoria   Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
   active      Boolean  @default(true)
+  // Campos del paquete de rubro (backend/src/industries): los valida el paquete, el núcleo solo los guarda.
+  industryData Json    @default("{}")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

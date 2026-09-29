@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Tx } from '../db.ts';
 import type { SaleContext, StockMovement } from './hooks.ts';
-import { PACKAGES, hooksFor } from './registry.ts';
+import { z } from 'zod';
+import { IndustryDataError, PACKAGES, hooksFor, parseIndustryData } from './registry.ts';
 
 const tx = {} as Tx;
 const vocabulary = { business: 'botica', businesses: 'boticas', product: 'medicamento', products: 'medicamentos', sampleTradeName: 'Botica Salud' };
@@ -39,4 +40,21 @@ test('cada rubro del catálogo tiene su paquete, con todas sus palabras', () => 
     assert.equal(pkg.id, id);
     for (const [key, word] of Object.entries(pkg.vocabulary)) assert.ok(word.trim(), `${id}: falta la palabra ${key}`);
   }
+});
+
+test('campos del rubro: sin esquema del paquete solo se acepta vacío', () => {
+  const pkg = { id: 'ferreteria', hooks: {}, vocabulary };
+  assert.equal(parseIndustryData(pkg, 'product', undefined), undefined);
+  assert.deepEqual(parseIndustryData(pkg, 'product', {}), {});
+  assert.deepEqual(parseIndustryData(pkg, 'product', null), {});
+  assert.throws(() => parseIndustryData(pkg, 'product', { lote: 'A1' }), IndustryDataError);
+});
+
+test('campos del rubro: el esquema del paquete valida y da el mensaje', () => {
+  const pkg = {
+    id: 'farmacia', hooks: {}, vocabulary,
+    fields: { product: z.object({ registroSanitario: z.string({ message: 'Falta el registro sanitario.' }).min(3) }) },
+  };
+  assert.deepEqual(parseIndustryData(pkg, 'product', { registroSanitario: 'EE-01234', otro: 1 }), { registroSanitario: 'EE-01234' });
+  assert.throws(() => parseIndustryData(pkg, 'product', {}), /registro sanitario/);
 });
