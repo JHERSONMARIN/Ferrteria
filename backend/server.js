@@ -10,7 +10,7 @@ import clientesRoutes from './src/routes/clientes.js';
 import consultaDocRoutes from './src/routes/consultaDoc.js';
 import productosRoutes from './src/routes/productos.js';
 import ventasRoutes from './src/routes/ventas.js';
-import entregasRoutes from './src/routes/entregas.js';
+import { deliveryRoutes as entregasRoutes } from './src/modules/deliveries/index.ts';
 import creditosRoutes from './src/routes/creditos.js';
 import dashboardRoutes from './src/routes/dashboard.js';
 import { cashRoutes as cajaRoutes } from './src/modules/cash/index.ts';

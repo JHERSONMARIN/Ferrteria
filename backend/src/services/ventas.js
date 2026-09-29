@@ -2,7 +2,7 @@ import { nextDocumentNumber } from './documentSeries.js';
 import { takeAvailableStock, reserveStock } from '../modules/inventory/index.ts';
 import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
-import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers } from './deliveries.js';
+import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers } from '../modules/deliveries/index.ts';
 import { recordAudit } from './audit.js';
 import { requireOpenSession } from '../modules/cash/index.ts';
 import { requireFeature } from '../modules/licensing/index.ts';
