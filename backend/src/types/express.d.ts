@@ -1,23 +1,10 @@
 // Lo que el backend agrega a cada petición de Express: el usuario de la sesión (modules/identity/session.ts)
 // y el identificador de la petición (@ferresys/shared/logger).
 
-export interface SessionUser {
-  id: number;
-  name: string;
-  user: string;
-  role: 'ADMINISTRADOR' | 'VENDEDOR' | 'CAJERO' | 'REPARTIDOR' | string;
-  modules: string[];
-  active: boolean;
-  mustChangePassword: boolean;
-  branchId: number;
-  branch: {
-    id: number;
-    name: string;
-    saleFlowMode: 'DIRECT' | 'SEPARATE_CASHIER' | 'STAGED';
-    deliveriesEnabled: boolean;
-    dispatchRole: string | null;
-  } | null;
-}
+import type { SessionUser } from '@ferresys/contracts/identity';
+
+// El usuario de la sesión tiene la misma forma que recibe la pantalla (packages/contracts).
+export type { SessionUser };
 
 declare global {
   namespace Express {

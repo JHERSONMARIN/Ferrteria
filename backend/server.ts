@@ -24,6 +24,8 @@ import {
   allowModules, authenticate, authRoutes, requirePasswordChanged, staffRoutes as personalRoutes,
 } from './src/modules/identity/index.ts';
 import { APP_VERSION, APP_COMMIT, APP_BUILT_AT, versionLabel } from './src/config/version.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type { AppInfo } from '@ferresys/contracts/app';
 
 dotenv.config();
 
@@ -89,7 +91,7 @@ app.get('/api/app-info', async (req, res) => {
     quickLogin: QUICK_LOGIN_USERS,
     business,
     version: { number: APP_VERSION, commit: APP_COMMIT },
-  });
+  } satisfies Sendable<AppInfo>);
 });
 
 app.get('/api/health', (req, res) => {

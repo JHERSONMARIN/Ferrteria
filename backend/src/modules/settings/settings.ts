@@ -174,6 +174,6 @@ export async function updateSettings(client: Client, input: Record<string, unkno
         user,
       });
     }
-    return saved;
+    return { ...saved, enabledModules: moduleList(saved.enabledModules) };
   });
 }

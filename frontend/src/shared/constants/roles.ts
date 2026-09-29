@@ -1,4 +1,4 @@
-import type { Role } from '../../api/types.ts';
+import type { Role } from '@ferresys/contracts/identity';
 import { effectiveDispatchRole, dispatchRoleModule, type DispatchBranch } from './dispatch.ts';
 
 export interface RoleOption {

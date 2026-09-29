@@ -7,9 +7,11 @@ import { createSessionToken } from '@ferresys/shared/sessionTokens';
 import { registerFailure, registerSuccess, secondsBlocked } from '@ferresys/shared/loginThrottle';
 import { prisma } from '../../db.ts';
 import { id, parseInput } from '../../lib/validation.ts';
-import { StaffError } from './permissions.ts';
+import { moduleList, StaffError } from './permissions.ts';
 import { authenticate, clearSessionCookie, setSessionCookie } from './session.ts';
 import { createStaff, deleteStaff, listStaff, updateStaff } from './staff.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type { LoginResponse, MeResponse } from '@ferresys/contracts/identity';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -70,7 +72,7 @@ authRoutes.post('/login', handle('Error interno de servidor en autenticación.',
   registerSuccess(user, req.ip);
   setSessionCookie(res, createSessionToken(account));
   const { pass: _password, ...publicUser } = account;
-  res.json({ success: true, user: publicUser });
+  res.json({ success: true, user: { ...publicUser, modules: moduleList(account.modules) } } satisfies Sendable<LoginResponse>);
 }));
 
 // POST /api/auth/change-password { currentPassword, newPassword }
@@ -89,7 +91,7 @@ authRoutes.post('/change-password', authenticate, handle('No se pudo cambiar la 
   });
   // La huella de la contraseña cambió: se entrega una sesión nueva y las demás quedan inválidas.
   setSessionCookie(res, createSessionToken(updated));
-  res.json({ success: true, user: { ...req.user, mustChangePassword: false } });
+  res.json({ success: true, user: { ...req.user, mustChangePassword: false } } satisfies Sendable<LoginResponse>);
 }));
 
 // POST /api/auth/logout
@@ -100,7 +102,7 @@ authRoutes.post('/logout', (req, res) => {
 
 // GET /api/auth/me: usuario de la sesión (también sirve de latido para detectar cambios).
 authRoutes.get('/me', authenticate, (req, res) => {
-  res.json({ user: req.user });
+  res.json({ user: req.user } satisfies Sendable<MeResponse>);
 });
 
 // ---------- /api/personal ----------

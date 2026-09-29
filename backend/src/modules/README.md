@@ -54,6 +54,18 @@ capas el día que le aparece su primera regla de negocio propia.
 - La entrada de datos (cuerpos de peticiones, variables de entorno) se valida con Zod, y el tipo se
   obtiene del mismo esquema (`z.infer`).
 
+## Contratos con las pantallas
+
+Lo que responde cada ruta está escrito en `packages/contracts` (solo tipos), y el frontend usa esos mismos
+tipos. Una respuesta se ata a su contrato con `satisfies`:
+
+```ts
+res.json({ user: req.user } satisfies Sendable<MeResponse>);
+```
+
+Si la respuesta deja de cumplir el contrato, `npm run typecheck` falla aquí; si cambia el contrato, fallan las
+pantallas que usan el campo cambiado.
+
 ## Núcleo y rubro
 
 Cada módulo indica al inicio de su `index.ts` si es del **núcleo** (igual para cualquier comercio) o

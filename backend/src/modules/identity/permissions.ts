@@ -10,6 +10,10 @@ export type Role = (typeof ROLES)[number];
 
 export const isAdmin = (user: { role: string }) => user.role === 'ADMINISTRADOR';
 
+// Los módulos del usuario se guardan como JSON: se entregan siempre como lista de textos.
+export const moduleList = (value: unknown): string[] =>
+  (Array.isArray(value) ? value.filter((m): m is string => typeof m === 'string') : []);
+
 // Un módulo se puede usar si está contratado y activo en la empresa, y asignado al usuario. El
 // administrador tiene todos los módulos activos de la empresa sin asignárselos uno a uno.
 export function canUseAnyModule(activeModules: readonly string[], user: { role: string; modules: readonly string[] }, required: readonly string[]) {

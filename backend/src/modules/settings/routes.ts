@@ -7,6 +7,8 @@ import { prisma } from '../../db.ts';
 import { AVAILABLE_MODULES } from '../../config/modules.js';
 import { LICENSED_FEATURES, LICENSED_MODULES, LIMITS, licenseStatus } from '../licensing/index.ts';
 import { getSettings, updateSettings } from './settings.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type { SettingsResponse, SettingsSaved } from '@ferresys/contracts/settings';
 
 const router = express.Router();
 
@@ -26,7 +28,7 @@ router.get('/', async (req, res) => {
     res.json({
       settings, documentSeries, themes: THEMES, availableModules: AVAILABLE_MODULES, licensedModules: LICENSED_MODULES,
       licensedFeatures: LICENSED_FEATURES, limits: LIMITS, license: licenseStatus(),
-    });
+    } satisfies Sendable<SettingsResponse>);
   } catch (error) {
     console.error('[configuración] Error al obtener la configuración:', error);
     res.status(500).json({ error: 'No se pudo obtener la configuración de la empresa.' });
@@ -37,7 +39,7 @@ router.get('/', async (req, res) => {
 router.put('/', async (req, res) => {
   try {
     const settings = await updateSettings(prisma, (req.body ?? {}) as Record<string, unknown>, req.user);
-    res.json({ success: true, settings });
+    res.json({ success: true, settings } satisfies Sendable<SettingsSaved>);
   } catch (error) {
     if (error instanceof AppError) return res.status(error.status).json(errorBody(error));
     console.error('[configuración] Error al guardar la configuración:', error);

@@ -2,7 +2,8 @@
 import { useState, type FormEvent } from 'react';
 import FieldError from '../shared/ui/FieldError.tsx';
 import { api } from '../api/client.ts';
-import type { AppInfo, SessionUser } from '../api/types.ts';
+import type { AppInfo } from '@ferresys/contracts/app';
+import type { LoginRequest, LoginResponse, SessionUser } from '@ferresys/contracts/identity';
 
 // Usuarios de la instancia de demostración (DEMO_MODE): se muestran solo allí.
 const DEMO_TEST_USERS = [
@@ -43,7 +44,7 @@ export default function LoginScreen({ appInfo, onSignedIn }: Props) {
 
     try {
       setLoading(true);
-      const res = await api.post<{ success: boolean; user: SessionUser }>('/auth/login', { user: user.trim(), pass: pass.trim() });
+      const res = await api.post<LoginResponse>('/auth/login', { user: user.trim(), pass: pass.trim() } satisfies LoginRequest);
       if (res.success && res.user) onSignedIn(res.user);
     } catch (err) {
       setLoginError((err as Error).message || 'Credenciales incorrectas o usuario inactivo.');
