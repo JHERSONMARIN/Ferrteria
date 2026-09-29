@@ -11,7 +11,7 @@ import { moduleList, StaffError } from './permissions.ts';
 import { authenticate, clearSessionCookie, setSessionCookie } from './session.ts';
 import { createStaff, deleteStaff, listStaff, updateStaff } from './staff.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type { LoginResponse, MeResponse } from '@ferresys/contracts/identity';
+import type { LoginResponse, MeResponse, StaffMember } from '@ferresys/contracts/identity';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -113,7 +113,7 @@ const Params = z.object({ id: id('ID de usuario inválido.') });
 const staffId = (req: Request) => parseInput(Params, req.params, m => new StaffError(m)).id;
 
 staffRoutes.get('/', handle('Error al listar personal.', async (req, res) => {
-  res.json(await listStaff(prisma));
+  res.json(await listStaff(prisma) satisfies Sendable<StaffMember[]>);
 }));
 
 staffRoutes.post('/', handle('Error al guardar personal.', async (req, res) => {

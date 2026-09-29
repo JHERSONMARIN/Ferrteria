@@ -33,6 +33,7 @@ export async function listQuotes(client: Client) {
     validDays: q.validDays,
     status: q.status,
     date: q.createdAt.toLocaleString('es-PE'),
+    createdAt: q.createdAt,
     customer: q.cliente ? q.cliente.name : 'Público General',
     customerDoc: q.cliente ? q.cliente.doc : '00000000',
     clienteId: q.clienteId,

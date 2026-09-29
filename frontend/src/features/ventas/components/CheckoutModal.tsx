@@ -1,17 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import FieldError from '../shared/ui/FieldError.tsx';
-import CustomerSelector from './CustomerSelector.jsx';
-import { borderClass } from '../shared/utils/validators.ts';
-import { formatSoles } from '../shared/utils/currency.ts';
-import { findCustomerByInput } from '../shared/utils/customers.ts';
+import { useState, useEffect, type ReactNode } from 'react';
+import type { Customer } from '@ferresys/contracts/customers';
+import type { DeliveryRequest, DocTypeLabel, PayMethodLabel } from '@ferresys/contracts/sales';
+import FieldError from '../../../shared/ui/FieldError.tsx';
+import CustomerSelector from './CustomerSelector.tsx';
+import { borderClass } from '../../../shared/utils/validators.ts';
+import { formatSoles } from '../../../shared/utils/currency.ts';
+import { findCustomerByInput } from '../../../shared/utils/customers.ts';
 
-const DOCUMENT_TYPES = [
+const DOCUMENT_TYPES: { id: DocTypeLabel; icon: string; hint: string }[] = [
   { id: 'Nota de Venta', icon: 'fa-receipt', hint: 'Sin datos' },
   { id: 'Boleta', icon: 'fa-file-lines', hint: 'Con DNI' },
   { id: 'Factura', icon: 'fa-file-invoice-dollar', hint: 'Con RUC' },
 ];
 
-const PAYMENT_METHODS = [
+const PAYMENT_METHODS: { id: PayMethodLabel; label: string; icon: string }[] = [
   { id: 'Efectivo', label: 'Efectivo', icon: 'fa-money-bill-wave' },
   { id: 'Tarjeta', label: 'Tarjeta', icon: 'fa-credit-card' },
   { id: 'Yape/Plin', label: 'Yape / Plin', icon: 'fa-mobile-screen' },
@@ -23,7 +25,7 @@ const PAYMENT_METHODS = [
 // Billetes que el cliente suele entregar; tocar uno varias veces los acumula.
 const BILLS = [10, 20, 50, 100, 200];
 
-function Section({ title, children }) {
+function Section({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <section>
       <h4 className="text-[11px] font-bold text-muted uppercase tracking-wide mb-2">{title}</h4>
@@ -34,34 +36,67 @@ function Section({ title, children }) {
 
 // Ventana de cobro: comprobante, cliente y medio de pago. Valida los datos y entrega el pago a
 // onConfirm; si onConfirm lanza un error, su mensaje se muestra aquí para corregir y reintentar.
-export default function CheckoutModal({ title, total, units, clients, customerInput, onCustomerInputChange, onClose, onConfirm, allowDelivery = false }) {
-  const [docType, setDocType] = useState('Nota de Venta');
-  const [payMethod, setPayMethod] = useState('Efectivo');
+/** Lo que la ventana de cobro entrega al confirmar. */
+export interface CheckoutPayment {
+  docType: DocTypeLabel;
+  payMethod: PayMethodLabel;
+  payCode: string;
+  mixCash: number;
+  mixDigital: number;
+  /** Efectivo recibido (para el vuelto); null si no se indicó o no es efectivo. */
+  receivedCash: number | null;
+  customer: Customer | null;
+  /** Cliente sin registrar (boleta o factura). */
+  customerName: string;
+  customerDni: string;
+  customerRuc: string;
+  delivery: DeliveryRequest | null;
+}
+
+type ErrorField = 'customer' | 'customerName' | 'customerDoc' | 'receivedCash' | 'payCode' | 'deliveryAddress' | 'deliveryPhone' | 'mixCash' | 'mixDigital';
+type Errors = Partial<Record<ErrorField, string>>;
+type DeliveryType = 'PICKUP' | 'DELIVERY';
+
+interface Props {
+  title?: string;
+  total: number;
+  units: number;
+  clients: readonly Customer[];
+  customerInput: string;
+  onCustomerInputChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: (payment: CheckoutPayment) => Promise<void>;
+  allowDelivery?: boolean;
+}
+
+export default function CheckoutModal({ title, total, units, clients, customerInput, onCustomerInputChange, onClose, onConfirm, allowDelivery = false }: Props) {
+  const [docType, setDocType] = useState<DocTypeLabel>('Nota de Venta');
+  const [payMethod, setPayMethod] = useState<PayMethodLabel>('Efectivo');
   const [payCode, setPayCode] = useState('');
   const [mixCash, setMixCash] = useState('');
   const [mixDigital, setMixDigital] = useState('');
   const [receivedCash, setReceivedCash] = useState('');
   // Billetes entregados por el cliente: { 50: 2 } = dos billetes de 50. Se suman al tocar.
-  const [bills, setBills] = useState({});
+  const [bills, setBills] = useState<Record<number, number>>({});
   const [customerName, setCustomerName] = useState('');
   const [customerDni, setCustomerDni] = useState('');
   const [customerRuc, setCustomerRuc] = useState('');
-  const [deliveryType, setDeliveryType] = useState('PICKUP');
+  const [deliveryType, setDeliveryType] = useState<DeliveryType>('PICKUP');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryPhone, setDeliveryPhone] = useState('');
   const [deliveryRecipient, setDeliveryRecipient] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<Errors>({});
   const [serverError, setServerError] = useState('');
   const [processing, setProcessing] = useState(false);
 
   const customer = findCustomerByInput(clients, customerInput);
   const received = parseFloat(receivedCash);
-  const change = !isNaN(received) ? received - total : null;
+  const change = !Number.isNaN(received) ? received - total : null;
   const billCount = Object.values(bills).reduce((sum, n) => sum + n, 0);
 
   // Cada toque suma un billete a lo recibido. Escribir el monto a mano descarta los billetes.
-  const addBill = (value) => {
+  const addBill = (value: number) => {
     const next = { ...bills, [value]: (bills[value] || 0) + 1 };
     setBills(next);
     setReceivedCash(Object.entries(next).reduce((sum, [v, n]) => sum + Number(v) * n, 0).toFixed(2));
@@ -71,24 +106,24 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
   const clearReceived = () => { setBills({}); setReceivedCash(''); clearError('receivedCash'); };
 
   // Pago mixto: lo que falta del total se completa solo en el otro campo.
-  const remainderOf = (value) => {
+  const remainderOf = (value: string) => {
     const n = parseFloat(value);
-    if (value === '' || isNaN(n)) return '';
+    if (value === '' || Number.isNaN(n)) return '';
     return Math.max(0, Math.round((total - n) * 100) / 100).toFixed(2);
   };
-  const changeMix = (field, value) => {
+  const changeMix = (field: 'cash' | 'digital', value: string) => {
     if (field === 'cash') { setMixCash(value); setMixDigital(remainderOf(value)); }
     else { setMixDigital(value); setMixCash(remainderOf(value)); }
     clearError('mixCash');
     clearError('mixDigital');
   };
 
-  const clearError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
+  const clearError = (field: ErrorField) => setErrors(prev => ({ ...prev, [field]: '' }));
 
   const close = () => { if (!processing) onClose(); };
 
   // Al elegir envío se proponen los datos del cliente registrado (se pueden corregir).
-  const chooseDelivery = (type) => {
+  const chooseDelivery = (type: DeliveryType) => {
     setDeliveryType(type);
     if (type === 'DELIVERY') {
       if (!deliveryAddress && customer?.address) setDeliveryAddress(customer.address);
@@ -100,13 +135,13 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
   };
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
 
   const validate = () => {
-    const e = {};
+    const e: Errors = {};
     if (customerInput.trim() && !customer) {
       e.customer = 'Cliente no registrado. Selecciónelo de la lista o borre el campo.';
     } else if (payMethod === 'Fiado' && !customer) {
@@ -118,7 +153,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
       if (docType === 'Factura' && !/^\d{11}$/.test(customerRuc.trim())) e.customerDoc = 'El RUC debe tener 11 dígitos.';
     }
     if (payMethod === 'Efectivo' && receivedCash !== '') {
-      if (isNaN(received) || received < 0) e.receivedCash = 'Monto recibido inválido.';
+      if (Number.isNaN(received) || received < 0) e.receivedCash = 'Monto recibido inválido.';
       else if (received + 0.001 < total) e.receivedCash = `El monto recibido es menor al total (${formatSoles(total)}).`;
     }
     if (payMethod === 'Yape/Plin' && !payCode.trim()) e.payCode = 'Ingrese el N° de operación de Yape/Plin.';
@@ -129,9 +164,9 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
     if (payMethod === 'Pago Mixto') {
       const cash = parseFloat(mixCash);
       const digital = parseFloat(mixDigital);
-      if (mixCash === '' || isNaN(cash) || cash < 0) e.mixCash = 'Monto en efectivo inválido.';
+      if (mixCash === '' || Number.isNaN(cash) || cash < 0) e.mixCash = 'Monto en efectivo inválido.';
       else if (cash > total + 0.001) e.mixCash = `El efectivo no puede superar el total (${formatSoles(total)}).`;
-      if (mixDigital === '' || isNaN(digital) || digital < 0) e.mixDigital = 'Monto digital inválido.';
+      if (mixDigital === '' || Number.isNaN(digital) || digital < 0) e.mixDigital = 'Monto digital inválido.';
       if (!e.mixCash && !e.mixDigital && Math.abs(cash + digital - total) > 0.01) {
         e.mixDigital = `La suma de ambos montos debe ser ${formatSoles(total)}.`;
       }
@@ -152,7 +187,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
         payCode,
         mixCash: parseFloat(mixCash) || 0,
         mixDigital: parseFloat(mixDigital) || 0,
-        receivedCash: payMethod === 'Efectivo' && !isNaN(received) ? received : null,
+        receivedCash: payMethod === 'Efectivo' && !Number.isNaN(received) ? received : null,
         customer,
         customerName,
         customerDni,
@@ -168,16 +203,16 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
           : null,
       });
     } catch (err) {
-      setServerError(err.message || 'No se pudo completar el cobro.');
+      setServerError((err as Error).message || 'No se pudo completar el cobro.');
     } finally {
       setProcessing(false);
     }
   };
 
-  const chip = (active) => `rounded-lg border text-xs font-bold transition-colors ${
+  const chip = (active: boolean) => `rounded-lg border text-xs font-bold transition-colors ${
     active ? 'border-brand bg-brand-soft text-brand-text ring-1 ring-brand' : 'border-line text-ink-soft hover:bg-surface-muted'
   }`;
-  const inputCls = (error) => `w-full px-3 py-2 border rounded-lg outline-none text-sm bg-surface focus:border-brand ${borderClass(error)}`;
+  const inputCls = (error?: string) => `w-full px-3 py-2 border rounded-lg outline-none text-sm bg-surface focus:border-brand ${borderClass(error)}`;
 
   return (
     <div className="fixed inset-0 bg-panel/60 z-50 flex items-end sm:items-center justify-center backdrop-blur-sm sm:p-4">
@@ -258,10 +293,10 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
               {allowDelivery && (
                 <Section title="Entrega">
                   <div className="grid grid-cols-2 gap-1.5">
-                    {[
+                    {([
                       { id: 'PICKUP', label: 'Se lleva ahora', icon: 'fa-bag-shopping' },
                       { id: 'DELIVERY', label: 'Envío a domicilio', icon: 'fa-truck-fast' },
-                    ].map(option => (
+                    ] as const).map(option => (
                       <button
                         key={option.id}
                         type="button"
@@ -355,7 +390,7 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
                         }`}
                       >
                         {value}
-                        {bills[value] > 0 && (
+                        {(bills[value] ?? 0) > 0 && (
                           <span className="absolute -top-1.5 -right-1.5 bg-success text-white text-[10px] rounded-full min-w-[1.1rem] h-[1.1rem] px-1 flex items-center justify-center">
                             ×{bills[value]}
                           </span>
@@ -421,10 +456,10 @@ export default function CheckoutModal({ title, total, units, clients, customerIn
               {payMethod === 'Pago Mixto' && (
                 <div>
                   <div className="grid grid-cols-2 gap-2">
-                    {[
+                    {([
                       { id: 'cash', label: 'Efectivo', value: mixCash, error: errors.mixCash },
                       { id: 'digital', label: 'Digital', value: mixDigital, error: errors.mixDigital },
-                    ].map(field => (
+                    ] as const).map(field => (
                       <div key={field.id}>
                         <label className="text-xs text-muted mb-1 block">{field.label}</label>
                         <input

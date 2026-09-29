@@ -1,4 +1,5 @@
 // Sesión y personal (módulo identity del backend).
+import type { IsoDate } from './common.ts';
 
 export type Role = 'ADMINISTRADOR' | 'VENDEDOR' | 'CAJERO' | 'REPARTIDOR' | 'ALMACEN';
 export type SaleFlowMode = 'DIRECT' | 'SEPARATE_CASHIER' | 'STAGED';
@@ -43,4 +44,17 @@ export interface MeResponse {
 export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
+}
+
+/** GET /api/personal */
+export interface StaffMember {
+  id: number;
+  name: string;
+  user: string;
+  role: Role;
+  modules: string[];
+  active: boolean;
+  branchId: number;
+  branch: { id: number; name: string };
+  createdAt: IsoDate;
 }

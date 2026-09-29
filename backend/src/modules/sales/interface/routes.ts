@@ -12,6 +12,10 @@ import {
   cancelOrder, createOrder, dispatchOrder, getOrder, listDispatchedToday, listOrders, payOrder,
 } from '../application/orders.ts';
 import { cancelQuote, convertQuote, createQuote, listQuotes } from '../application/quotes.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type {
+  DirectSaleSaved, DispatchedOrder, Order, OrderSaved, Quote, QuoteCancelled, QuoteSaved,
+} from '@ferresys/contracts/sales';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -50,7 +54,7 @@ salesRoutes.post('/', handle('registrar la venta', async (req, res) => {
     usuarioCajaId: req.user.id,
     vendedorId: body(req).vendedorId || req.user.id,
   }, req.user);
-  res.status(201).json({ success: true, venta });
+  res.status(201).json({ success: true, venta } satisfies Sendable<DirectSaleSaved>);
 }));
 
 // ---------- /api/pedidos ----------
@@ -67,40 +71,40 @@ export const orderRoutes = express.Router();
 
 // GET /api/pedidos?status=PENDING_PAYMENT|PAID  (cola de caja o de despacho)
 orderRoutes.get('/', allowModules({ default: ['caja', 'despacho', 'pos'] }), handle('listar los pedidos', async (req, res) => {
-  res.json(await listOrders(prisma, parseInput(QueueQuery, req.query, saleError).status, req.user));
+  res.json(await listOrders(prisma, parseInput(QueueQuery, req.query, saleError).status, req.user) satisfies Sendable<Order[]>);
 }));
 
 // GET /api/pedidos/despachados-hoy  (respaldo de lo que salió hoy del almacén)
 orderRoutes.get('/despachados-hoy', allowModules({ default: ['despacho', 'pos', 'caja'] }), handle('listar lo despachado hoy', async (req, res) => {
-  res.json(await listDispatchedToday(prisma, req.user));
+  res.json(await listDispatchedToday(prisma, req.user) satisfies Sendable<DispatchedOrder[]>);
 }));
 
 // GET /api/pedidos/:id
 orderRoutes.get('/:id', allowModules({ default: ['caja', 'despacho', 'pos'] }), handle('obtener el pedido', async (req, res) => {
-  res.json(await getOrder(prisma, orderId(req)));
+  res.json(await getOrder(prisma, orderId(req)) satisfies Sendable<Order>);
 }));
 
 // POST /api/pedidos  (el vendedor envía el pedido a caja)
 orderRoutes.post('/', allowModules({ default: ['pos'] }), handle('crear el pedido', async (req, res) => {
-  res.status(201).json({ success: true, pedido: await createOrder(prisma, body(req), req.user) });
+  res.status(201).json({ success: true, pedido: await createOrder(prisma, body(req), req.user) } satisfies Sendable<OrderSaved>);
 }));
 
 // POST /api/pedidos/:id/cobrar
 orderRoutes.post('/:id/cobrar', allowModules({ default: ['caja'] }), handle('cobrar el pedido', async (req, res) => {
-  res.json({ success: true, pedido: await payOrder(prisma, orderId(req), body(req), req.user) });
+  res.json({ success: true, pedido: await payOrder(prisma, orderId(req), body(req), req.user) } satisfies Sendable<OrderSaved>);
 }));
 
 // POST /api/pedidos/:id/despachar  { repartidorId? }
 // Quién despacha lo decide la sucursal (domain/dispatch.ts); aquí solo se exige alguno de esos módulos.
 orderRoutes.post('/:id/despachar', allowModules({ default: ['despacho', 'pos', 'caja'] }), handle('despachar el pedido', async (req, res) => {
   const { repartidorId } = parseInput(DispatchBody, req.body, saleError);
-  res.json({ success: true, pedido: await dispatchOrder(prisma, orderId(req), req.user, repartidorId ?? null) });
+  res.json({ success: true, pedido: await dispatchOrder(prisma, orderId(req), req.user, repartidorId ?? null) } satisfies Sendable<OrderSaved>);
 }));
 
 // POST /api/pedidos/:id/anular  { reason? }
 orderRoutes.post('/:id/anular', allowModules({ default: ['caja', 'pos'] }), handle('anular el pedido', async (req, res) => {
   const { reason } = parseInput(CancelBody, req.body, saleError);
-  res.json({ success: true, pedido: await cancelOrder(prisma, orderId(req), req.user, reason) });
+  res.json({ success: true, pedido: await cancelOrder(prisma, orderId(req), req.user, reason) } satisfies Sendable<OrderSaved>);
 }));
 
 // ---------- /api/cotizaciones ----------
@@ -113,21 +117,21 @@ export const quoteRoutes = express.Router();
 
 // GET /api/cotizaciones
 quoteRoutes.get('/', handle('listar las cotizaciones', async (req, res) => {
-  res.json(await listQuotes(prisma));
+  res.json(await listQuotes(prisma) satisfies Sendable<Quote[]>);
 }));
 
 // POST /api/cotizaciones  { cart, clienteId?, validDays? }
 quoteRoutes.post('/', handle('generar la cotización', async (req, res) => {
-  res.status(201).json({ success: true, cotizacion: await createQuote(prisma, body(req), req.user) });
+  res.status(201).json({ success: true, cotizacion: await createQuote(prisma, body(req), req.user) } satisfies Sendable<QuoteSaved>);
 }, QUOTE_NUMBER_TAKEN));
 
 // POST /api/cotizaciones/:id/convertir: cobrarla como venta directa.
 quoteRoutes.post('/:id/convertir', handle('convertir la cotización', async (req, res) => {
-  res.json({ success: true, venta: await convertQuote(prisma, quoteId(req), body(req), req.user) });
+  res.json({ success: true, venta: await convertQuote(prisma, quoteId(req), body(req), req.user) } satisfies Sendable<DirectSaleSaved>);
 }));
 
 // DELETE /api/cotizaciones/:id: anularla (queda registrada, en estado CANCELADO).
 quoteRoutes.delete('/:id', handle('anular la cotización', async (req, res) => {
   const cotizacion = await cancelQuote(prisma, quoteId(req), req.user);
-  res.json({ success: true, message: 'Cotización eliminada (cancelada) exitosamente.', cotizacion });
+  res.json({ success: true, message: 'Cotización eliminada (cancelada) exitosamente.', cotizacion } satisfies Sendable<QuoteCancelled>);
 }));

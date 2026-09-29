@@ -1,8 +1,23 @@
-import React from 'react';
-import { formatSoles } from '../shared/utils/currency.ts';
+import { formatSoles } from '../../../shared/utils/currency.ts';
+
+export interface SaleSuccess {
+  icon?: string;
+  title: string;
+  /** Lo que el cliente debe recordar, en grande (ej. "N° 15"). */
+  highlight?: string;
+  subtitle?: string;
+  rows?: { label: string; value: string }[];
+  /** Vuelto a entregar; null si no corresponde. */
+  change?: number | null;
+  buttonLabel: string;
+}
+
+interface Props extends SaleSuccess {
+  onClose: () => void;
+}
 
 // Confirmación de una operación terminada (venta cobrada, pedido enviado a caja…).
-export default function SaleSuccessModal({ icon = 'fa-check', title, highlight, subtitle, rows = [], change = null, buttonLabel, onClose }) {
+export default function SaleSuccessModal({ icon = 'fa-check', title, highlight, subtitle, rows = [], change = null, buttonLabel, onClose }: Props) {
   return (
     <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
       <div className="bg-surface rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">

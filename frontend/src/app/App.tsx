@@ -24,11 +24,11 @@ import { useSession } from './useSession.ts';
 // Las pantallas se cargan por separado: entrar al sistema no descarga todo el programa de una vez.
 const page = (load: () => Promise<{ default: ComponentType<any> }>) => lazy(load);
 const PAGES = {
-  pos: page(() => import('../pages/PosPage.jsx')),
+  pos: page(() => import('../features/ventas/PosPage.tsx')),
   caja: page(() => import('../pages/CajaPage.jsx')),
   inventory: page(() => import('../pages/InventarioPage.jsx')),
   categories: page(() => import('../pages/CategoriasPage.jsx')),
-  cotizaciones: page(() => import('../pages/CotizacionesPage.jsx')),
+  cotizaciones: page(() => import('../features/ventas/CotizacionesPage.tsx')),
   kardex: page(() => import('../pages/KardexPage.jsx')),
   compras: page(() => import('../pages/ComprasPage.jsx')),
   deliveries: page(() => import('../pages/EntregasPage.jsx')),
@@ -39,8 +39,8 @@ const PAGES = {
   settings: page(() => import('../pages/SettingsPage.jsx')),
   audit: page(() => import('../pages/AuditPage.jsx')),
   transfers: page(() => import('../pages/TransfersPage.jsx')),
-  cobros: page(() => import('../pages/CashierQueuePage.jsx')),
-  despacho: page(() => import('../pages/DispatchQueuePage.jsx')),
+  cobros: page(() => import('../features/ventas/CashierQueuePage.tsx')),
+  despacho: page(() => import('../features/ventas/DispatchQueuePage.tsx')),
 } satisfies Record<ScreenId, unknown>;
 
 const COUNTS_INTERVAL_MS = 20000;

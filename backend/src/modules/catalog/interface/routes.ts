@@ -11,6 +11,8 @@ import {
 import {
   createCategory, deleteCategory, importCategories, listCategories, updateCategory,
 } from '../application/categories.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type { Category, Product } from '@ferresys/contracts/catalog';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -45,7 +47,7 @@ export const productRoutes = express.Router();
 
 // GET /api/productos: con el stock de la sucursal del usuario y el de la empresa.
 productRoutes.get('/', handle(async (req, res) => {
-  res.json(await listProducts(prisma, req.user));
+  res.json(await listProducts(prisma, req.user) satisfies Sendable<Product[]>);
 }, { failure: 'Error al listar productos.' }));
 
 // GET /api/productos/categorias: nombres para los formularios.
@@ -87,7 +89,7 @@ export const categoryRoutes = express.Router();
 
 // GET /api/categorias?all=true  (con métricas; all=true incluye las inactivas)
 categoryRoutes.get('/', handle(async (req, res) => {
-  res.json(await listCategories(prisma, req.query.all === 'true'));
+  res.json(await listCategories(prisma, req.query.all === 'true') satisfies Sendable<Category[]>);
 }, { failure: 'Error al obtener la lista de categorías.' }));
 
 categoryRoutes.post('/', handle(async (req, res) => {

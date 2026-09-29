@@ -8,6 +8,8 @@ import {
   CustomerError, createCustomer, listCustomers, listDebts, registerPayment, setCreditLimit, setPriceList, updateCustomer,
 } from './customers.ts';
 import { lookupDocument } from './documentLookup.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type { Customer } from '@ferresys/contracts/customers';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -39,7 +41,7 @@ const PaymentBody = z.object({
 export const customerRoutes = express.Router();
 
 customerRoutes.get('/', handle('Error al obtener clientes.', async (req, res) => {
-  res.json(await listCustomers(prisma));
+  res.json(await listCustomers(prisma) satisfies Sendable<Customer[]>);
 }));
 
 // GET /api/clientes/consulta-doc/:doc  (datos de un DNI o RUC para registrarlo)

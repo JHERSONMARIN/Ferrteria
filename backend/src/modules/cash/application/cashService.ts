@@ -43,9 +43,9 @@ export async function getCashStatus(db: Db, user: CashUser) {
   const sessionId = await repo.activeSessionOf(db, user.id);
   if (sessionId !== null) {
     const session = await repo.loadSession(db, sessionId);
-    if (session) return { abierta: true, caja: presentSession(session), registers: [] };
+    if (session) return { abierta: true as const, caja: presentSession(session), registers: [] };
   }
-  return { abierta: false, caja: null, registers: await repo.registersToJoin(db, user.branchId) };
+  return { abierta: false as const, caja: null, registers: await repo.registersToJoin(db, user.branchId) };
 }
 
 export async function openSession(client: Client, input: { cashRegisterId?: number; montoInicial?: unknown }, user: CashUser) {

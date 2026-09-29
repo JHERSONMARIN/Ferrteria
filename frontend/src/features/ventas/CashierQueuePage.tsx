@@ -1,64 +1,49 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { api } from '../api/client.ts';
-import CheckoutModal from '../components/CheckoutModal.jsx';
-import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
-import { formatSoles } from '../shared/utils/currency.ts';
-import { customerOptionLabel } from '../shared/utils/customers.ts';
-import { buildSaleTicket } from '../shared/utils/tickets.ts';
-import { useConfirm } from '../shared/ui/index.ts';
+// Por cobrar: la cola de pedidos que los vendedores enviaron a caja. Se refresca sola cada pocos segundos.
+import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { SaleFlowMode, SessionUser } from '@ferresys/contracts/identity';
+import type { CancelOrderRequest, OrderSaved, PayOrderRequest } from '@ferresys/contracts/sales';
+import { api } from '../../api/client.ts';
+import { queryKeys } from '../../api/queryClient.ts';
+import { useCashStatus, useCustomers } from '../../api/queries.ts';
+import { formatSoles } from '../../shared/utils/currency.ts';
+import { customerOptionLabel } from '../../shared/utils/customers.ts';
+import { buildSaleTicket, type TicketData } from '../../shared/utils/tickets.ts';
+import { useConfirm } from '../../shared/ui/index.ts';
+import CheckoutModal, { type CheckoutPayment } from './components/CheckoutModal.tsx';
+import SaleSuccessModal, { type SaleSuccess } from './components/SaleSuccessModal.tsx';
+import { minutesAgo } from './time.ts';
+import { useOrderQueue } from './queries.ts';
 
-const REFRESH_MS = 5000;
-
-function minutesAgo(date) {
-  const minutes = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
-  if (minutes < 1) return 'recién';
-  if (minutes < 60) return `hace ${minutes} min`;
-  return `hace ${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+interface Props {
+  currentUser: SessionUser;
+  onTriggerPrint?: (ticket: TicketData) => void;
+  saleFlowMode?: SaleFlowMode;
+  deliveriesEnabled?: boolean;
 }
 
-// Cola de pedidos que los vendedores enviaron a caja.
-export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlowMode, deliveriesEnabled = false }) {
+export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlowMode, deliveriesEnabled = false }: Props) {
   const confirmar = useConfirm();
-  const [orders, setOrders] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+  const queryClient = useQueryClient();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
-  const [cajaAbierta, setCajaAbierta] = useState(null);
-  const [loadError, setLoadError] = useState('');
   const [customerInput, setCustomerInput] = useState('');
   const [showCheckout, setShowCheckout] = useState(false);
-  const [success, setSuccess] = useState(null);
+  const [success, setSuccess] = useState<SaleSuccess | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [notice, setNotice] = useState('');
-  const searchRef = useRef(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const selected = orders.find(o => o.id === selectedId) || null;
+  // Mientras se cobra un pedido la cola no se refresca.
+  const queue = useOrderQueue('PENDING_PAYMENT', showCheckout);
+  const orders = useMemo(() => queue.data ?? [], [queue.data]);
+  const loadError = queue.error ? queue.error.message || 'No se pudo cargar la cola de pedidos.' : '';
+  const clients = useCustomers().data ?? [];
+  const cashStatus = useCashStatus();
+  const cajaAbierta = cashStatus.data ? cashStatus.data.abierta : null;
 
-  const loadOrders = async () => {
-    try {
-      setOrders(await api.get('/pedidos?status=PENDING_PAYMENT'));
-      setLoadError('');
-    } catch (err) {
-      setLoadError(err.message || 'No se pudo cargar la cola de pedidos.');
-    }
-  };
-
-  const loadCaja = async () => {
-    try {
-      const data = await api.get('/caja/estado-actual');
-      setCajaAbierta(Boolean(data?.abierta));
-    } catch {
-      setCajaAbierta(null);
-    }
-  };
-
-  useEffect(() => {
-    loadOrders();
-    loadCaja();
-    api.get('/clientes').then(setClients).catch(() => setClients([]));
-    const interval = setInterval(() => { if (!showCheckout) loadOrders(); }, REFRESH_MS);
-    return () => clearInterval(interval);
-  }, [showCheckout]);
+  const selected = orders.find(o => o.id === selectedId) ?? null;
+  const refreshQueue = () => queryClient.invalidateQueries({ queryKey: queryKeys.orders });
 
   // Si el pedido elegido desaparece de la cola (otro cajero lo cobró o venció), se avisa.
   useEffect(() => {
@@ -68,7 +53,7 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
     }
   }, [orders]);
 
-  const selectOrder = (order) => {
+  const selectOrder = (order: (typeof orders)[number]) => {
     setSelectedId(order.id);
     setNotice('');
     const customer = clients.find(c => c.id === order.clienteId);
@@ -81,10 +66,10 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
     return orders.filter(o => String(o.id) === q || o.customer.toLowerCase().includes(q) || o.seller.toLowerCase().includes(q));
   }, [orders, search]);
 
-  const handleSearchKeyDown = (e) => {
+  const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
     const number = parseInt(search.replace(/\D/g, ''), 10);
-    const match = orders.find(o => o.id === number) || (filtered.length === 1 ? filtered[0] : null);
+    const match = orders.find(o => o.id === number) ?? (filtered.length === 1 ? filtered[0] : undefined);
     if (match) {
       selectOrder(match);
       setSearch('');
@@ -93,8 +78,9 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
     }
   };
 
-  const confirmPayment = async (payment) => {
-    const res = await api.post(`/pedidos/${selected.id}/cobrar`, {
+  const confirmPayment = async (payment: CheckoutPayment) => {
+    if (!selected) return;
+    const res = await api.post<OrderSaved>(`/pedidos/${selected.id}/cobrar`, {
       docType: payment.docType,
       payMethod: payment.payMethod,
       mixCash: payment.mixCash,
@@ -102,12 +88,13 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
       payCode: payment.payCode,
       clienteId: payment.customer ? payment.customer.id : null,
       delivery: payment.delivery,
-    });
+    } satisfies PayOrderRequest);
     const order = res.pedido;
+    // La pantalla de Caja (si sigue abierta en otra parte del sistema) se actualiza con la venta.
     window.dispatchEvent(new Event('venta-registrada'));
 
     if (onTriggerPrint) {
-      onTriggerPrint(buildSaleTicket({ ...payment, numDoc: order.numDoc, items: order.items, total: order.total, discount: order.discount, sellerName: order.seller }));
+      onTriggerPrint(buildSaleTicket({ ...payment, numDoc: order.numDoc ?? '', items: order.items, total: order.total, discount: order.discount, sellerName: order.seller }));
       setTimeout(() => window.print(), 300);
     }
 
@@ -128,7 +115,11 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
     });
     setShowCheckout(false);
     setSelectedId(null);
-    loadOrders();
+    refreshQueue();
+    // Cambian la caja, el stock (si se despachó en el acto) y la deuda del cliente (fiado).
+    queryClient.invalidateQueries({ queryKey: queryKeys.cashStatus });
+    queryClient.invalidateQueries({ queryKey: queryKeys.products });
+    queryClient.invalidateQueries({ queryKey: queryKeys.customers });
   };
 
   const cancelSelected = async () => {
@@ -142,12 +133,13 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
     if (!seguro) return;
     try {
       setCancelling(true);
-      await api.post(`/pedidos/${selected.id}/anular`, { reason: `Anulado en caja por ${currentUser?.name}` });
+      await api.post<OrderSaved>(`/pedidos/${selected.id}/anular`, { reason: `Anulado en caja por ${currentUser.name}` } satisfies CancelOrderRequest);
       setNotice(`Pedido N° ${selected.id} anulado.`);
       setSelectedId(null);
-      loadOrders();
+      refreshQueue();
+      queryClient.invalidateQueries({ queryKey: queryKeys.products });
     } catch (err) {
-      setNotice(err.message || 'No se pudo anular el pedido.');
+      setNotice((err as Error).message || 'No se pudo anular el pedido.');
     } finally {
       setCancelling(false);
     }

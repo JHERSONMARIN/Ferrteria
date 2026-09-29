@@ -1,144 +1,106 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { api } from '../api/client.ts';
-import CustomerSelector from '../components/CustomerSelector.jsx';
-import CheckoutModal from '../components/CheckoutModal.jsx';
-import SaleSuccessModal from '../components/SaleSuccessModal.jsx';
-import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
-import { formatSoles } from '../shared/utils/currency.ts';
-import { findCustomerByInput } from '../shared/utils/customers.ts';
-import { buildSaleTicket } from '../shared/utils/tickets.ts';
-import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../shared/utils/quantities.ts';
-import { useToast, useConfirm, SkeletonCards, Modal } from '../shared/ui/index.ts';
+// Vender: catálogo a la izquierda y la venta (o el pedido, si la sucursal trabaja con caja separada) a la derecha.
+import { useState, useEffect, useRef, useMemo, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { Product, SaleUnit } from '@ferresys/contracts/catalog';
+import type { SaleFlowMode, SessionUser } from '@ferresys/contracts/identity';
+import type {
+  DirectSaleRequest, DirectSaleSaved, OrderRequest, OrderSaved, PricesChanged, Quote, QuoteRequest, QuoteSaved,
+} from '@ferresys/contracts/sales';
+import { api, ApiError } from '../../api/client.ts';
+import { queryKeys } from '../../api/queryClient.ts';
+import { fetchCashStatus, useCashStatus, useCategories, useCustomers, useProducts } from '../../api/queries.ts';
+import BarcodeScannerModal from '../../shared/scanner/BarcodeScannerModal.tsx';
+import { formatSoles } from '../../shared/utils/currency.ts';
+import { findCustomerByInput } from '../../shared/utils/customers.ts';
+import { buildSaleTicket, type TicketData } from '../../shared/utils/tickets.ts';
+import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../../shared/utils/quantities.ts';
+import { useToast, useConfirm, SkeletonCards } from '../../shared/ui/index.ts';
+import CustomerSelector from './components/CustomerSelector.tsx';
+import CheckoutModal, { type CheckoutPayment } from './components/CheckoutModal.tsx';
+import SaleSuccessModal, { type SaleSuccess } from './components/SaleSuccessModal.tsx';
+import CartQtyInput from './components/CartQtyInput.tsx';
+import UnitChoiceModal from './components/UnitChoiceModal.tsx';
+import QuotePickerModal from './components/QuotePickerModal.tsx';
+import {
+  availableStock, baseQtyOf, cartPayload, lineKey, perUnitLabel, priceFor, stockUnitLabel, unitOf, type CartItem,
+} from './cart.ts';
+import { fetchQuotes } from './queries.ts';
 
-// Stock que se puede vender: lo reservado por pedidos sin despachar ya tiene dueño.
-const availableStock = (product) => roundQuantity(product.stock - (product.reserved || 0));
+type DiscountType = 'PERCENT' | 'AMOUNT';
 
-// "c/u" para lo que se vende por unidad; "/ metro", "/ kilo"… para lo demás.
-const perUnitLabel = (unit) => (!unit || unit === 'Unidad' ? 'c/u' : `/ ${unit.toLowerCase()}`);
-const stockUnitLabel = (unit) => (!unit || unit === 'Unidad' ? 'disp.' : `${unit.toLowerCase()} disp.`);
+const NO_PRODUCTS: Product[] = [];
 
-// Una línea del carrito es un producto en una presentación (unitId null = unidad base).
-const lineKey = (id, unitId) => `${id}:${unitId ?? 0}`;
-// Unidades del stock que ocupa una línea.
-const baseQtyOf = (item) => roundQuantity(item.qty * (item.factor || 1));
-
-// Cantidad editable: se confirma al salir del campo o con Enter, para poder escribir "2.5"
-// sin que el valor se corrija a mitad de camino.
-function CartQtyInput({ item, onCommit }) {
-  const [draft, setDraft] = useState(formatQuantity(item.qty));
-  useEffect(() => { setDraft(formatQuantity(item.qty)); }, [item.qty]);
-
-  const commit = () => {
-    const value = Number(draft.replace(',', '.'));
-    if (quantityProblem(value, item.allowsFractions)) setDraft(formatQuantity(item.qty));
-    else onCommit(value);
-  };
-
-  return (
-    <input
-      type="text"
-      inputMode={item.allowsFractions ? 'decimal' : 'numeric'}
-      value={draft}
-      onFocus={e => e.target.select()}
-      onChange={e => setDraft(e.target.value.replace(item.allowsFractions ? /[^0-9.,]/g : /\D/g, ''))}
-      onBlur={commit}
-      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }}
-      className={`${item.allowsFractions ? 'w-16' : 'w-11'} h-7 text-center border border-line rounded-md text-sm font-bold outline-none focus:border-brand`}
-      title={item.allowsFractions ? 'Admite decimales (hasta 3)' : undefined}
-    />
-  );
+interface Props {
+  currentUser: SessionUser;
+  onTriggerPrint?: (ticket: TicketData) => void;
+  saleFlowMode?: SaleFlowMode;
+  deliveriesEnabled?: boolean;
+  maxDiscountPercent?: number;
 }
 
-export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'DIRECT', deliveriesEnabled = false, maxDiscountPercent = 0 }) {
+export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'DIRECT', deliveriesEnabled = false, maxDiscountPercent = 0 }: Props) {
   const aviso = useToast();
   const confirmar = useConfirm();
+  const queryClient = useQueryClient();
   const isDirect = saleFlowMode === 'DIRECT';
 
-  const [products, setProducts] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [dbCategories, setDbCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const productsQuery = useProducts();
+  const products = productsQuery.data ?? NO_PRODUCTS;
+  const clients = useCustomers().data ?? [];
+  // Sin categorías registradas se usan las de los productos.
+  const dbCategories = useCategories().data ?? [];
+  // En modo directo se cobra aquí: hace falta estar en un turno de caja.
+  const estadoCaja = useCashStatus(isDirect).data ?? null;
   const [processing, setProcessing] = useState(false);
+
+  useEffect(() => {
+    if (productsQuery.error) aviso.error(`Error cargando datos del Punto de Venta: ${productsQuery.error.message}`);
+  }, [productsQuery.error, aviso]);
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
 
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [customerInput, setCustomerInput] = useState('');
   const [customerError, setCustomerError] = useState('');
-  const [estadoCaja, setEstadoCaja] = useState(null);
-  const [loadedQuote, setLoadedQuote] = useState(null);
+  const [loadedQuote, setLoadedQuote] = useState<{ id: number; numDoc: string } | null>(null);
   const [showDiscount, setShowDiscount] = useState(false);
-  const [discountType, setDiscountType] = useState('PERCENT');
+  const [discountType, setDiscountType] = useState<DiscountType>('PERCENT');
   const [discountValue, setDiscountValue] = useState('');
 
   const [showCheckout, setShowCheckout] = useState(false);
-  const [success, setSuccess] = useState(null);
+  const [success, setSuccess] = useState<SaleSuccess | null>(null);
 
-  const [showQuotesModal, setShowQuotesModal] = useState(false);
-  const [quotes, setQuotes] = useState([]);
+  const [pendingQuotes, setPendingQuotes] = useState<Quote[] | null>(null);
 
-  const searchRef = useRef(null);
-  const customerPanelRef = useRef(null);
-  const cartRef = useRef(null);
-  const cartActionsRef = useRef(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const customerPanelRef = useRef<HTMLInputElement>(null);
+  const cartRef = useRef<HTMLDivElement>(null);
+  const cartActionsRef = useRef<HTMLDivElement>(null);
   const [showScanner, setShowScanner] = useState(false);
   // Producto con varias presentaciones esperando que se elija en cuál se vende.
-  const [unitChoice, setUnitChoice] = useState(null);
+  const [unitChoice, setUnitChoice] = useState<Product | null>(null);
   // En pantallas angostas la barra "Ver venta" solo aparece si los botones del carrito no se ven,
   // así no tapa "Cobrar" ni "Guardar como cotización".
   const [cartActionsVisible, setCartActionsVisible] = useState(false);
   useEffect(() => {
     const el = cartActionsRef.current;
     if (!el || typeof IntersectionObserver === 'undefined') return undefined;
-    const observer = new IntersectionObserver(([entry]) => setCartActionsVisible(entry.isIntersecting), { threshold: 0.1 });
+    const observer = new IntersectionObserver(([entry]) => setCartActionsVisible(Boolean(entry?.isIntersecting)), { threshold: 0.1 });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
-
-  const showToast = (message, type = 'info') => {
-    if (type === 'error') aviso.error(message);
-    else if (type === 'exito') aviso.exito(message);
-    else aviso.info(message);
-  };
-
-  useEffect(() => {
-    loadInitialData();
-    if (currentUser && isDirect) loadEstadoCaja();
-  }, [currentUser, isDirect]);
 
   // En pantallas táctiles el foco automático abriría el teclado al entrar.
   useEffect(() => {
     if (window.matchMedia('(min-width: 1280px)').matches) searchRef.current?.focus();
   }, []);
 
-  const loadEstadoCaja = async () => {
-    try {
-      const data = await api.get('/caja/estado-actual');
-      setEstadoCaja(data);
-      return data;
-    } catch (err) {
-      console.error('Error cargando estado de caja:', err);
-    }
-  };
-
-  const loadInitialData = async () => {
-    try {
-      setLoading(true);
-      const [prodsData, clientsData, catsData] = await Promise.all([
-        api.get('/productos'),
-        api.get('/clientes'),
-        api.get('/categorias').catch(() => []),
-      ]);
-      setProducts(prodsData || []);
-      setClients(clientsData || []);
-      setDbCategories(catsData || []);
-      return prodsData || [];
-    } catch (err) {
-      showToast('Error cargando datos del Punto de Venta: ' + err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+  // Después de vender cambian el stock, la deuda del cliente (fiado) y la caja.
+  const refreshAfterSale = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.products });
+    queryClient.invalidateQueries({ queryKey: queryKeys.customers });
+    queryClient.invalidateQueries({ queryKey: queryKeys.cashStatus });
   };
 
   const categories = useMemo(() => {
@@ -152,7 +114,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     const q = search.toLowerCase().trim();
     return products.filter(p => {
       const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
-        || (p.saleUnits || []).some(u => u.code && u.code.toLowerCase().includes(q));
+        || p.saleUnits.some(u => u.code && u.code.toLowerCase().includes(q));
       const matchesCategory = selectedCategory === 'Todas' || (p.category || 'General') === selectedCategory;
       return matchesSearch && matchesCategory;
     });
@@ -160,14 +122,14 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
   // Unidades base de cada producto ya puestas en el carrito (sumando sus presentaciones).
   const qtyInCart = useMemo(() => {
-    const map = new Map();
+    const map = new Map<number, number>();
     cart.forEach(i => map.set(i.id, roundQuantity((map.get(i.id) || 0) + baseQtyOf(i))));
     return map;
   }, [cart]);
   const cartSubtotal = roundMoney(cart.reduce((sum, item) => sum + item.price * item.qty, 0));
 
   // Descuento sobre el total: se calcula igual que en el servidor, que es quien valida el tope.
-  const isAdmin = currentUser?.role === 'ADMINISTRADOR';
+  const isAdmin = currentUser.role === 'ADMINISTRADOR';
   const canDiscount = isAdmin || maxDiscountPercent > 0;
   const discountNumber = Number(discountValue) || 0;
   const discountAmount = discountNumber > 0
@@ -188,17 +150,9 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const cartTotal = roundMoney(cartSubtotal - appliedDiscount);
   // Cantidad de líneas: sumar metros con unidades no tiene sentido.
   const cartUnits = cart.length;
-  const cajaCerrada = isDirect && estadoCaja && estadoCaja.abierta === false;
+  const cajaCerrada = isDirect && estadoCaja !== null && !estadoCaja.abierta;
   const selectedCustomer = findCustomerByInput(clients, customerInput);
   const isWholesale = selectedCustomer?.priceList === 'WHOLESALE';
-
-  // Mismo criterio que el backend: precio mayorista si el cliente tiene esa lista y el producto (o la
-  // presentación) lo define.
-  const priceFor = (product, wholesale = isWholesale, unit = null) => {
-    const source = unit || product;
-    return wholesale && source.wholesalePrice != null ? source.wholesalePrice : source.price;
-  };
-  const unitOf = (product, unitId) => (unitId ? (product?.saleUnits || []).find(u => u.id === unitId) || null : null);
 
   // Al cambiar de cliente se recalculan los precios del carrito (salvo si viene de una cotización,
   // que conserva los precios cotizados).
@@ -219,7 +173,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   // ---------- Carrito ----------
 
   // Máximo de una línea: lo disponible del producto menos lo que ocupan sus otras líneas.
-  const maxQtyFor = (item, lines = cart) => {
+  const maxQtyFor = (item: CartItem, lines: readonly CartItem[] = cart) => {
     const product = products.find(p => p.id === item.id);
     const available = product ? availableStock(product) : item.stock;
     const others = lines
@@ -229,24 +183,28 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     return item.allowsFractions ? Math.floor(max * 1000) / 1000 : Math.floor(max + 1e-9);
   };
 
-  // unit: presentación elegida; sin elegir y con presentaciones, primero se pregunta cuál.
-  const addToCart = (product, unit) => {
-    if (unit === undefined && product.saleUnits?.length > 0) {
+  // unit: presentación elegida (null = unidad base); sin elegir y con presentaciones, primero se pregunta cuál.
+  const addToCart = (product: Product, unit?: SaleUnit | null) => {
+    if (unit === undefined && product.saleUnits.length > 0) {
       setUnitChoice(product);
       return;
     }
     const available = availableStock(product);
-    if (available <= 0) return showToast(`${product.name} está agotado.`, 'error');
+    if (available <= 0) {
+      aviso.error(`${product.name} está agotado.`);
+      return;
+    }
     const key = lineKey(product.id, unit?.id);
     const current = cart.find(i => i.key === key);
-    const draft = current || {
+    const draft: CartItem = current ?? {
       key, id: product.id, unitId: unit?.id ?? null, unitName: unit?.name ?? null, factor: unit?.factor ?? 1,
-      name: product.name, code: product.code, price: priceFor(product, isWholesale, unit), qty: 0, stock: available,
+      name: product.name, code: product.code, price: priceFor(product, isWholesale, unit ?? null), qty: 0, stock: available,
       unit: unit?.name ?? product.unit, allowsFractions: unit ? unit.allowsFractions : product.allowsFractions,
     };
     const max = maxQtyFor(draft);
     if (draft.qty + 1 > max) {
-      return showToast(`No alcanza el stock: quedan ${formatQuantity(roundQuantity(available - (qtyInCart.get(product.id) || 0)))} ${product.unit.toLowerCase()} de ${product.name}.`, 'error');
+      aviso.error(`No alcanza el stock: quedan ${formatQuantity(roundQuantity(available - (qtyInCart.get(product.id) || 0)))} ${product.unit.toLowerCase()} de ${product.name}.`);
+      return;
     }
     setCart(prev => current
       ? prev.map(i => (i.key === key ? { ...i, qty: roundQuantity(i.qty + 1) } : i))
@@ -254,22 +212,25 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     );
   };
 
-  const setCartQty = (key, qty) => {
+  const setCartQty = (key: string, qty: number) => {
     const item = cart.find(i => i.key === key);
     if (!item) return;
     const problem = quantityProblem(qty, item.allowsFractions);
-    if (problem) return showToast(`La cantidad de ${item.name} ${problem}.`, 'error');
+    if (problem) {
+      aviso.error(`La cantidad de ${item.name} ${problem}.`);
+      return;
+    }
     let quantity = qty;
     const max = maxQtyFor(item);
     if (quantity > max) {
-      showToast(`Solo hay ${formatQuantity(Math.max(max, 0))} ${item.unitName ? item.unitName.toLowerCase() : 'disponibles'} de ${item.name}.`, 'error');
+      aviso.error(`Solo hay ${formatQuantity(Math.max(max, 0))} ${item.unitName ? item.unitName.toLowerCase() : 'disponibles'} de ${item.name}.`);
       quantity = max;
     }
     if (quantity <= 0) return;
     setCart(prev => prev.map(i => (i.key === key ? { ...i, qty: quantity } : i)));
   };
 
-  const removeFromCart = (key) => setCart(prev => prev.filter(item => item.key !== key));
+  const removeFromCart = (key: string) => setCart(prev => prev.filter(item => item.key !== key));
 
   const clearCart = async () => {
     if (cart.length === 0) return;
@@ -299,7 +260,19 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     setCustomerError('');
   };
 
-  const handleSearchKeyDown = (e) => {
+  // Producto (y presentación, si el código es de una) con ese código exacto.
+  const findByCode = (code: string): { product: Product; unit: SaleUnit | undefined } | null => {
+    const q = code.trim().toLowerCase();
+    const product = products.find(p => p.code.toLowerCase() === q);
+    if (product) return { product, unit: undefined };
+    for (const p of products) {
+      const unit = p.saleUnits.find(u => u.code && u.code.toLowerCase() === q);
+      if (unit) return { product: p, unit };
+    }
+    return null;
+  };
+
+  const handleSearchKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
       setSearch('');
       return;
@@ -311,46 +284,39 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     // Enter agrega por código exacto (lector de barras, también el de una presentación) o el único
     // resultado de la búsqueda.
     const byCode = findByCode(q);
-    const candidate = byCode?.product || (filteredProducts.length === 1 ? filteredProducts[0] : null);
+    const candidate = byCode?.product ?? (filteredProducts.length === 1 ? filteredProducts[0] : undefined);
 
     if (candidate) {
       addToCart(candidate, byCode ? byCode.unit : undefined);
       setSearch('');
     } else if (filteredProducts.length === 0) {
-      showToast('No se encontró ningún producto con ese código o nombre.', 'error');
+      aviso.error('No se encontró ningún producto con ese código o nombre.');
     }
-  };
-
-  // Producto (y presentación, si el código es de una) con ese código exacto.
-  const findByCode = (code) => {
-    const q = code.trim().toLowerCase();
-    const product = products.find(p => p.code.toLowerCase() === q);
-    if (product) return { product, unit: undefined };
-    for (const p of products) {
-      const unit = (p.saleUnits || []).find(u => u.code && u.code.toLowerCase() === q);
-      if (unit) return { product: p, unit };
-    }
-    return null;
   };
 
   // Código leído con la cámara o el lector: si coincide con un producto se agrega; si no, se busca.
-  const handleScanned = (code) => {
+  const handleScanned = (code: string) => {
     const found = findByCode(code);
     if (found) {
       addToCart(found.product, found.unit);
       setSearch('');
     } else {
       setSearch(code);
-      showToast(`No hay un producto con el código ${code}.`, 'error');
+      aviso.error(`No hay un producto con el código ${code}.`);
     }
   };
 
   // Si el servidor rechaza porque los precios cambiaron, el carrito se actualiza con los reales.
-  const applyServerPrices = (err) => {
-    const serverPrices = new Map((err.data?.precios || []).map(p => [lineKey(p.id, p.unitId), p.price]));
-    setCart(prev => prev.map(item => (serverPrices.has(item.key) ? { ...item, price: serverPrices.get(item.key) } : item)));
-    loadInitialData();
+  const applyServerPrices = (err: ApiError) => {
+    const data = err.data as Partial<PricesChanged> | null;
+    const serverPrices = new Map((data?.precios ?? []).map(p => [lineKey(p.id, p.unitId), p.price]));
+    setCart(prev => prev.map(item => {
+      const price = serverPrices.get(item.key);
+      return price === undefined ? item : { ...item, price };
+    }));
+    queryClient.invalidateQueries({ queryKey: queryKeys.products });
   };
+  const pricesChanged = (err: unknown): err is ApiError => err instanceof ApiError && err.codigo === 'PRECIOS_CAMBIARON';
 
   const validateTypedCustomer = () => {
     if (customerInput.trim() && !selectedCustomer) {
@@ -361,7 +327,11 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     return true;
   };
 
-  const cartPayload = () => cart.map(item => ({ id: item.id, unitId: item.unitId, name: item.name, qty: item.qty }));
+  const print = (ticket: TicketData) => {
+    if (!onTriggerPrint) return;
+    onTriggerPrint(ticket);
+    setTimeout(() => window.print(), 300);
+  };
 
   // ---------- Modo directo: cobro en el POS ----------
 
@@ -370,41 +340,40 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     setShowCheckout(true);
   };
 
-  const confirmDirectSale = async (payment) => {
-    const caja = await loadEstadoCaja();
+  const confirmDirectSale = async (payment: CheckoutPayment) => {
+    // El turno se confirma con el servidor justo antes de cobrar (pudo cerrarse en otra pantalla).
+    const caja = await queryClient.fetchQuery({ queryKey: queryKeys.cashStatus, queryFn: fetchCashStatus, staleTime: 0 }).catch(() => null);
     if (!caja) throw new Error('No se pudo verificar el estado de la caja. Revise su conexión e intente nuevamente.');
     if (!caja.abierta) throw new Error('No está en un turno de caja. Abra una caja o únase a un turno en "Arqueo de Caja" para poder cobrar.');
 
-    let res;
+    let res: DirectSaleSaved;
     try {
-      res = await api.post('/ventas', {
+      res = await api.post<DirectSaleSaved>('/ventas', {
         docType: payment.docType,
         payMethod: payment.payMethod,
         mixCash: payment.mixCash,
         mixDigital: payment.mixDigital,
         payCode: payment.payCode,
         clienteId: payment.customer ? payment.customer.id : null,
-        vendedorId: currentUser?.id ?? null,
+        vendedorId: currentUser.id,
         cotizacionId: loadedQuote ? loadedQuote.id : null,
         totalEsperado: cartTotal,
         discount: discountPayload,
-        cart: cartPayload(),
+        cart: cartPayload(cart),
         delivery: payment.delivery,
-      });
+      } satisfies DirectSaleRequest);
     } catch (err) {
-      if (err.codigo === 'PRECIOS_CAMBIARON') {
+      if (pricesChanged(err)) {
         applyServerPrices(err);
         throw new Error(`${err.message} Ya se actualizaron los precios; verifique el nuevo total y confirme otra vez.`);
       }
       throw err;
     }
 
+    // La pantalla de Caja (si sigue abierta en otra parte del sistema) se actualiza con la venta.
     window.dispatchEvent(new Event('venta-registrada'));
     const sale = res.venta;
-    if (onTriggerPrint) {
-      onTriggerPrint(buildSaleTicket({ ...payment, numDoc: sale.numDoc, items: sale.items, total: sale.total, discount: sale.discount, sellerName: currentUser?.name }));
-      setTimeout(() => window.print(), 300);
-    }
+    print(buildSaleTicket({ ...payment, numDoc: sale.numDoc ?? '', items: sale.items, total: sale.total, discount: sale.discount, sellerName: currentUser.name }));
 
     setSuccess({
       icon: 'fa-check',
@@ -420,8 +389,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     });
     setShowCheckout(false);
     resetSale();
-    loadEstadoCaja();
-    loadInitialData();
+    refreshAfterSale();
   };
 
   // ---------- Modo con pedidos: el vendedor envía el pedido a caja ----------
@@ -430,13 +398,13 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     if (cart.length === 0 || processing || !validateTypedCustomer()) return;
     try {
       setProcessing(true);
-      const res = await api.post('/pedidos', {
-        cart: cartPayload(),
+      const res = await api.post<OrderSaved>('/pedidos', {
+        cart: cartPayload(cart),
         clienteId: selectedCustomer ? selectedCustomer.id : null,
         cotizacionId: loadedQuote ? loadedQuote.id : null,
         totalEsperado: cartTotal,
         discount: discountPayload,
-      });
+      } satisfies OrderRequest);
       // El comprobante se emite e imprime recién en caja, al cobrar; aquí solo se da el número de pedido.
       const order = res.pedido;
       setSuccess({
@@ -448,13 +416,15 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         buttonLabel: 'Nuevo pedido',
       });
       resetSale();
-      loadInitialData();
+      // El pedido reserva stock y aparece en la cola de caja.
+      queryClient.invalidateQueries({ queryKey: queryKeys.products });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders });
     } catch (err) {
-      if (err.codigo === 'PRECIOS_CAMBIARON') {
+      if (pricesChanged(err)) {
         applyServerPrices(err);
-        showToast('Los precios cambiaron: se actualizó el carrito. Revise el total y envíe otra vez.', 'error');
+        aviso.error('Los precios cambiaron: se actualizó el carrito. Revise el total y envíe otra vez.');
       } else {
-        showToast(err.message || 'No se pudo enviar el pedido.', 'error');
+        aviso.error((err as Error).message || 'No se pudo enviar el pedido.');
       }
     } finally {
       setProcessing(false);
@@ -474,34 +444,32 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     if (cart.length === 0 || processing || !validateTypedCustomer()) return;
     try {
       setProcessing(true);
-      const res = await api.post('/cotizaciones', {
+      const res = await api.post<QuoteSaved>('/cotizaciones', {
         clienteId: selectedCustomer ? selectedCustomer.id : null,
         validDays: 7,
-        cart: cartPayload(),
-      });
+        cart: cartPayload(cart),
+      } satisfies QuoteRequest);
       if (!res.success || !res.cotizacion) return;
 
-      if (onTriggerPrint) {
-        onTriggerPrint({
-          docTitle: 'PROFORMA / COTIZACIÓN',
-          numDoc: res.cotizacion.numDoc,
-          dateStr: new Date().toLocaleString('es-PE'),
-          customerName: selectedCustomer ? selectedCustomer.name : 'Público General',
-          customerDoc: selectedCustomer ? selectedCustomer.doc : '00000000',
-          docLabelTitle: selectedCustomer ? (selectedCustomer.type === 'EMPRESA' ? 'RUC' : 'DNI') : 'DNI',
-          sellerName: currentUser?.name || 'General',
-          payMethod: 'COTIZACIÓN (Válido 7 días)',
-          items: res.cotizacion.detalles.map(d => ({ name: d.producto.name, unitName: d.unitName, qty: d.quantity, price: d.unitPrice })),
-          total: res.cotizacion.total,
-          isFiscal: false,
-        });
-        setTimeout(() => window.print(), 300);
-      }
+      print({
+        docTitle: 'PROFORMA / COTIZACIÓN',
+        numDoc: res.cotizacion.numDoc,
+        dateStr: new Date().toLocaleString('es-PE'),
+        customerName: selectedCustomer ? selectedCustomer.name : 'Público General',
+        customerDoc: selectedCustomer ? selectedCustomer.doc : '00000000',
+        docLabelTitle: selectedCustomer ? (selectedCustomer.type === 'EMPRESA' ? 'RUC' : 'DNI') : 'DNI',
+        sellerName: currentUser.name || 'General',
+        payMethod: 'COTIZACIÓN (Válido 7 días)',
+        items: res.cotizacion.detalles.map(d => ({ name: d.producto.name, unitName: d.unitName, qty: d.quantity, price: d.unitPrice })),
+        total: res.cotizacion.total,
+        isFiscal: false,
+      });
 
-      showToast(`Cotización ${res.cotizacion.numDoc} guardada.`, 'exito');
+      aviso.exito(`Cotización ${res.cotizacion.numDoc} guardada.`);
       setCart([]);
+      queryClient.invalidateQueries({ queryKey: queryKeys.quotes });
     } catch (err) {
-      showToast('Error creando cotización: ' + err.message, 'error');
+      aviso.error(`Error creando cotización: ${(err as Error).message}`);
     } finally {
       setProcessing(false);
     }
@@ -510,17 +478,16 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   const openQuotesModal = async () => {
     try {
       setProcessing(true);
-      const data = await api.get('/cotizaciones');
-      setQuotes(data.filter(c => c.status === 'PENDIENTE'));
-      setShowQuotesModal(true);
+      const quotes = await queryClient.fetchQuery({ queryKey: queryKeys.quotes, queryFn: fetchQuotes, staleTime: 0 });
+      setPendingQuotes(quotes.filter(c => c.status === 'PENDIENTE'));
     } catch (err) {
-      showToast('Error al obtener cotizaciones: ' + err.message, 'error');
+      aviso.error(`Error al obtener cotizaciones: ${(err as Error).message}`);
     } finally {
       setProcessing(false);
     }
   };
 
-  const loadQuote = async (quote) => {
+  const loadQuote = async (quote: Quote) => {
     if (cart.length > 0) {
       const seguro = await confirmar({
         title: 'Cargar la cotización',
@@ -549,29 +516,29 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     }));
     setLoadedQuote({ id: quote.id, numDoc: quote.numDoc });
     setCustomerInput(quote.clienteId ? `${quote.customerDoc} - ${quote.customer}` : '');
-    setShowQuotesModal(false);
-    showToast(`Cotización ${quote.numDoc} cargada. Revise y ${isDirect ? 'cobre la venta' : 'envíela a caja'}.`, 'exito');
+    setPendingQuotes(null);
+    aviso.exito(`Cotización ${quote.numDoc} cargada. Revise y ${isDirect ? 'cobre la venta' : 'envíela a caja'}.`);
   };
 
   // ---------- Atajos de teclado ----------
 
-  const shortcutsRef = useRef(null);
-  shortcutsRef.current = (e) => {
+  const shortcutsRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  shortcutsRef.current = (e: KeyboardEvent) => {
     if (showCheckout || showScanner || unitChoice) return; // Esas ventanas manejan sus propias teclas.
     if (e.key === 'F2') {
       e.preventDefault();
       searchRef.current?.focus();
     } else if (e.key === 'F9') {
       e.preventDefault();
-      if (!success && !showQuotesModal && !cajaCerrada) primaryAction();
+      if (!success && !pendingQuotes && !cajaCerrada) primaryAction();
     } else if (e.key === 'Escape') {
       if (success) closeSuccess();
-      else if (showQuotesModal) setShowQuotesModal(false);
+      else if (pendingQuotes) setPendingQuotes(null);
     }
   };
 
   useEffect(() => {
-    const handler = (e) => shortcutsRef.current(e);
+    const handler = (e: KeyboardEvent) => shortcutsRef.current(e);
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
@@ -651,7 +618,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
               {selectedCategory !== 'Todas' && <> en <strong className="text-ink-soft">{selectedCategory}</strong></>}
             </p>
 
-            {loading && products.length === 0 ? (
+            {productsQuery.isPending ? (
               <SkeletonCards count={8} />
             ) : filteredProducts.length === 0 ? (
               <div className="text-center py-16 text-muted">
@@ -690,7 +657,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                       )}
                       <span className="text-[10px] font-mono text-muted truncate pr-7">{product.code}</span>
                       <h4 className="font-semibold text-ink text-sm leading-snug line-clamp-2 flex-1">{product.name}</h4>
-                      {product.saleUnits?.length > 0 && (
+                      {product.saleUnits.length > 0 && (
                         <span className="text-[10px] font-semibold text-brand-text truncate">
                           <i className="fa-solid fa-layer-group mr-1"></i>
                           {product.unit}, {product.saleUnits.map(u => u.name).join(', ')}
@@ -698,7 +665,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                       )}
                       <div className="flex items-end justify-between gap-2">
                         <span className="text-base font-black text-ink">
-                          {formatSoles(priceFor(product))}
+                          {formatSoles(priceFor(product, isWholesale))}
                           {isWholesale && product.wholesalePrice != null && (
                             <span className="block text-[9px] font-bold text-info uppercase">Mayorista</span>
                           )}
@@ -746,7 +713,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
             </div>
           )}
 
-          {isWholesale && !loadedQuote && (
+          {isWholesale && !loadedQuote && selectedCustomer && (
             <div className="px-4 py-2 bg-info-soft border-b border-info/30 text-xs text-info">
               <i className="fa-solid fa-tags mr-1.5"></i>
               <strong>Precios mayoristas</strong> de {selectedCustomer.name}.
@@ -855,7 +822,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-bold text-muted uppercase tracking-wide">Descuento</span>
                   <div className="flex rounded-md border border-line overflow-hidden text-xs font-bold">
-                    {[['PERCENT', '%'], ['AMOUNT', 'S/']].map(([type, label]) => (
+                    {([['PERCENT', '%'], ['AMOUNT', 'S/']] as const).map(([type, label]) => (
                       <button
                         key={type}
                         type="button"
@@ -954,94 +921,17 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
       <BarcodeScannerModal open={showScanner} onClose={() => setShowScanner(false)} onDetected={handleScanned} />
 
-      <Modal
-        open={Boolean(unitChoice)}
+      <UnitChoiceModal
+        product={unitChoice}
+        inCart={unitChoice ? qtyInCart.get(unitChoice.id) || 0 : 0}
+        wholesale={isWholesale}
         onClose={() => setUnitChoice(null)}
-        title={unitChoice?.name}
-        description="¿En qué presentación lo vende?"
-        icon="fa-layer-group"
-        size="sm"
-      >
-        {unitChoice && (
-          <div className="flex flex-col gap-2">
-            {[null, ...unitChoice.saleUnits].map(unit => {
-              const left = availableStock(unitChoice) - (qtyInCart.get(unitChoice.id) || 0);
-              const factor = unit ? unit.factor : 1;
-              const enough = left + 1e-9 >= factor;
-              return (
-                <button
-                  key={unit?.id ?? 'base'}
-                  type="button"
-                  disabled={!enough}
-                  onClick={() => { const product = unitChoice; setUnitChoice(null); addToCart(product, unit); }}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3 text-left hover:border-brand hover:bg-brand-soft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <span>
-                    <span className="block text-sm font-bold text-ink">{unit ? unit.name : unitChoice.unit}</span>
-                    <span className="block text-[11px] text-muted">
-                      {unit ? `${formatQuantity(unit.factor)} ${unitChoice.unit.toLowerCase()}` : 'Unidad base'}
-                      {!enough && ' · sin stock suficiente'}
-                    </span>
-                  </span>
-                  <span className="text-base font-black text-ink tabular-nums">{formatSoles(priceFor(unitChoice, isWholesale, unit))}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </Modal>
+        onChoose={(product, unit) => { setUnitChoice(null); addToCart(product, unit); }}
+      />
 
-      {/* ===== MODAL: COTIZACIONES PENDIENTES ===== */}
-      {showQuotesModal && (
-        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm p-4">
-          <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="px-5 py-4 bg-panel text-white flex justify-between items-center">
-              <h3 className="font-bold text-lg flex items-center gap-2">
-                <i className="fa-solid fa-file-import text-brand"></i> Cargar cotización
-              </h3>
-              <button onClick={() => setShowQuotesModal(false)} className="text-muted hover:text-white">
-                <i className="fa-solid fa-xmark text-xl"></i>
-              </button>
-            </div>
-            <div className="p-4 flex-1 overflow-y-auto">
-              {quotes.length === 0 ? (
-                <div className="text-center py-12 text-muted">
-                  <i className="fa-solid fa-file-circle-check text-4xl mb-3 text-muted"></i>
-                  <p className="text-sm font-semibold">No hay cotizaciones pendientes</p>
-                </div>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {quotes.map(q => (
-                    <li
-                      key={q.id}
-                      className="border border-line rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-3 hover:border-brand/40 transition-colors"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-sm text-ink">{q.numDoc}</span>
-                          <span className="text-xs text-muted">{q.date}</span>
-                        </div>
-                        <p className="text-sm text-ink-soft truncate">{q.customer}</p>
-                        <p className="text-xs text-muted">{q.detalles.length} producto{q.detalles.length === 1 ? '' : 's'}</p>
-                      </div>
-                      <div className="flex items-center justify-between sm:justify-end gap-3">
-                        <span className="font-black text-ink tabular-nums">{formatSoles(q.total)}</span>
-                        <button
-                          onClick={() => loadQuote(q)}
-                          className="bg-brand hover:bg-brand-strong text-brand-contrast font-bold px-4 py-2 rounded-lg text-sm shadow-sm"
-                        >
-                          Cargar
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
+      {pendingQuotes && (
+        <QuotePickerModal quotes={pendingQuotes} onClose={() => setPendingQuotes(null)} onLoad={loadQuote} />
       )}
-
     </div>
   );
 }
