@@ -3,6 +3,7 @@
 // rechazarlo (lanzando un AppError con un mensaje para el usuario) o guardar sus propios datos. No cambia
 // precios, cantidades ni estados: si un rubro necesita eso, la regla es del núcleo y se configura allí.
 import type { Tx } from '../db.ts';
+import type { Vocabulary } from '@ferresys/contracts/settings';
 import type { SessionUser } from '../types/express.d.ts';
 
 /** Una línea que está por venderse. qty está en la presentación elegida; baseQty, en la unidad del stock. */
@@ -42,7 +43,9 @@ export interface IndustryHooks {
   onStockMovement?(tx: Tx, movement: StockMovement): Promise<void>;
 }
 
+// Un paquete aporta, además de sus enganches, las palabras con que las pantallas nombran las cosas.
 export interface IndustryPackage {
   id: string;
   hooks: IndustryHooks;
+  vocabulary: Vocabulary;
 }

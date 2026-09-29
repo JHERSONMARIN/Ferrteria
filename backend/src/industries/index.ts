@@ -7,3 +7,4 @@ export type { SaleContext, SaleLine, StockMovement } from './hooks.ts';
 
 export const industryPackage = PACKAGES[INDUSTRY];
 export const industryHooks = hooksFor(industryPackage);
+export const vocabulary = industryPackage.vocabulary;

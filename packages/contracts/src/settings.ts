@@ -52,6 +52,18 @@ export type LimitName = 'maxUsers' | 'maxBranches' | 'maxCashRegisters';
 /** Rubro de la empresa (packages/shared/industries.js). */
 export type Industry = 'ferreteria';
 
+/** Palabras que cambian según el rubro (las da su paquete: backend/src/industries). */
+export interface Vocabulary {
+  /** El comercio, en singular y plural: "ferretería", "ferreterías". */
+  business: string;
+  businesses: string;
+  /** Lo que se vende: "producto", "productos". */
+  product: string;
+  products: string;
+  /** Ejemplo de nombre comercial para los formularios. */
+  sampleTradeName: string;
+}
+
 export interface LicenseStatus {
   plan: string | null;
   /** AAAA-MM-DD; null = sin vencimiento. */
@@ -72,6 +84,7 @@ export interface SettingsResponse {
   limits: Record<LimitName, number | null>;
   license: LicenseStatus;
   industry: Industry;
+  vocabulary: Vocabulary;
 }
 
 /** PUT /api/settings (solo los campos que se cambian). */
