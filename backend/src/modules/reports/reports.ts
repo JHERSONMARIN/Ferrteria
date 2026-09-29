@@ -4,7 +4,7 @@
 // convierten a float8 en el mismo SQL.
 import { Prisma } from '@prisma/client';
 import type { prisma } from '../../db.ts';
-import { roundMoney, roundQuantity } from '../../utils/quantities.js';
+import { roundMoney, roundQuantity } from '../../utils/quantities.ts';
 import { requireFeature } from '../licensing/index.ts';
 import {
   BUSINESS_TIME_ZONE, LOW_COVERAGE_DAYS, PAY_METHOD_LABELS, ReportError, dailySeries, parseRange, rotation, withAverage,

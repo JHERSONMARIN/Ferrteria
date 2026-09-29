@@ -1,8 +1,27 @@
 # Módulos del backend
 
-El código se organiza por **negocio**, no por tipo de archivo: todo lo de un tema vive en su carpeta.
-Los módulos se migran de a uno desde `src/routes` y `src/services` (ver el documento de arquitectura,
-secciones 6 y 9.2). Mientras dure la migración conviven las dos formas.
+El código se organiza por **negocio**, no por tipo de archivo: todo lo de un tema vive en su carpeta
+(documento de arquitectura, secciones 6 y 9.2).
+
+| Módulo | Qué contiene | Forma |
+|---|---|---|
+| `sales` | Venta directa, pedidos por estados, cotizaciones, series de comprobante, quién despacha | Capas |
+| `cash` | Cajas físicas, turnos compartidos, arqueo | Capas |
+| `inventory` | Stock por sucursal con reservas, kardex, transferencias | Capas |
+| `licensing` | Plan contratado: módulos, funciones, límites, vencimiento | Capas |
+| `deliveries` | Envíos a domicilio y repartidores | Capas |
+| `catalog` | Productos, presentaciones de venta, categorías, importación | Capas |
+| `identity` | Inicio de sesión, sesión de cada petición, permisos, personal | Simple |
+| `customers` | Clientes, lista de precios, crédito y abonos | Simple |
+| `purchasing` | Proveedores y compras | Simple |
+| `reports` | Panel de inicio y reportes por período | Simple |
+| `audit` | Registro de auditoría y su consulta | Simple |
+| `settings` | Configuración de la empresa | Simple |
+| `branches` | Sucursales, su modo de trabajo y sus envíos | Simple |
+
+Fuera de los módulos quedan lo transversal: `db.ts` (cliente de Prisma), `lib/validation.ts` (Zod),
+`utils/quantities.ts` (redondeo de cantidades y dinero), `config/` y `types/`. `db.js` y `config/modules.js`
+siguen en JavaScript a propósito: los scripts de `deploy/` y la consola los leen por esa ruta.
 
 ## Módulos con capas (los que mueven dinero, stock o permisos)
 

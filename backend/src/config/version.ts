@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 // Versión que corre esta instancia: número del package.json, commit y fecha de construcción de la
 // imagen (ver Dockerfile). Se informa en /api/health y en /api/app-info, y la consola la muestra.
-const read = (file) => {
+const read = (file: string): string | null => {
   try {
     return readFileSync(new URL(file, import.meta.url), 'utf8').trim();
   } catch {

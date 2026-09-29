@@ -3,7 +3,7 @@
 import type { prisma } from '../../db.ts';
 import { AppError } from '@ferresys/shared/errors';
 import { resolveBranchId } from '../branches/index.ts';
-import { quantityProblem, roundMoney } from '../../utils/quantities.js';
+import { quantityProblem, roundMoney } from '../../utils/quantities.ts';
 import type { SessionUser } from '../../types/express.d.ts';
 import { addStock } from '../inventory/index.ts';
 

@@ -4,7 +4,7 @@ import type { SaleStatus } from '@prisma/client';
 import type { prisma, Tx } from '../../../db.ts';
 import { recordAudit } from '../../audit/index.ts';
 import { getSettings } from '../../settings/index.ts';
-import { roundMoney } from '../../../utils/quantities.js';
+import { roundMoney } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { requireOpenSession } from '../../cash/index.ts';
 import { assertBranchDelivers, assertCanDeliver, parseDeliveryRequest, scheduleDeliveryForSale } from '../../deliveries/index.ts';

@@ -1,6 +1,6 @@
 // Reglas de los reportes: el período (días de Perú), la serie diaria y la rotación de productos.
 import { AppError } from '@ferresys/shared/errors';
-import { roundMoney, roundQuantity } from '../../utils/quantities.js';
+import { roundMoney, roundQuantity } from '../../utils/quantities.ts';
 
 export class ReportError extends AppError {
   static override area = 'REPORTE';

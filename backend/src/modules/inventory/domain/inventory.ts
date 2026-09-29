@@ -1,7 +1,7 @@
 // Inventario: stock por sucursal, movimientos de kardex y transferencias. Reglas puras.
 // Disponible = stock - reservado (lo reservado son pedidos sin despachar).
 import { AppError } from '@ferresys/shared/errors';
-import { MAX_QUANTITY_DECIMALS, roundQuantity } from '../../../utils/quantities.js';
+import { MAX_QUANTITY_DECIMALS, roundQuantity } from '../../../utils/quantities.ts';
 
 export class StockError extends AppError {
   static override area = 'STOCK';
