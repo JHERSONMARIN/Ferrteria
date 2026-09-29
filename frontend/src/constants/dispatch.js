@@ -1,4 +1,4 @@
-// Espejo de backend/src/config/dispatch.js: quién atiende "Por despachar" en cada sucursal.
+// Espejo de backend/src/modules/sales/domain/dispatch.ts: quién atiende "Por despachar" en cada sucursal.
 export const DISPATCH_ROLE_OPTIONS = [
   { id: 'SELLER', title: 'Vendedor', module: 'pos', description: 'Quien vende prepara y entrega los envíos al repartidor.' },
   { id: 'CASHIER', title: 'Cajero', module: 'caja', description: 'Quien cobra prepara y entrega los envíos al repartidor.' },

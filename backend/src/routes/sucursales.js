@@ -1,7 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { listBranches, createBranch, updateBranch, BranchError } from '../services/branches.js';
-import { initializeDocumentSeries } from '../services/documentSeries.js';
+import { initializeDocumentSeries } from '../modules/sales/index.ts';
 import { respondIfLicenseError } from '../modules/licensing/index.ts';
 import { errorBody } from '@ferresys/shared/errors';
 

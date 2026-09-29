@@ -9,24 +9,23 @@ import personalRoutes from './src/routes/personal.js';
 import clientesRoutes from './src/routes/clientes.js';
 import consultaDocRoutes from './src/routes/consultaDoc.js';
 import productosRoutes from './src/routes/productos.js';
-import ventasRoutes from './src/routes/ventas.js';
-import entregasRoutes from './src/routes/entregas.js';
+import { deliveryRoutes as entregasRoutes } from './src/modules/deliveries/index.ts';
 import creditosRoutes from './src/routes/creditos.js';
 import dashboardRoutes from './src/routes/dashboard.js';
 import { cashRoutes as cajaRoutes } from './src/modules/cash/index.ts';
 import proveedoresRoutes from './src/routes/proveedores.js';
 import comprasRoutes from './src/routes/compras.js';
-import cotizacionesRoutes from './src/routes/cotizaciones.js';
 import categoriesRoutes from './src/routes/categories.js';
 import settingsRoutes from './src/routes/settings.js';
 import auditoriaRoutes from './src/routes/auditoria.js';
-import pedidosRoutes from './src/routes/pedidos.js';
 import { prisma } from './src/db.js';
-import { initializeDocumentSeries } from './src/services/documentSeries.js';
 import { ensureBranchStockRows, kardexRoutes, transferRoutes as transferenciasRoutes } from './src/modules/inventory/index.ts';
 import { licenseStatus, readOnlyWhenExpired } from './src/modules/licensing/index.ts';
 import sucursalesRoutes from './src/routes/sucursales.js';
-import { expireOrders } from './src/services/saleOrders.js';
+import {
+  expireOrders, initializeDocumentSeries, orderRoutes as pedidosRoutes, quoteRoutes as cotizacionesRoutes,
+  salesRoutes as ventasRoutes,
+} from './src/modules/sales/index.ts';
 import { authenticate, requirePasswordChanged } from './src/middleware/authenticate.js';
 import { allowModules } from './src/middleware/authorize.js';
 import { APP_VERSION, APP_COMMIT, APP_BUILT_AT, versionLabel } from './src/config/version.js';
