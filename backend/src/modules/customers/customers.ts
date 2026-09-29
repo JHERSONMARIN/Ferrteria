@@ -202,6 +202,6 @@ export async function registerPayment(client: Client, clienteId: number, amount:
       where: { id: movement.id },
       data: { docRef, desc: `Abono de cliente en caja (Recibo: ${docRef})` },
     });
-    return { success: true, docRef };
+    return { success: true as const, docRef };
   });
 }

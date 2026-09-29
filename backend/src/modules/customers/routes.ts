@@ -9,7 +9,7 @@ import {
 } from './customers.ts';
 import { lookupDocument } from './documentLookup.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type { Customer } from '@ferresys/contracts/customers';
+import type { CreditAccount, CreditPaymentSaved, Customer } from '@ferresys/contracts/customers';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -75,11 +75,11 @@ export const creditRoutes = express.Router();
 
 // GET /api/creditos: clientes con deuda y sus movimientos.
 creditRoutes.get('/', handle('Error al obtener estado de créditos.', async (req, res) => {
-  res.json(await listDebts(prisma));
+  res.json(await listDebts(prisma) satisfies Sendable<CreditAccount[]>);
 }));
 
 // POST /api/creditos/abono  { clienteId, amount }
 creditRoutes.post('/abono', handle('Error al registrar abono.', async (req, res) => {
   const { clienteId, amount } = parseInput(PaymentBody, req.body, customerError);
-  res.json(await registerPayment(prisma, clienteId, amount));
+  res.json(await registerPayment(prisma, clienteId, amount) satisfies Sendable<CreditPaymentSaved>);
 }));

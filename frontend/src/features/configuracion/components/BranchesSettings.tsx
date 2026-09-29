@@ -1,43 +1,47 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../api/client.ts';
+import { useState, type FormEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Branch } from '@ferresys/contracts/branches';
+import { api } from '../../../api/client.ts';
+import { queryKeys } from '../../../api/queryClient.ts';
+
+type Message = { type: 'success' | 'error'; text: string };
 
 // Sucursales o almacenes. Se guardan al momento. Una sucursal no se borra: se desactiva cuando no
 // tiene usuarios, stock ni pedidos abiertos (el servidor lo valida y explica qué falta).
-export default function BranchesSettings({ onChanged }) {
-  const [branches, setBranches] = useState([]);
+export default function BranchesSettings({ onChanged }: { onChanged?: () => void }) {
+  const queryClient = useQueryClient();
+  // Con ?todas=1 el administrador ve también las desactivadas.
+  const branchesQuery = useQuery({
+    queryKey: [...queryKeys.branches, 'todas'],
+    queryFn: () => api.get<Branch[]>('/sucursales?todas=1'),
+  });
+  const branches = branchesQuery.data ?? [];
   const [form, setForm] = useState({ name: '', address: '' });
-  const [editing, setEditing] = useState(null); // { id, name, address }
+  const [editing, setEditing] = useState<{ id: number; name: string; address: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(null);
+  const [result, setResult] = useState<Message | null>(null);
+  const message: Message | null = result
+    ?? (branchesQuery.error ? { type: 'error', text: branchesQuery.error.message || 'No se pudieron cargar las sucursales.' } : null);
 
-  const load = async () => {
-    try {
-      setBranches(await api.get('/sucursales?todas=1'));
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'No se pudieron cargar las sucursales.' });
-    }
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const run = async (action, successText) => {
+  // Cualquier cambio refresca todas las listas de sucursales del sistema.
+  const run = async (action: () => Promise<unknown>, successText: string) => {
     try {
       setBusy(true);
-      setMessage(null);
+      setResult(null);
       await action();
-      await load();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.branches });
       if (onChanged) onChanged();
-      setMessage({ type: 'success', text: successText });
+      setResult({ type: 'success', text: successText });
       return true;
     } catch (err) {
-      setMessage({ type: 'error', text: err.message });
+      setResult({ type: 'error', text: (err as Error).message });
       return false;
     } finally {
       setBusy(false);
     }
   };
 
-  const add = async (e) => {
+  const add = async (e: FormEvent) => {
     e.preventDefault();
     const name = form.name.trim();
     if (!name) return;
@@ -47,12 +51,13 @@ export default function BranchesSettings({ onChanged }) {
   };
 
   const save = async () => {
+    if (!editing) return;
     if (await run(() => api.put(`/sucursales/${editing.id}`, { name: editing.name, address: editing.address }), 'Sucursal actualizada.')) {
       setEditing(null);
     }
   };
 
-  const toggle = (b) => run(
+  const toggle = (b: Branch) => run(
     () => api.put(`/sucursales/${b.id}`, { active: !b.active }),
     b.active ? `${b.name} desactivada.` : `${b.name} activada.`
   );

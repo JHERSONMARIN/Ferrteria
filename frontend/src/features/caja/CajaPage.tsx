@@ -1,12 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../api/client.ts';
-import FieldError from '../shared/ui/FieldError.tsx';
-import { borderClass } from '../shared/utils/validators.ts';
-import ContadorEfectivo, { calcularTotalConteo } from '../components/ContadorEfectivo.jsx';
-import { useToast, useConfirm } from '../shared/ui/index.ts';
+// Caja: abrir un turno (o unirse a uno), ver lo cobrado y cerrar con el arqueo del efectivo.
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { CashClosed, CloseCashRequest, OpenCashRequest, RegisterToJoin } from '@ferresys/contracts/cash';
+import type { SessionUser } from '@ferresys/contracts/identity';
+import { api } from '../../api/client.ts';
+import { queryKeys } from '../../api/queryClient.ts';
+import { fetchCashStatus } from '../../api/queries.ts';
+import FieldError from '../../shared/ui/FieldError.tsx';
+import { borderClass } from '../../shared/utils/validators.ts';
+import ContadorEfectivo, { calcularTotalConteo, type Conteo } from './components/ContadorEfectivo.tsx';
+import { useToast, useConfirm } from '../../shared/ui/index.ts';
 
-function SelectorModo({ modo, onChange }) {
-  const opciones = [
+type Modo = 'CONTEO' | 'MANUAL';
+
+// El turno se consulta cada 3 s: las ventas de otros cajeros del mismo turno aparecen solas.
+const REFRESH_MS = 3000;
+
+function SelectorModo({ modo, onChange }: { modo: Modo; onChange: (modo: Modo) => void }) {
+  const opciones: { id: Modo; label: string; icon: string }[] = [
     { id: 'CONTEO', label: 'Contar billetes', icon: 'fa-money-bill-wave' },
     { id: 'MANUAL', label: 'Monto directo', icon: 'fa-keyboard' },
   ];
@@ -31,10 +42,18 @@ function SelectorModo({ modo, onChange }) {
   );
 }
 
-const formatTime = (value) => new Date(value).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+const formatTime = (value: string) => new Date(value).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
 
 // Cajas activas: las cerradas se eligen para abrir un turno; a las abiertas uno se suma.
-function RegisterList({ registers, selectedId, onSelect, onJoin, loading }) {
+interface RegisterListProps {
+  registers: readonly RegisterToJoin[];
+  selectedId: number | undefined;
+  onSelect: (id: number) => void;
+  onJoin: (register: RegisterToJoin) => void;
+  loading: boolean;
+}
+
+function RegisterList({ registers, selectedId, onSelect, onJoin, loading }: RegisterListProps) {
   if (registers.length === 0) {
     return (
       <p className="text-sm text-muted text-center bg-surface border border-line rounded-xl p-6">
@@ -88,21 +107,25 @@ function RegisterList({ registers, selectedId, onSelect, onJoin, loading }) {
   );
 }
 
-export default function CajaPage({ currentUser }) {
+export default function CajaPage({ currentUser }: { currentUser: SessionUser }) {
   const aviso = useToast();
   const confirmar = useConfirm();
-  const [estadoCaja, setEstadoCaja] = useState({ abierta: false, caja: null, registers: [] });
-  const [selectedRegisterId, setSelectedRegisterId] = useState(null);
+  const queryClient = useQueryClient();
+  const statusQuery = useQuery({ queryKey: queryKeys.cashStatus, queryFn: fetchCashStatus, refetchInterval: REFRESH_MS });
+  const estadoCaja = statusQuery.data ?? { abierta: false as const, caja: null, registers: [] };
+  const [selectedRegisterId, setSelectedRegisterId] = useState<number | null>(null);
   const [montoInicial, setMontoInicial] = useState('');
   const [montoConteo, setMontoConteo] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [working, setWorking] = useState(false);
+  // Mientras llega el primer estado o se procesa una acción, los botones quedan deshabilitados.
+  const loading = working || statusQuery.isPending;
+  const [errors, setErrors] = useState<{ montoInicial?: string; montoConteo?: string }>({});
 
   // Contador de billetes y monedas
-  const [modoApertura, setModoApertura] = useState('CONTEO');
-  const [conteoApertura, setConteoApertura] = useState({});
-  const [modoCierre, setModoCierre] = useState('CONTEO');
-  const [conteoCierre, setConteoCierre] = useState({});
+  const [modoApertura, setModoApertura] = useState<Modo>('CONTEO');
+  const [conteoApertura, setConteoApertura] = useState<Conteo>({});
+  const [modoCierre, setModoCierre] = useState<Modo>('CONTEO');
+  const [conteoCierre, setConteoCierre] = useState<Conteo>({});
 
   const totalApertura = modoApertura === 'CONTEO'
     ? calcularTotalConteo(conteoApertura)
@@ -116,112 +139,77 @@ export default function CajaPage({ currentUser }) {
   const diferenciaCierre = Math.round((totalCierre - saldoTeorico) * 100) / 100;
 
   // Caja a abrir: la elegida si sigue cerrada; si no, la primera cerrada.
-  const closedRegisters = (estadoCaja.registers || []).filter(r => !r.session);
-  const registerToOpen = closedRegisters.find(r => r.id === selectedRegisterId) || closedRegisters[0] || null;
+  const closedRegisters = estadoCaja.registers.filter(r => !r.session);
+  const registerToOpen = closedRegisters.find(r => r.id === selectedRegisterId) ?? closedRegisters[0] ?? null;
 
-  const validateMonto = (value, field) => {
+  const validateMonto = (value: string, field: 'montoInicial' | 'montoConteo') => {
     const n = parseFloat(value);
     let msg = '';
-    if (value === '' || isNaN(n)) msg = 'Ingrese un monto válido.';
+    if (value === '' || Number.isNaN(n)) msg = 'Ingrese un monto válido.';
     else if (n < 0) msg = 'El monto no puede ser negativo.';
     else if (n > 1000000) msg = 'El monto es demasiado alto.';
     setErrors(prev => ({ ...prev, [field]: msg }));
     return msg === '';
   };
 
-  useEffect(() => {
-    if (!currentUser) return;
+  const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.cashStatus });
 
-    loadEstadoCaja();
-
-    const intervalo = setInterval(() => loadEstadoCaja({ silencioso: true }), 3000);
-
-    const actualizarCaja = () => loadEstadoCaja({ silencioso: true });
-    window.addEventListener('venta-registrada', actualizarCaja);
-
-    return () => {
-      clearInterval(intervalo);
-      window.removeEventListener('venta-registrada', actualizarCaja);
-    };
-  }, [currentUser]);
-
-  // El refresco automático es silencioso para no deshabilitar los botones cada 3s.
-  const loadEstadoCaja = async ({ silencioso = false } = {}) => {
+  // Ejecuta una acción con los botones deshabilitados y refresca el turno al terminar.
+  const run = async (action: () => Promise<void>, errorPrefix: string) => {
     try {
-      if (!silencioso) setLoading(true);
-      const data = await api.get(`/caja/estado-actual`);
-      setEstadoCaja(data);
+      setWorking(true);
+      await action();
     } catch (err) {
-      console.error('Error cargando estado de caja:', err);
+      aviso.error(`${errorPrefix}${(err as Error).message}`);
     } finally {
-      if (!silencioso) setLoading(false);
+      await refresh();
+      setWorking(false);
     }
   };
 
   const handleAbrirCaja = async () => {
+    if (!registerToOpen) return;
     if (modoApertura === 'MANUAL' && !validateMonto(montoInicial, 'montoInicial')) return;
     const m = totalApertura;
-
-    try {
-      setLoading(true);
-      await api.post('/caja/apertura', {
-        cashRegisterId: registerToOpen.id,
-        montoInicial: m,
-      });
-
+    await run(async () => {
+      await api.post('/caja/apertura', { cashRegisterId: registerToOpen.id, montoInicial: m } satisfies OpenCashRequest);
       aviso.exito(`¡${registerToOpen.name} abierta con S/ ${m.toFixed(2)}!`);
       setMontoInicial('');
       setConteoApertura({});
-      await loadEstadoCaja();
-    } catch (err) {
-      aviso.error('Error al abrir caja: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
+    }, 'Error al abrir caja: ');
   };
 
-  const handleUnirse = async (register) => {
+  const handleUnirse = async (register: RegisterToJoin) => {
+    if (!register.session) return;
+    const sessionId = register.session.id;
     const seguro = await confirmar({
       title: `Unirse al turno de ${register.name}`,
       description: 'Lo que cobre quedará registrado a su nombre en ese turno.',
       confirmText: 'Unirme',
     });
     if (!seguro) return;
-    try {
-      setLoading(true);
-      await api.post(`/caja/turnos/${register.session.id}/unirse`, {});
-      await loadEstadoCaja();
-    } catch (err) {
-      aviso.error('No se pudo unir al turno: ' + err.message);
-      await loadEstadoCaja();
-    } finally {
-      setLoading(false);
-    }
+    await run(async () => { await api.post(`/caja/turnos/${sessionId}/unirse`, {}); }, 'No se pudo unir al turno: ');
   };
 
   const handleSalir = async () => {
+    const caja = estadoCaja.caja;
+    if (!caja) return;
     const seguro = await confirmar({
       title: 'Salir del turno sin cerrarlo',
       description: 'Lo que cobró queda en el turno y lo cierran los demás cajeros.',
       confirmText: 'Salir del turno',
     });
     if (!seguro) return;
-    try {
-      setLoading(true);
-      await api.post(`/caja/turnos/${estadoCaja.caja.id}/salir`, {});
-      await loadEstadoCaja();
-    } catch (err) {
-      aviso.error(err.message);
-    } finally {
-      setLoading(false);
-    }
+    await run(async () => { await api.post(`/caja/turnos/${caja.id}/salir`, {}); }, '');
   };
 
   const handleCerrarCaja = async () => {
+    const caja = estadoCaja.caja;
+    if (!caja) return;
     if (modoCierre === 'MANUAL' && !validateMonto(montoConteo, 'montoConteo')) return;
     const conteo = totalCierre;
 
-    const otros = estadoCaja.caja.members.filter(m => m.id !== currentUser.id).length;
+    const otros = caja.members.filter(m => m.id !== currentUser.id).length;
     const seguro = await confirmar({
       title: 'Cerrar la caja',
       description: `Se cierra con un conteo físico de S/ ${conteo.toFixed(2)}.`
@@ -230,36 +218,24 @@ export default function CajaPage({ currentUser }) {
     });
     if (!seguro) return;
 
-    try {
-      setLoading(true);
-      const res = await api.post('/caja/cierre', {
-        cajaId: estadoCaja.caja.id,
-        montoCierreConteo: conteo,
-      });
-
-      if (res.success) {
-        const dif = res.diferencia;
-        const msg = dif === 0 
-          ? '¡Caja cuadrada perfectamente (S/ 0.00 de diferencia)!'
-          : dif > 0 
-          ? `Cierre registrado. Sobrante en caja: +S/ ${dif.toFixed(2)}`
-          : `Cierre registrado. Faltante en caja: -S/ ${Math.abs(dif).toFixed(2)}`;
-
-        aviso.exito(msg);
-        setMontoConteo('');
-        setConteoCierre({});
-        await loadEstadoCaja();
-      }
-    } catch (err) {
-      aviso.error('Error al cerrar caja: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
+    await run(async () => {
+      const res = await api.post<CashClosed>('/caja/cierre', { cajaId: caja.id, montoCierreConteo: conteo } satisfies CloseCashRequest);
+      if (!res.success) return;
+      const dif = res.diferencia;
+      const msg = dif === 0
+        ? '¡Caja cuadrada perfectamente (S/ 0.00 de diferencia)!'
+        : dif > 0
+        ? `Cierre registrado. Sobrante en caja: +S/ ${dif.toFixed(2)}`
+        : `Cierre registrado. Faltante en caja: -S/ ${Math.abs(dif).toFixed(2)}`;
+      aviso.exito(msg);
+      setMontoConteo('');
+      setConteoCierre({});
+    }, 'Error al cerrar caja: ');
   };
 
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
-      {!estadoCaja.abierta ? (
+      {!estadoCaja.caja ? (
         /* SIN TURNO: las cajas a la izquierda y la apertura de la elegida a la derecha */
         <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-5 gap-5 items-start">
           <div className="lg:col-span-2 flex flex-col gap-3">
@@ -269,7 +245,7 @@ export default function CajaPage({ currentUser }) {
             </div>
 
             <RegisterList
-              registers={estadoCaja.registers || []}
+              registers={estadoCaja.registers}
               selectedId={registerToOpen?.id}
               onSelect={setSelectedRegisterId}
               onJoin={handleUnirse}
@@ -320,7 +296,7 @@ export default function CajaPage({ currentUser }) {
                   </button>
                 </div>
               </div>
-            ) : (estadoCaja.registers || []).length > 0 && (
+            ) : estadoCaja.registers.length > 0 && (
               <div className="bg-surface rounded-xl border border-dashed border-line p-8 text-center text-sm text-muted">
                 <i className="fa-solid fa-lock-open text-2xl mb-2 block"></i>
                 Todas las cajas tienen un turno abierto. Únase a uno desde la lista.
@@ -461,13 +437,13 @@ export default function CajaPage({ currentUser }) {
                 <div className="flex justify-between items-center">
                   <span className="text-muted">Dinero Contado</span>
                   <span className="font-bold text-ink tabular-nums">
-                    {isNaN(totalCierre) ? '—' : `S/ ${totalCierre.toFixed(2)}`}
+                    {Number.isNaN(totalCierre) ? '—' : `S/ ${totalCierre.toFixed(2)}`}
                   </span>
                 </div>
               </div>
 
               <div className={`rounded-lg border p-4 text-center mb-4 ${
-                isNaN(totalCierre)
+                Number.isNaN(totalCierre)
                   ? 'bg-surface-muted border-line'
                   : diferenciaCierre === 0
                   ? 'bg-success-soft border-success/30'
@@ -477,7 +453,7 @@ export default function CajaPage({ currentUser }) {
               }`}>
                 <p className="text-[11px] font-bold uppercase tracking-wide text-muted mb-1">Diferencia</p>
                 <p className={`text-3xl font-black tabular-nums ${
-                  isNaN(totalCierre)
+                  Number.isNaN(totalCierre)
                     ? 'text-muted'
                     : diferenciaCierre === 0
                     ? 'text-success'
@@ -485,9 +461,9 @@ export default function CajaPage({ currentUser }) {
                     ? 'text-info'
                     : 'text-danger'
                 }`}>
-                  {isNaN(totalCierre) ? '—' : `S/ ${diferenciaCierre.toFixed(2)}`}
+                  {Number.isNaN(totalCierre) ? '—' : `S/ ${diferenciaCierre.toFixed(2)}`}
                 </p>
-                {!isNaN(totalCierre) && (
+                {!Number.isNaN(totalCierre) && (
                   <p className="text-xs font-semibold text-muted mt-1">
                     {diferenciaCierre === 0
                       ? 'Caja cuadrada'
@@ -500,7 +476,7 @@ export default function CajaPage({ currentUser }) {
 
               <button
                 onClick={handleCerrarCaja}
-                disabled={loading || isNaN(totalCierre)}
+                disabled={loading || Number.isNaN(totalCierre)}
                 className="w-full mt-auto bg-panel hover:bg-panel-strong text-white font-bold py-3.5 rounded-lg shadow transition-colors text-sm disabled:opacity-50"
               >
                 Ejecutar Cierre y Guardar Arqueo

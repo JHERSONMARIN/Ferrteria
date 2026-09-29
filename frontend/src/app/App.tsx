@@ -2,7 +2,7 @@
 // dirección actual (/vender, /caja…). Cada pantalla se descarga recién cuando se abre por primera vez.
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import Sidebar from './Sidebar.tsx';
 import Header from './Header.tsx';
 import TicketPrint from '../shared/print/TicketPrint.tsx';
@@ -16,29 +16,52 @@ import { applyTheme } from '../shared/utils/theme.ts';
 import { api } from '../api/client.ts';
 import { queryKeys } from '../api/queryClient.ts';
 import type { AppInfo } from '@ferresys/contracts/app';
-import type { BusinessSettings, SettingsResponse } from '@ferresys/contracts/settings';
+import type { SaleFlowMode, SessionUser } from '@ferresys/contracts/identity';
+import type { LicenseStatus } from '@ferresys/contracts/settings';
 import LoginScreen from './LoginScreen.tsx';
 import { SCREENS, firstScreen, isScreenId, screenFromPath, type ScreenId } from './screens.ts';
 import { useSession } from './useSession.ts';
-import { useBranches } from '../api/queries.ts';
+import { useBranches, useSettings } from '../api/queries.ts';
+
+// Todo lo que App entrega a las pantallas. Cada una declara lo que usa; TypeScript comprueba que
+// App le da eso con el tipo correcto.
+interface ScreenProps {
+  currentUser: SessionUser;
+  // Vender y Por cobrar
+  onTriggerPrint: (ticket: TicketData) => void;
+  saleFlowMode: SaleFlowMode;
+  deliveriesEnabled: boolean;
+  maxDiscountPercent: number;
+  // Productos, Clientes y Categorías
+  initialSearch: string;
+  initialCategory: string;
+  onNavigateToCategories: () => void;
+  onSelectCategory: (categoria: string) => void;
+  onNavigateToProducts: () => void;
+  // Reportes y Configuración
+  periodReports: boolean;
+  hasFeature: (feature: string) => boolean;
+  licensedFeatures: string[] | null;
+  license: LicenseStatus | null;
+}
 
 // Las pantallas se cargan por separado: entrar al sistema no descarga todo el programa de una vez.
-const page = (load: () => Promise<{ default: ComponentType<any> }>) => lazy(load);
+const page = (load: () => Promise<{ default: ComponentType<ScreenProps> }>) => lazy(load);
 const PAGES = {
   pos: page(() => import('../features/ventas/PosPage.tsx')),
-  caja: page(() => import('../pages/CajaPage.jsx')),
+  caja: page(() => import('../features/caja/CajaPage.tsx')),
   inventory: page(() => import('../features/catalogo/ProductosPage.tsx')),
   categories: page(() => import('../features/catalogo/CategoriasPage.tsx')),
   cotizaciones: page(() => import('../features/ventas/CotizacionesPage.tsx')),
   kardex: page(() => import('../features/inventario/MovimientosPage.tsx')),
   compras: page(() => import('../features/compras/ComprasPage.tsx')),
-  deliveries: page(() => import('../pages/EntregasPage.jsx')),
-  'client-dir': page(() => import('../pages/ClientesPage.jsx')),
-  customers: page(() => import('../pages/CreditosPage.jsx')),
-  personal: page(() => import('../pages/PersonalPage.jsx')),
-  dashboard: page(() => import('../pages/DashboardPage.jsx')),
-  settings: page(() => import('../pages/SettingsPage.jsx')),
-  audit: page(() => import('../pages/AuditPage.jsx')),
+  deliveries: page(() => import('../features/entregas/EntregasPage.tsx')),
+  'client-dir': page(() => import('../features/clientes/ClientesPage.tsx')),
+  customers: page(() => import('../features/clientes/CreditosPage.tsx')),
+  personal: page(() => import('../features/personal/PersonalPage.tsx')),
+  dashboard: page(() => import('../features/reportes/ReportesPage.tsx')),
+  settings: page(() => import('../features/configuracion/ConfiguracionPage.tsx')),
+  audit: page(() => import('../features/auditoria/AuditoriaPage.tsx')),
   transfers: page(() => import('../features/inventario/TransferenciasPage.tsx')),
   cobros: page(() => import('../features/ventas/CashierQueuePage.tsx')),
   despacho: page(() => import('../features/ventas/DispatchQueuePage.tsx')),
@@ -60,7 +83,6 @@ export default function App() {
 function Aplicacion() {
   const aviso = useToast();
   const confirmar = useConfirm();
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -88,11 +110,7 @@ function Aplicacion() {
   }).data;
 
   // Con clave temporal la API rechaza todo salvo el cambio de clave: se carga después.
-  const settingsQuery = useQuery({
-    queryKey: queryKeys.settings,
-    queryFn: () => api.get<SettingsResponse>('/settings'),
-    enabled: signedIn,
-  });
+  const settingsQuery = useSettings(signedIn);
   // Las sucursales solo se muestran si hay más de una; un error aquí no bloquea la aplicación.
   const branchCount = useBranches(signedIn).data?.length ?? 1;
 
@@ -102,9 +120,6 @@ function Aplicacion() {
   const licensedFeatures = settingsQuery.data?.licensedFeatures ?? null;
   const license = settingsQuery.data?.license ?? null;
   const settingsStatus = settingsQuery.isPending ? 'loading' : settingsQuery.isError ? 'error' : 'ready';
-
-  const updateSettings = (saved: BusinessSettings) =>
-    queryClient.setQueryData<SettingsResponse>(queryKeys.settings, old => (old ? { ...old, settings: saved } : old));
 
   // Estilo de la empresa: en el inicio de sesión viene de /app-info y, ya dentro, de la configuración.
   useEffect(() => {
@@ -230,7 +245,6 @@ function Aplicacion() {
 
   const screen = activeTab ? SCREENS[activeTab] : SCREENS.pos;
   const busquedaInicial = searchParams.get('q') ?? '';
-  const pantallaProps = { currentUser };
   const enPos = activeTab === 'pos';
 
   return (
@@ -301,21 +315,17 @@ function Aplicacion() {
                   key={`${activeTab}${location.search}`}
                   tab={activeTab}
                   props={{
-                    ...pantallaProps,
-                    // Vender y Por cobrar
+                    currentUser,
                     onTriggerPrint: setTicketData,
                     saleFlowMode,
                     deliveriesEnabled,
                     maxDiscountPercent: Number(settings?.maxDiscountPercent ?? 0),
-                    // Productos, Clientes y Categorías
                     initialSearch: busquedaInicial,
                     initialCategory: searchParams.get('categoria') ?? 'Todas',
                     onNavigateToCategories: () => goTo('categories'),
                     onSelectCategory: (categoria: string) => goTo('inventory', { categoria }),
                     onNavigateToProducts: () => goTo('inventory'),
-                    // Reportes y Configuración
                     periodReports: hasFeature('period_reports'),
-                    onSaved: updateSettings,
                     hasFeature,
                     licensedFeatures,
                     license,
@@ -332,7 +342,7 @@ function Aplicacion() {
 }
 
 // Configuración y Auditoría son solo del administrador, aunque alguien escriba su dirección.
-function Screen({ tab, props, isAdmin }: { tab: ScreenId; props: Record<string, unknown>; isAdmin: boolean }) {
+function Screen({ tab, props, isAdmin }: { tab: ScreenId; props: ScreenProps; isAdmin: boolean }) {
   if ((tab === 'settings' || tab === 'audit') && !isAdmin) return null;
   const Page = PAGES[tab];
   return <Page {...props} />;

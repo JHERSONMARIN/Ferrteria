@@ -90,8 +90,6 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
       delivery: payment.delivery,
     } satisfies PayOrderRequest);
     const order = res.pedido;
-    // La pantalla de Caja (si sigue abierta en otra parte del sistema) se actualiza con la venta.
-    window.dispatchEvent(new Event('venta-registrada'));
 
     if (onTriggerPrint) {
       onTriggerPrint(buildSaleTicket({ ...payment, numDoc: order.numDoc ?? '', items: order.items, total: order.total, discount: order.discount, sellerName: order.seller }));
