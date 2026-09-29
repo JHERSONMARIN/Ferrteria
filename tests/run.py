@@ -100,6 +100,35 @@ def consola_vacia():
     esperar(f"{ENTORNO['CONSOLA_URL']}/api/health", "consola")
 
 
+def en_imagen(nombre, *cmd):
+    """Corre un chequeo dentro de la imagen de pruebas del backend (tiene TypeScript y las dependencias):
+    así no depende de lo que haya instalado en este equipo."""
+    inicio = time.time()
+    r = sh("docker", "run", "--rm", "ferresys-backend:tests", *cmd)
+    salida = r.stdout + r.stderr
+    (SALIDA / f"{nombre}.log").write_text(salida)
+    return r.returncode == 0, salida, time.time() - inicio
+
+
+def chequeos_estaticos():
+    """Tipos (TypeScript) y pruebas unitarias del dominio: rápidos, van antes que todo lo demás."""
+    hubo_error = False
+    ok, salida, seg = en_imagen("tipos", "npx", "--no-install", "tsc", "-p", ".")
+    errores = [l for l in salida.splitlines() if "error TS" in l]
+    print(f"  {'OK   ' if ok else 'FALLA'} {'tipos (TypeScript)':<32} {len(errores):>3} errores {seg:5.1f}s", flush=True)
+    for linea in errores[:10]:
+        print(f"        {linea}")
+    hubo_error |= not ok
+    ok, salida, seg = en_imagen("unitarias", "node", "--test", "src/**/*.test.ts")
+    # Formato TAP ("# pass 7") fuera de una terminal; "ℹ pass 7" en una.
+    n = {k: int(v) for k, v in re.findall(r"^(?:#|ℹ) (pass|fail) (\d+)$", salida, re.M)}
+    print(f"  {'OK   ' if ok else 'FALLA'} {'pruebas unitarias':<32} {n.get('pass', 0):>3}/{n.get('pass', 0) + n.get('fail', 0):<3} {seg:5.1f}s", flush=True)
+    for linea in [l for l in salida.splitlines() if l.lstrip().startswith(("✖", "not ok"))][:10]:
+        print(f"        {linea.strip()}")
+    hubo_error |= not ok
+    return hubo_error, n.get("pass", 0), n.get("pass", 0) + n.get("fail", 0)
+
+
 def correr(prueba):
     ruta = RAIZ / prueba
     cmd = ["python3", str(ruta)] if ruta.suffix == ".py" else ["node", str(ruta)]
@@ -134,6 +163,9 @@ def main():
 
     filas, total_ok, total, hubo_error = [], 0, 0, False
     try:
+        if not args:  # con un filtro se corren solo las cadenas pedidas
+            print("\n▶ Chequeos del código", flush=True)
+            hubo_error, total_ok, total = chequeos_estaticos()
         for cadena in cadenas:
             print(f"\n▶ Base vacía → {' → '.join(p.rsplit(".", 1)[0] for p in cadena)}", flush=True)
             base_vacia()

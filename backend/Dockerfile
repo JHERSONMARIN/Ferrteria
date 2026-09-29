@@ -1,5 +1,6 @@
 # Se construye desde la raíz del repositorio (usa packages/shared): ver backend/Dockerfile.dockerignore.
-FROM node:20-alpine
+# Node 22: ejecuta TypeScript directamente (sin paso de compilación; ver backend/tsconfig.json).
+FROM node:22-alpine
 
 WORKDIR /app/backend
 
