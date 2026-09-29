@@ -1,49 +1,62 @@
-import React, { useState, useEffect, useMemo } from 'react';
+// Transferencias: mover stock disponible de una sucursal a otra en un solo paso, y las últimas realizadas.
+import { useState, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Product } from '@ferresys/contracts/catalog';
+import type { SessionUser } from '@ferresys/contracts/identity';
+import type { Transfer, TransferRequest } from '@ferresys/contracts/inventory';
 import { api } from '../../api/client.ts';
+import { queryKeys } from '../../api/queryClient.ts';
+import { useBranches, useProducts } from '../../api/queries.ts';
 import { Pagination, usePagination } from '../../shared/ui/index.ts';
 import { formatQuantity, quantityProblem } from '../../shared/utils/quantities.ts';
 
-const formatDateTime = (value) => new Date(value).toLocaleString('es-PE', {
+const formatDateTime = (value: string) => new Date(value).toLocaleString('es-PE', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
 // Disponible del producto en una sucursal (stock menos lo reservado para pedidos).
-const availableIn = (product, branchId) => {
-  const row = product.branches?.find(b => b.branchId === branchId);
+const availableIn = (product: Product, branchId: number | null) => {
+  const row = product.branches.find(b => b.branchId === branchId);
   return row ? Math.max(row.stock - row.reserved, 0) : 0;
 };
 
-export default function TransfersPage({ currentUser }) {
-  const isAdmin = currentUser?.role === 'ADMINISTRADOR';
-  const [branches, setBranches] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [fromBranchId, setFromBranchId] = useState(currentUser?.branchId ?? null);
+interface Line {
+  id: number;
+  qty: string;
+}
+
+type Message = { type: 'error' | 'success'; text: string };
+
+const NO_PRODUCTS: Product[] = [];
+
+export default function TransferenciasPage({ currentUser }: { currentUser: SessionUser }) {
+  const isAdmin = currentUser.role === 'ADMINISTRADOR';
+  const queryClient = useQueryClient();
+  const branchesQuery = useBranches();
+  const productsQuery = useProducts();
+  const historyQuery = useQuery({ queryKey: queryKeys.transfers, queryFn: () => api.get<Transfer[]>('/transferencias') });
+  const branches = branchesQuery.data ?? [];
+  const products = productsQuery.data ?? NO_PRODUCTS;
+  const history = historyQuery.data ?? [];
+  const loadError = branchesQuery.error ?? productsQuery.error ?? historyQuery.error;
+  const [fromBranchId, setFromBranchId] = useState<number | null>(currentUser.branchId ?? null);
   const [toBranchId, setToBranchId] = useState('');
   const [search, setSearch] = useState('');
-  const [lines, setLines] = useState([]); // { id, qty }
+  const [lines, setLines] = useState<Line[]>([]);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState(null);
+  const [result, setResult] = useState<Message | null>(null);
+  const message: Message | null = result ?? (loadError ? { type: 'error', text: loadError.message || 'No se pudieron cargar los datos.' } : null);
 
-  const loadData = async () => {
-    try {
-      const [branchList, productList, transfers] = await Promise.all([
-        api.get('/sucursales'), api.get('/productos'), api.get('/transferencias'),
-      ]);
-      setBranches(branchList);
-      setProducts(productList);
-      setHistory(transfers);
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'No se pudieron cargar los datos.' });
-    }
-  };
-
-  useEffect(() => { loadData(); }, []);
+  // El stock de ambas sucursales y el historial cambian con cada transferencia.
+  const refresh = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.products }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.transfers }),
+  ]);
 
   const productById = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
   const destinations = branches.filter(b => b.id !== fromBranchId);
-  const originName = branches.find(b => b.id === fromBranchId)?.name ?? currentUser?.branch?.name ?? '';
+  const originName = branches.find(b => b.id === fromBranchId)?.name ?? currentUser.branch?.name ?? '';
 
   const results = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -53,20 +66,21 @@ export default function TransfersPage({ currentUser }) {
       .slice(0, 8);
   }, [products, search]);
 
-  const changeOrigin = (value) => {
+  const changeOrigin = (value: string) => {
     const id = Number(value);
     setFromBranchId(id);
     if (Number(toBranchId) === id) setToBranchId('');
     setLines([]);
   };
 
-  const addLine = (product) => {
+  const addLine = (product: Product) => {
     setLines(prev => (prev.some(l => l.id === product.id) ? prev : [...prev, { id: product.id, qty: '' }]));
     setSearch('');
   };
 
-  const lineError = (line) => {
+  const lineError = (line: Line) => {
     const product = productById.get(line.id);
+    if (!product) return 'El producto ya no está en el catálogo.';
     if (line.qty === '') return 'Ingrese la cantidad.';
     const qty = Number(line.qty);
     const problem = quantityProblem(qty, product.allowsFractions);
@@ -75,27 +89,26 @@ export default function TransfersPage({ currentUser }) {
     return '';
   };
 
-  const canSubmit = toBranchId && lines.length > 0 && lines.every(l => !lineError(l)) && !saving;
+  const canSubmit = Boolean(toBranchId) && lines.length > 0 && lines.every(l => !lineError(l)) && !saving;
 
   const submit = async () => {
     if (!canSubmit) return;
     try {
       setSaving(true);
-      setMessage(null);
-      const transfer = await api.post('/transferencias', {
+      setResult(null);
+      const transfer = await api.post<Transfer>('/transferencias', {
         fromBranchId,
         toBranchId: Number(toBranchId),
         items: lines.map(l => ({ id: l.id, qty: Number(l.qty) })),
         notes,
-      });
-      setMessage({ type: 'success', text: `${transfer.number} registrada: ${transfer.items.length} producto(s) de ${transfer.from.name} a ${transfer.to.name}.` });
+      } satisfies TransferRequest);
+      setResult({ type: 'success', text: `${transfer.number} registrada: ${transfer.items.length} producto(s) de ${transfer.from.name} a ${transfer.to.name}.` });
       setLines([]);
       setNotes('');
-      await loadData();
     } catch (err) {
-      setMessage({ type: 'error', text: err.message });
-      await loadData();
+      setResult({ type: 'error', text: (err as Error).message });
     } finally {
+      await refresh();
       setSaving(false);
     }
   };
@@ -171,6 +184,7 @@ export default function TransfersPage({ currentUser }) {
             <ul className="divide-y divide-line border border-line rounded-lg">
               {lines.map(line => {
                 const product = productById.get(line.id);
+                if (!product) return null;
                 const error = line.qty !== '' ? lineError(line) : '';
                 return (
                   <li key={line.id} className="px-3 py-2 flex flex-wrap items-center gap-2">

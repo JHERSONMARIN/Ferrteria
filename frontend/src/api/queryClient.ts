@@ -30,5 +30,9 @@ export const queryKeys = {
   orders: ['pedidos'] as const,
   ordersByStatus: (status: 'PENDING_PAYMENT' | 'PAID') => ['pedidos', status] as const,
   dispatchedToday: ['pedidos', 'despachados-hoy'] as const,
+  kardex: ['kardex'] as const,
+  transfers: ['transferencias'] as const,
+  purchases: ['compras'] as const,
+  suppliers: ['proveedores'] as const,
   queueCounts: ['pedidos', 'contadores'] as const,
 };

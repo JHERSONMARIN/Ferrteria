@@ -20,6 +20,7 @@ import type { BusinessSettings, SettingsResponse } from '@ferresys/contracts/set
 import LoginScreen from './LoginScreen.tsx';
 import { SCREENS, firstScreen, isScreenId, screenFromPath, type ScreenId } from './screens.ts';
 import { useSession } from './useSession.ts';
+import { useBranches } from '../api/queries.ts';
 
 // Las pantallas se cargan por separado: entrar al sistema no descarga todo el programa de una vez.
 const page = (load: () => Promise<{ default: ComponentType<any> }>) => lazy(load);
@@ -93,11 +94,7 @@ function Aplicacion() {
     enabled: signedIn,
   });
   // Las sucursales solo se muestran si hay más de una; un error aquí no bloquea la aplicación.
-  const branchCount = useQuery({
-    queryKey: queryKeys.branches,
-    queryFn: () => api.get<unknown[]>('/sucursales'),
-    enabled: signedIn,
-  }).data?.length ?? 1;
+  const branchCount = useBranches(signedIn).data?.length ?? 1;
 
   const settings = settingsQuery.data?.settings ?? null;
   const licensedModules = settingsQuery.data?.licensedModules ?? null;

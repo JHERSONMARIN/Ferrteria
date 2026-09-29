@@ -1,215 +1,75 @@
-import React, { useState, useEffect } from 'react';
+// Compras: el historial de compras a proveedores y cómo varió el costo de cada producto.
+import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Purchase, Supplier } from '@ferresys/contracts/purchasing';
 import { api } from '../../api/client.ts';
-import FieldError from '../../shared/ui/FieldError.tsx';
-import { borderClass } from '../../shared/utils/validators.ts';
-import { quantityProblem, roundQuantity } from '../../shared/utils/quantities.ts';
+import { queryKeys } from '../../api/queryClient.ts';
+import { useProducts } from '../../api/queries.ts';
 import { useToast, Pagination, usePagination } from '../../shared/ui/index.ts';
+import SupplierFormModal from './components/SupplierFormModal.tsx';
+import PurchaseFormModal from './components/PurchaseFormModal.tsx';
+import PurchaseDetailModal from './components/PurchaseDetailModal.tsx';
+
+interface CostPurchase {
+  date: string;
+  numDoc: string;
+  provider: string;
+  quantity: number;
+  unitCost: number;
+}
 
 export default function ComprasPage() {
   const aviso = useToast();
-  const [compras, setCompras] = useState([]);
-  const [proveedores, setProveedores] = useState([]);
-  const [productos, setProductos] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState('historial'); // 'historial' | 'costos'
+  const queryClient = useQueryClient();
+  const comprasQuery = useQuery({ queryKey: queryKeys.purchases, queryFn: () => api.get<Purchase[]>('/compras') });
+  const proveedoresQuery = useQuery({ queryKey: queryKeys.suppliers, queryFn: () => api.get<Supplier[]>('/proveedores') });
+  const productosQuery = useProducts();
+  const compras = comprasQuery.data ?? [];
+  const proveedores = proveedoresQuery.data ?? [];
+  const productos = productosQuery.data ?? [];
+  const [viewMode, setViewMode] = useState<'historial' | 'costos'>('historial');
 
   // Modales
   const [showCompraModal, setShowCompraModal] = useState(false);
   const [showProveedorModal, setShowProveedorModal] = useState(false);
-  const [selectedCompra, setSelectedCompra] = useState(null); // Detalle de compra del historial
+  const [selectedCompra, setSelectedCompra] = useState<Purchase | null>(null);
 
   // Histórico de variación de costos: buscador + producto seleccionado (panel derecho)
   const [costSearch, setCostSearch] = useState('');
-  const [selectedCostCode, setSelectedCostCode] = useState(null);
+  const [selectedCostCode, setSelectedCostCode] = useState<string | null>(null);
 
-  const IGV_RATE = 0.18;
-
-  // Form Proveedor
-  const [provRuc, setProvRuc] = useState('');
-  const [provName, setProvName] = useState('');
-  const [provPhone, setProvPhone] = useState('');
-  const [provAddress, setProvAddress] = useState('');
-
-  // Form Compra
-  const [selectedProveedorId, setSelectedProveedorId] = useState('');
-  const [numDoc, setNumDoc] = useState('');
-  const [productInput, setProductInput] = useState('');
-  const [productQty, setProductQty] = useState('1');
-  const [productCost, setProductCost] = useState('');
-  const [compraCart, setCompraCart] = useState([]);
-
-  // Errores de validación
-  const [provErrors, setProvErrors] = useState({});
-  const [compraErrors, setCompraErrors] = useState({});
-  const [itemErrors, setItemErrors] = useState({});
-
-  const clearProvError = (f) => setProvErrors(p => ({ ...p, [f]: '' }));
-  const clearCompraError = (f) => setCompraErrors(p => ({ ...p, [f]: '' }));
-  const clearItemError = (f) => setItemErrors(p => ({ ...p, [f]: '' }));
-
-  const validateProveedor = () => {
-    const e = {};
-    if (!provRuc.trim()) e.ruc = 'El RUC es obligatorio.';
-    else if (!/^\d{11}$/.test(provRuc.trim())) e.ruc = 'El RUC debe tener exactamente 11 dígitos.';
-
-    if (!provName.trim()) e.name = 'La razón social / nombre es obligatoria.';
-    else if (provName.trim().length < 3) e.name = 'Debe tener al menos 3 caracteres.';
-
-    if (provPhone.trim() && !/^\+?\d[\d\s-]{5,14}$/.test(provPhone.trim()))
-      e.phone = 'Teléfono inválido (6 a 15 dígitos).';
-
-    setProvErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const validateCompra = () => {
-    const e = {};
-    if (!selectedProveedorId) e.proveedor = 'Seleccione un proveedor.';
-    if (!numDoc.trim()) e.numDoc = 'Ingrese el N° de factura / guía.';
-    else if (numDoc.trim().length < 3) e.numDoc = 'El número de documento es demasiado corto.';
-    if (compraCart.length === 0) e.cart = 'Agregue al menos un producto a la compra.';
-    setCompraErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
+  const loadError = comprasQuery.error ?? proveedoresQuery.error ?? productosQuery.error;
   useEffect(() => {
-    loadInitialData();
-  }, []);
+    if (loadError) aviso.error(`Error cargando datos de compras: ${loadError.message}`);
+  }, [loadError, aviso]);
 
-  const loadInitialData = async () => {
-    try {
-      setLoading(true);
-      const [comprasData, provsData, prodsData] = await Promise.all([
-        api.get('/compras'),
-        api.get('/proveedores'),
-        api.get('/productos')
-      ]);
-      setCompras(comprasData);
-      setProveedores(provsData);
-      setProductos(prodsData);
-    } catch (err) {
-      aviso.error('Error cargando datos de compras: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
+  const handleSupplierSaved = async () => {
+    setShowProveedorModal(false);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.suppliers });
+    aviso.exito('Proveedor guardado con éxito.');
   };
 
-  const handleSaveProveedor = async () => {
-    if (!validateProveedor()) return;
-
-    try {
-      setLoading(true);
-      await api.post('/proveedores', {
-        ruc: provRuc.trim(),
-        name: provName.trim(),
-        phone: provPhone.trim(),
-        address: provAddress.trim(),
-      });
-
-      setShowProveedorModal(false);
-      setProvErrors({});
-      setProvRuc('');
-      setProvName('');
-      setProvPhone('');
-      setProvAddress('');
-      await loadInitialData();
-      aviso.exito('Proveedor guardado con éxito.');
-    } catch (err) {
-      aviso.error('Error guardando proveedor: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
+  // La compra ingresa stock: cambian el catálogo y el kardex.
+  const handlePurchaseSaved = async () => {
+    setShowCompraModal(false);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.purchases }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.products }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.kardex }),
+    ]);
+    aviso.exito('¡Compra registrada exitosamente! El stock del inventario y el Kardex han sido actualizados.');
   };
-
-  const handleOpenCompraModal = () => {
-    if (proveedores.length > 0) {
-      setSelectedProveedorId(proveedores[0].id.toString());
-    }
-    setNumDoc('');
-    setProductInput('');
-    setProductQty('1');
-    setProductCost('');
-    setCompraCart([]);
-    setProvErrors({});
-    setCompraErrors({});
-    setItemErrors({});
-    setShowCompraModal(true);
-  };
-
-  const handleAddCompraItem = () => {
-    const e = {};
-    const qty = Number(productQty);
-    const cost = parseFloat(productCost);
-
-    if (!productInput.trim()) e.product = 'Seleccione un producto.';
-    if (productCost === '' || isNaN(cost)) e.cost = 'Ingrese el costo unitario.';
-    else if (cost < 0) e.cost = 'El costo no puede ser negativo.';
-
-    const prod = !e.product && (
-      productos.find(p => `${p.code} - ${p.name}` === productInput.trim()) ||
-      productos.find(p => p.code === productInput.trim() || p.name.toLowerCase().includes(productInput.trim().toLowerCase()))
-    );
-    if (!e.product && !prod) e.product = 'Producto no encontrado en el catálogo.';
-
-    // Enteros, o hasta 3 decimales si el producto se vende fraccionado (metros, kilos).
-    if (productQty === '' || isNaN(qty)) e.qty = 'Ingrese la cantidad.';
-    else if (prod && quantityProblem(qty, prod.allowsFractions)) e.qty = `La cantidad ${quantityProblem(qty, prod.allowsFractions)}.`;
-
-    setItemErrors(e);
-    if (Object.keys(e).length > 0) return;
-
-    setCompraErrors(p => ({ ...p, cart: '' }));
-    setCompraCart(prev => {
-      const exist = prev.find(item => item.id === prod.id);
-      if (exist) {
-        return prev.map(item => item.id === prod.id ? { ...item, qty: roundQuantity(item.qty + qty), cost } : item);
-      }
-      return [...prev, { id: prod.id, name: prod.name, code: prod.code, qty, cost }];
-    });
-
-    setProductInput('');
-    setProductQty('1');
-    setProductCost('');
-  };
-
-  const handleRemoveCompraItem = (id) => {
-    setCompraCart(prev => prev.filter(i => i.id !== id));
-  };
-
-  const handleSaveCompra = async () => {
-    if (!validateCompra()) return;
-
-    try {
-      setLoading(true);
-      await api.post('/compras', {
-        proveedorId: selectedProveedorId,
-        numDoc: numDoc.trim(),
-        items: compraCart
-      });
-
-      setShowCompraModal(false);
-      await loadInitialData();
-      aviso.exito('¡Compra registrada exitosamente! El stock del inventario y el Kardex han sido actualizados.');
-    } catch (err) {
-      aviso.error('Error registrando compra: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const compraTotal = compraCart.reduce((acc, i) => acc + (i.qty * i.cost), 0);
 
   // Histórico de Variación de Costos: agrupa las compras por producto en orden
   // cronológico y calcula la variación del costo unitario frente a la compra anterior.
   const comprasAsc = [...compras].sort((a, b) => a.id - b.id);
-  const costVariationMap = new Map();
+  const costVariationMap = new Map<string, { code: string; name: string; purchases: CostPurchase[] }>();
   comprasAsc.forEach(c => {
     c.detalles.forEach(d => {
       const key = d.producto.code;
-      if (!costVariationMap.has(key)) {
-        costVariationMap.set(key, { code: key, name: d.producto.name, purchases: [] });
-      }
-      costVariationMap.get(key).purchases.push({
+      const group = costVariationMap.get(key) ?? { code: key, name: d.producto.name, purchases: [] };
+      costVariationMap.set(key, group);
+      group.purchases.push({
         date: c.date,
         numDoc: c.numDoc,
         provider: c.provider,
@@ -221,14 +81,14 @@ export default function ComprasPage() {
 
   const costVariation = Array.from(costVariationMap.values()).map(g => {
     const purchases = g.purchases.map((p, i) => {
-      const prev = i > 0 ? g.purchases[i - 1].unitCost : null;
+      const prev = i > 0 ? g.purchases[i - 1]?.unitCost ?? null : null;
       const delta = prev !== null ? p.unitCost - prev : null;
-      const pct = prev ? (delta / prev) * 100 : null;
+      const pct = prev && delta !== null ? (delta / prev) * 100 : null;
       return { ...p, delta, pct };
     });
     const costs = purchases.map(p => p.unitCost);
-    const firstCost = costs[0];
-    const lastCost = costs[costs.length - 1];
+    const firstCost = costs[0] ?? 0;
+    const lastCost = costs[costs.length - 1] ?? 0;
     const totalDelta = lastCost - firstCost;
     const totalPct = firstCost ? (totalDelta / firstCost) * 100 : null;
     return {
@@ -265,7 +125,7 @@ export default function ComprasPage() {
           <button onClick={() => setShowProveedorModal(true)} className="bg-surface border border-line hover:bg-surface-muted text-ink-soft px-3 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2">
             <i className="fa-solid fa-truck-field"></i> Nuevo proveedor
           </button>
-          <button onClick={handleOpenCompraModal} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2">
+          <button onClick={() => setShowCompraModal(true)} className="bg-brand hover:bg-brand-strong text-brand-contrast px-4 py-2 rounded-xl text-sm font-semibold shadow-card transition-colors flex items-center gap-2">
             <i className="fa-solid fa-cart-flatbed"></i> Registrar compra
           </button>
         </div>
@@ -304,7 +164,7 @@ export default function ComprasPage() {
               <tbody className="text-sm divide-y divide-line">
                 {compras.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-4 py-6 text-center text-muted">
+                    <td colSpan={5} className="px-4 py-6 text-center text-muted">
                       No hay compras de mercadería registradas.
                     </td>
                   </tr>
@@ -509,273 +369,20 @@ export default function ComprasPage() {
         )}
       </div>
 
-      {/* Modal Nuevo Proveedor */}
       {showProveedorModal && (
-        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
-          <div className="bg-surface rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 bg-panel text-white flex justify-between items-center">
-              <h3 className="font-bold text-lg"><i className="fa-solid fa-truck-field mr-2"></i> Registrar Proveedor</h3>
-              <button onClick={() => setShowProveedorModal(false)} className="text-muted hover:text-white">
-                <i className="fa-solid fa-xmark text-xl"></i>
-              </button>
-            </div>
-            <div className="p-6 flex flex-col gap-4">
-              <div>
-                <label className="text-xs font-bold text-muted mb-1 block">RUC del Proveedor</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={11}
-                  value={provRuc}
-                  onChange={e => { setProvRuc(e.target.value.replace(/\D/g, '')); clearProvError('ruc'); }}
-                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(provErrors.ruc)}`}
-                />
-                <FieldError msg={provErrors.ruc} />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-muted mb-1 block">Razón Social / Nombre</label>
-                <input
-                  type="text"
-                  maxLength={120}
-                  value={provName}
-                  onChange={e => { setProvName(e.target.value); clearProvError('name'); }}
-                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(provErrors.name)}`}
-                />
-                <FieldError msg={provErrors.name} />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-muted mb-1 block">Teléfono</label>
-                <input
-                  type="text"
-                  inputMode="tel"
-                  maxLength={15}
-                  value={provPhone}
-                  onChange={e => { setProvPhone(e.target.value); clearProvError('phone'); }}
-                  className={`w-full border p-2 rounded outline-none text-sm ${borderClass(provErrors.phone)}`}
-                />
-                <FieldError msg={provErrors.phone} />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-muted mb-1 block">Dirección</label>
-                <input
-                  type="text"
-                  maxLength={200}
-                  value={provAddress}
-                  onChange={e => setProvAddress(e.target.value)}
-                  className="w-full border border-line p-2 rounded outline-none focus:border-brand text-sm"
-                />
-              </div>
-            </div>
-            <div className="p-4 bg-surface-muted border-t flex justify-end gap-3">
-              <button onClick={() => setShowProveedorModal(false)} className="px-4 py-2 font-bold text-ink-soft bg-surface-muted rounded-lg text-sm">Cancelar</button>
-              <button onClick={handleSaveProveedor} disabled={loading} className="px-4 py-2 font-bold text-white bg-info rounded-lg text-sm">Guardar Proveedor</button>
-            </div>
-          </div>
-        </div>
+        <SupplierFormModal onClose={() => setShowProveedorModal(false)} onSaved={handleSupplierSaved} />
       )}
 
-      {/* Modal Registrar Compra */}
       {showCompraModal && (
-        <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
-          <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 bg-panel text-white flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-lg"><i className="fa-solid fa-cart-flatbed mr-2"></i> Registrar Entrada de Mercadería</h3>
-              <button onClick={() => setShowCompraModal(false)} className="text-muted hover:text-white">
-                <i className="fa-solid fa-xmark text-xl"></i>
-              </button>
-            </div>
-            <div className="p-4 bg-surface-muted border-b border-line grid grid-cols-1 md:grid-cols-2 gap-3 shrink-0">
-              <div>
-                <label className="text-xs font-bold text-muted mb-1 block">Proveedor</label>
-                <select
-                  value={selectedProveedorId}
-                  onChange={e => { setSelectedProveedorId(e.target.value); clearCompraError('proveedor'); }}
-                  className={`w-full border p-2 rounded outline-none bg-surface text-sm ${borderClass(compraErrors.proveedor)}`}
-                >
-                  <option value="">-- Seleccionar proveedor --</option>
-                  {proveedores.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} (RUC: {p.ruc})</option>
-                  ))}
-                </select>
-                <FieldError msg={compraErrors.proveedor} />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-muted mb-1 block">N° Factura / Guía de Remisión</label>
-                <input
-                  type="text"
-                  maxLength={30}
-                  value={numDoc}
-                  onChange={e => { setNumDoc(e.target.value); clearCompraError('numDoc'); }}
-                  placeholder="Ej: F001-000458"
-                  className={`w-full border p-2 rounded outline-none text-sm font-medium ${borderClass(compraErrors.numDoc)}`}
-                />
-                <FieldError msg={compraErrors.numDoc} />
-              </div>
-            </div>
-
-            <div className="p-4 border-b border-line shrink-0 bg-surface">
-              <div className="flex gap-2 items-start">
-                <div className="flex-1 relative">
-                  <input
-                    list="compra-prod-list"
-                    value={productInput}
-                    onChange={e => { setProductInput(e.target.value); clearItemError('product'); }}
-                    placeholder="Buscar producto..."
-                    className={`w-full px-3 py-2 border rounded outline-none bg-surface text-sm ${borderClass(itemErrors.product)}`}
-                  />
-                  <datalist id="compra-prod-list">
-                    {productos.map(p => (
-                      <option key={p.id} value={`${p.code} - ${p.name}`} />
-                    ))}
-                  </datalist>
-                  <FieldError msg={itemErrors.product} />
-                </div>
-                <div>
-                  <input
-                    type="number"
-                    min="0.001"
-                    step="any"
-                    value={productQty}
-                    onChange={e => { setProductQty(e.target.value); clearItemError('qty'); }}
-                    placeholder="Cant."
-                    className={`w-20 border p-2 rounded outline-none text-sm ${borderClass(itemErrors.qty)}`}
-                  />
-                  <FieldError msg={itemErrors.qty} />
-                </div>
-                <div>
-                  <input
-                    type="number"
-                    step="0.10"
-                    min="0"
-                    value={productCost}
-                    onChange={e => { setProductCost(e.target.value); clearItemError('cost'); }}
-                    placeholder="Costo S/"
-                    className={`w-24 border p-2 rounded outline-none text-sm ${borderClass(itemErrors.cost)}`}
-                  />
-                  <FieldError msg={itemErrors.cost} />
-                </div>
-                <button
-                  onClick={handleAddCompraItem}
-                  className="bg-panel text-white font-bold px-4 py-2 rounded shadow hover:bg-panel-strong text-sm h-[38px]"
-                >
-                  Agregar
-                </button>
-              </div>
-              <FieldError msg={compraErrors.cart} />
-            </div>
-
-            <div className="flex-1 overflow-auto p-4 bg-surface-muted">
-              <table className="w-full text-left border-collapse bg-surface shadow-sm rounded-lg overflow-hidden">
-                <thead className="bg-surface-muted text-muted text-xs uppercase">
-                  <tr>
-                    <th className="px-3 py-2">Código</th>
-                    <th className="px-3 py-2">Producto</th>
-                    <th className="px-3 py-2">Cant.</th>
-                    <th className="px-3 py-2 text-right">Costo U.</th>
-                    <th className="px-3 py-2 text-right">Subtotal</th>
-                    <th className="px-3 py-2">Acción</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm divide-y divide-line">
-                  {compraCart.map(item => (
-                    <tr key={item.id}>
-                      <td className="px-3 py-2 font-mono text-xs">{item.code}</td>
-                      <td className="px-3 py-2 font-semibold">{item.name}</td>
-                      <td className="px-3 py-2 font-bold">{item.qty}</td>
-                      <td className="px-3 py-2 text-right">S/ {item.cost.toFixed(2)}</td>
-                      <td className="px-3 py-2 text-right font-bold">S/ {(item.qty * item.cost).toFixed(2)}</td>
-                      <td className="px-3 py-2">
-                        <button onClick={() => handleRemoveCompraItem(item.id)} className="text-danger hover:text-danger">
-                          <i className="fa-solid fa-trash"></i>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="p-4 bg-surface border-t flex justify-between items-center shrink-0">
-              <div className="text-ink font-bold text-lg">
-                TOTAL COMPRA: <span className="text-2xl font-black text-brand">S/ {compraTotal.toFixed(2)}</span>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setShowCompraModal(false)} className="px-4 py-2 font-bold text-ink-soft bg-surface-muted rounded-lg text-sm">Cancelar</button>
-                <button onClick={handleSaveCompra} disabled={loading || compraCart.length === 0} className="px-6 py-2 font-bold text-brand-contrast bg-brand rounded-lg shadow-md text-sm">
-                  Registrar Compra
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PurchaseFormModal
+          proveedores={proveedores}
+          productos={productos}
+          onClose={() => setShowCompraModal(false)}
+          onSaved={handlePurchaseSaved}
+        />
       )}
 
-      {/* Modal Detalle de Compra */}
-      {selectedCompra && (() => {
-        const totalConIgv = selectedCompra.total || 0;
-        const baseImponible = totalConIgv / (1 + IGV_RATE);
-        const igv = totalConIgv - baseImponible;
-        return (
-          <div className="fixed inset-0 bg-panel/60 z-50 flex items-center justify-center backdrop-blur-sm transition-all">
-            <div className="bg-surface rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="p-4 bg-panel text-white flex justify-between items-center shrink-0">
-                <div>
-                  <h3 className="font-bold text-lg"><i className="fa-solid fa-file-invoice-dollar mr-2"></i> Detalle de Compra</h3>
-                  <p className="text-muted text-xs mt-0.5">
-                    {selectedCompra.numDoc} · {selectedCompra.provider}
-                    <span className="text-muted"> ({selectedCompra.providerRuc})</span> · {selectedCompra.date}
-                  </p>
-                </div>
-                <button onClick={() => setSelectedCompra(null)} className="text-muted hover:text-white">
-                  <i className="fa-solid fa-xmark text-xl"></i>
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-auto p-4 bg-surface-muted">
-                <table className="w-full text-left border-collapse bg-surface shadow-sm rounded-lg overflow-hidden">
-                  <thead className="bg-surface-muted text-muted text-xs uppercase">
-                    <tr>
-                      <th className="px-3 py-2">Código</th>
-                      <th className="px-3 py-2">Producto</th>
-                      <th className="px-3 py-2 text-right">Cantidad</th>
-                      <th className="px-3 py-2 text-right">Costo Unit. (S/)</th>
-                      <th className="px-3 py-2 text-right">Subtotal (S/)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm divide-y divide-line">
-                    {selectedCompra.detalles.map((d, idx) => (
-                      <tr key={idx}>
-                        <td className="px-3 py-2 font-mono text-xs">{d.producto.code}</td>
-                        <td className="px-3 py-2 font-semibold text-ink">{d.producto.name}</td>
-                        <td className="px-3 py-2 text-right font-bold">{d.quantity}</td>
-                        <td className="px-3 py-2 text-right">S/ {d.unitPrice.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right font-bold text-ink">S/ {d.subtotal.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="p-4 bg-surface border-t shrink-0">
-                <div className="ml-auto w-full max-w-xs text-sm">
-                  <div className="flex justify-between py-1 text-ink-soft">
-                    <span>Op. Gravada:</span>
-                    <span className="font-semibold">S/ {baseImponible.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between py-1 text-ink-soft">
-                    <span>IGV (18%):</span>
-                    <span className="font-semibold">S/ {igv.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-t mt-1 text-ink font-black text-lg">
-                    <span>Total:</span>
-                    <span className="text-brand">S/ {totalConIgv.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {selectedCompra && <PurchaseDetailModal compra={selectedCompra} onClose={() => setSelectedCompra(null)} />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 // Datos que usan varias pantallas (productos, clientes, caja…): una sola consulta por clave, compartida.
 // Lo propio de una pantalla se consulta en su carpeta de features/.
 import { useQuery } from '@tanstack/react-query';
+import type { Branch } from '@ferresys/contracts/branches';
 import type { CashStatus } from '@ferresys/contracts/cash';
 import type { Category, Product } from '@ferresys/contracts/catalog';
 import type { Customer } from '@ferresys/contracts/customers';
@@ -24,3 +25,7 @@ export const useCashStatus = (enabled = true) =>
 
 export const useStaff = (enabled = true) =>
   useQuery({ queryKey: queryKeys.staff, queryFn: () => api.get<StaffMember[]>('/personal'), enabled });
+
+// Sucursales activas; un error no bloquea la pantalla (se trata como una sola sucursal).
+export const useBranches = (enabled = true) =>
+  useQuery({ queryKey: queryKeys.branches, queryFn: () => api.get<Branch[]>('/sucursales'), enabled });
