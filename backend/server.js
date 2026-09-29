@@ -14,7 +14,7 @@ import ventasRoutes from './src/routes/ventas.js';
 import entregasRoutes from './src/routes/entregas.js';
 import creditosRoutes from './src/routes/creditos.js';
 import dashboardRoutes from './src/routes/dashboard.js';
-import cajaRoutes from './src/routes/caja.js';
+import { cashRoutes as cajaRoutes } from './src/modules/cash/index.ts';
 import proveedoresRoutes from './src/routes/proveedores.js';
 import comprasRoutes from './src/routes/compras.js';
 import cotizacionesRoutes from './src/routes/cotizaciones.js';
