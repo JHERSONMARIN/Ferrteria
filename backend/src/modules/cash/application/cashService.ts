@@ -1,6 +1,6 @@
 // Casos de uso de caja: abrir, unirse, salir y cerrar un turno, y administrar las cajas físicas.
 import type { prisma } from '../../../db.ts';
-import { recordAudit } from '../../../services/audit.js';
+import { recordAudit } from '../../audit/index.ts';
 import { requireFeature, requireWithinLimit } from '../../licensing/index.ts';
 import {
   CashError, LEGACY_REGISTER_NAME, assertCanClose, assertCanDeactivate, assertCanMove, closingDifference, expectedCash,

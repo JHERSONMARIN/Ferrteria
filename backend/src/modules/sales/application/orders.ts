@@ -2,7 +2,7 @@
 // almacén lo despacha. PENDIENTE DE PAGO → PAGADO → DESPACHADO, o ANULADO (a mano o vencido al cierre del día).
 import type { SaleStatus } from '@prisma/client';
 import type { prisma, Tx } from '../../../db.ts';
-import { recordAudit } from '../../../services/audit.js';
+import { recordAudit } from '../../audit/index.ts';
 import { getSettings } from '../../../services/settings.js';
 import { roundMoney } from '../../../utils/quantities.js';
 import type { SessionUser } from '../../../types/express.d.ts';
