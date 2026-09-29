@@ -16,6 +16,7 @@ import FieldError from '../../shared/ui/FieldError.tsx';
 import { borderClass } from '../../shared/utils/validators.ts';
 import { MODULE_OPTIONS } from '../../shared/constants/modules.ts';
 import { useConfirm } from '../../shared/ui/index.ts';
+import { useVocabulary } from '../../shared/industry/vocabulary.ts';
 
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   NOTA_VENTA: 'Nota de venta',
@@ -60,7 +61,7 @@ const SALE_FLOW_OPTIONS: SaleFlowOption[] = [
     id: 'DIRECT',
     title: 'Directo',
     icon: 'fa-user',
-    description: 'Una persona atiende, cobra y entrega. Ideal para ferreterías pequeñas.',
+    description: 'Una persona atiende, cobra y entrega. Ideal para locales pequeños.',
     steps: ['Venta y cobro en el Punto de Venta'],
     requires: [],
   },
@@ -259,6 +260,7 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
   const confirmar = useConfirm();
   const queryClient = useQueryClient();
   const settingsQuery = useSettings();
+  const vocabulary = useVocabulary();
   const savedSettings = settingsQuery.data?.settings ?? null;
   const licensedModules = settingsQuery.data?.licensedModules ?? null;
   const documentSeries = settingsQuery.data?.documentSeries ?? [];
@@ -424,7 +426,7 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
             <LogoField logo={form.logo} onChange={value => setField('logo', value)} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field label="Nombre comercial" error={errors.tradeName} hint="Es el que se muestra en el sistema.">
-                {input('tradeName', { maxLength: 100, placeholder: 'Ferretería Los Andes' })}
+                {input('tradeName', { maxLength: 100, placeholder: vocabulary.sampleTradeName })}
               </Field>
               <Field label="Razón social" error={errors.legalName} hint="Para los comprobantes.">
                 {input('legalName', { maxLength: 150 })}

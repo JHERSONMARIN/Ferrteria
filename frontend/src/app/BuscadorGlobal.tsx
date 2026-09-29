@@ -6,6 +6,7 @@ import { api } from '../api/client.ts';
 import { queryKeys } from '../api/queryClient.ts';
 import type { ScreenId } from './screens.ts';
 import { formatSoles } from '../shared/utils/currency.ts';
+import { capitalize, useVocabulary } from '../shared/industry/vocabulary.ts';
 
 // Buscador general: se abre con Ctrl+K (o Ctrl+Barra) desde cualquier pantalla y encuentra de una vez
 // productos, clientes y las pantallas del sistema. Es el atajo de quien pasa el día vendiendo.
@@ -38,6 +39,7 @@ export default function BuscadorGlobal({ open, onClose, pantallas, onIr }: Props
   const [activo, setActivo] = useState(0);
   const campoRef = useRef<HTMLInputElement>(null);
   const listaRef = useRef<HTMLDivElement>(null);
+  const vocabulary = useVocabulary();
 
   // Los datos se piden al abrir (si tienen más de unos segundos): así muestra stock y deudas al día.
   const productos = useQuery({
@@ -125,7 +127,7 @@ export default function BuscadorGlobal({ open, onClose, pantallas, onIr }: Props
             value={texto}
             onChange={e => setTexto(e.target.value)}
             onKeyDown={alTeclear}
-            placeholder="Buscar productos, clientes o pantallas…"
+            placeholder={`Buscar ${vocabulary.products}, clientes o pantallas…`}
             className="flex-1 text-sm text-ink outline-none bg-transparent placeholder:text-muted"
           />
           <kbd className="text-[10px] font-bold text-muted border border-line rounded px-1.5 py-0.5">Esc</kbd>
@@ -136,7 +138,7 @@ export default function BuscadorGlobal({ open, onClose, pantallas, onIr }: Props
             <p className="text-sm text-muted text-center py-8">Nada coincide con “{texto}”.</p>
           )}
           {resultados.map((item, i) => {
-            const titulo = TITULOS[item.tipo];
+            const titulo = item.tipo === 'producto' ? capitalize(vocabulary.products) : TITULOS[item.tipo];
             const nuevoGrupo = titulo !== grupoAnterior;
             grupoAnterior = titulo;
             const seleccionado = i === activo;

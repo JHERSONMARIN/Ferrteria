@@ -34,3 +34,7 @@ src/
 - **Imports**: con la extensión (`./cart.ts`, `./PosPage.tsx`).
 - `npm run typecheck` verifica los tipos (también corre en `npm test` desde la raíz). La imagen se
   construye desde la raíz del repositorio para incluir los contratos (ver `Dockerfile.dockerignore`).
+- **Rubro**: las palabras que dependen del rubro ("ferretería", "productos"…) salen de `useVocabulary()`
+  (`shared/industry/`), que las toma de la configuración; no se escriben a mano. Las pantallas propias de
+  un rubro (control de vencimientos en farmacia) se agregan cuando exista el primero: se muestran según el
+  `industry` que devuelve `/api/settings`.
