@@ -31,6 +31,17 @@ entrega y las pantallas lo usan en vez de escribir "ferretería" o "producto" a 
 | `beforeSale` | Venta directa del POS y pedido nuevo, con los precios ya calculados y antes de guardar. |
 | `onStockMovement` | Cada entrada o salida física: compra, movimiento manual, transferencia (salida y entrada), venta y despacho. Las reservas de un pedido no cuentan: el stock sigue en el local. |
 
+## Campos propios del rubro
+
+Un rubro que necesita más datos en una entidad del núcleo no agrega columnas sueltas al modelo de todos:
+los guarda en la columna JSON `industryData` de esa entidad (hoy, los productos). El paquete declara su
+esquema Zod en `fields.product`, y el núcleo lo valida al crear o editar (`parseProductData`). Sin esquema,
+como en ferretería, solo se acepta vacío (`RUBRO_DATOS_INVALIDOS`): nada se guarda sin que el paquete lo
+haya validado.
+
+Lo que tiene varias filas por producto (los lotes de farmacia, con su cantidad y vencimiento) no es un
+campo: el paquete trae sus propias tablas y las llena desde `onStockMovement`.
+
 ## Sumar un rubro
 
 1. Agregarlo al catálogo en `packages/shared/industries.js` (y su tipo en `industries.d.ts`).

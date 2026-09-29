@@ -3,6 +3,7 @@
 // rechazarlo (lanzando un AppError con un mensaje para el usuario) o guardar sus propios datos. No cambia
 // precios, cantidades ni estados: si un rubro necesita eso, la regla es del núcleo y se configura allí.
 import type { Tx } from '../db.ts';
+import type { z } from 'zod';
 import type { Vocabulary } from '@ferresys/contracts/settings';
 import type { SessionUser } from '../types/express.d.ts';
 
@@ -43,9 +44,16 @@ export interface IndustryHooks {
   onStockMovement?(tx: Tx, movement: StockMovement): Promise<void>;
 }
 
-// Un paquete aporta, además de sus enganches, las palabras con que las pantallas nombran las cosas.
+/** Datos propios del rubro en una entidad del núcleo; se guardan en su columna industryData. */
+export type IndustryData = Record<string, unknown>;
+
+// Un paquete aporta, además de sus enganches, las palabras con que las pantallas nombran las cosas y
+// los campos que agrega a las entidades del núcleo (con su esquema, que también da los mensajes de error).
 export interface IndustryPackage {
   id: string;
   hooks: IndustryHooks;
   vocabulary: Vocabulary;
+  fields?: {
+    product?: z.ZodType<IndustryData>;
+  };
 }

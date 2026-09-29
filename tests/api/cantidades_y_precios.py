@@ -26,6 +26,16 @@ admin.api("POST", "/productos", {"code": "CEM", "name": "Cemento", "unit": "Unid
 admin.api("POST", "/productos", {"code": "CLA", "name": "Clavos 2\"", "unit": "Unidad", "stock": 200, "price": 10, "category": "General"})
 ID = {c: int(sql(f"select id from productos where code = '{c}'")) for c in ("CAB", "CEM", "CLA")}
 
+print("\n=== Campos del rubro ===")
+st, r = admin.api("POST", "/productos", {"code": "LOTE", "name": "Con lote", "unit": "Unidad", "stock": 1, "price": 5,
+                                         "category": "General", "industryData": {"lote": "A1"}})
+verificar("Ferretería no agrega campos: datos de otro rubro → 400 sin crear nada",
+          st == 400 and r.get("codigo") == "RUBRO_DATOS_INVALIDOS" and sql("select count(*) from productos where code = 'LOTE'") == "0", (st, r))
+productos = {p["code"]: p for p in admin.api("GET", "/productos")[1]}
+verificar("Los productos llegan con sus campos del rubro vacíos", productos["CEM"].get("industryData") == {}, productos["CEM"].get("industryData"))
+st, r = admin.api("PUT", f"/productos/{ID['CLA']}", {"code": "CLA", "name": "Clavos 2\"", "price": 10, "industryData": {"lote": "A1"}})
+verificar("…y al editar tampoco se aceptan", st == 400 and r.get("codigo") == "RUBRO_DATOS_INVALIDOS", (st, r))
+
 st, r = venta(admin, [(ID["CAB"], 2.75)], 6.88)
 verificar("Venta de 2.75 m de cable (2.75 × 2.50 = 6.88)", st == 201 and r["venta"]["total"] == 6.88, (st, r))
 verificar("…y descuenta 2.75 m exactos del stock", stock("CAB") == (97.75, 0), stock("CAB"))

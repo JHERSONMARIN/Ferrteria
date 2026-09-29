@@ -39,6 +39,8 @@ export interface Product {
   totalReserved: number;
   branches: BranchStock[];
   saleUnits: SaleUnit[];
+  /** Campos del paquete de rubro de la empresa; {} si su rubro no agrega ninguno. */
+  industryData: Record<string, unknown>;
 }
 
 /** GET /api/categorias, con sus números. */
