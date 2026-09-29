@@ -1,15 +1,19 @@
+# Se construye desde la raíz del repositorio (usa packages/shared): ver backend/Dockerfile.dockerignore.
 FROM node:20-alpine
 
-WORKDIR /app
+WORKDIR /app/backend
 
 RUN apk add --no-cache openssl
 
-COPY package*.json ./
-COPY prisma ./prisma/
+# Piezas comunes con la consola: el package.json las enlaza con "file:../packages/shared".
+COPY packages/shared /app/packages/shared
+
+COPY backend/package*.json ./
+COPY backend/prisma ./prisma/
 
 RUN npm install
 
-COPY . .
+COPY backend/ .
 
 RUN npx prisma generate
 

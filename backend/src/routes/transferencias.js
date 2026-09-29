@@ -3,7 +3,7 @@ import { prisma } from '../db.js';
 import { createTransfer, listTransfers, TransferError } from '../services/transfers.js';
 import { BranchError } from '../services/branches.js';
 import { StockError } from '../services/stock.js';
-import { errorBody } from '../utils/errors.js';
+import { errorBody } from '@ferresys/shared/errors';
 
 const router = express.Router();
 

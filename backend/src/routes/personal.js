@@ -1,10 +1,10 @@
 import express from 'express';
 import { prisma } from '../db.js';
-import { hashPassword, validateNewPassword, PasswordPolicyError } from '../services/passwords.js';
+import { hashPassword, validateNewPassword, PasswordPolicyError } from '@ferresys/shared/passwords';
 import { recordAudit, changedFields } from '../services/audit.js';
 import { requireWithinLimit, respondIfLicenseError, getActiveModules } from '../services/license.js';
 import { getSettings } from '../services/settings.js';
-import { errorBody } from '../utils/errors.js';
+import { errorBody } from '@ferresys/shared/errors';
 
 // Solo se pueden asignar módulos que la empresa tenga contratados y activos.
 async function assertModulesAllowed(modules) {

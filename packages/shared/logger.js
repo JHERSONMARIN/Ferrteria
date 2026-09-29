@@ -6,14 +6,15 @@ import { format } from 'node:util';
 // identificador y el usuario. Así, ante la falla de un cliente se filtra por su identificador en vez
 // de leer texto suelto:  docker logs <backend> | grep '"requestId":"a1b2c3d4e5f6"'
 //
-// Al importarse reemplaza console.log/info/warn/error: lo que el resto del código ya escribe con
-// console sale en el mismo formato y con el contexto de la petición. Por eso server.js lo importa primero.
+// Cada aplicación llama a installConsoleLogger al arrancar, antes que nada: desde ahí lo que el resto
+// del código escribe con console sale en el mismo formato y con el contexto de la petición.
 
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 const MIN_LEVEL = LEVELS[process.env.LOG_LEVEL?.toLowerCase()] ?? LEVELS.info;
 const COMPANY = process.env.COMPANY_SLUG?.trim() || process.env.COMPANY_NAME?.trim() || null;
 
 const requestContext = new AsyncLocalStorage();
+let service = null;
 
 const serializeError = (error) => ({
   name: error.name,
@@ -28,6 +29,7 @@ function write(level, message, fields = {}) {
   const entry = {
     time: new Date().toISOString(),
     level,
+    ...(service && { service }),
     company: COMPANY,
     ...(context && { requestId: context.requestId }),
     ...(context?.user && { userId: context.user.id, user: context.user.user }),
@@ -51,10 +53,14 @@ const fromConsole = (level) => (...args) => {
   const rest = args.filter(arg => arg !== error);
   write(level, format(...rest).replace(/:\s*$/, ''), error ? { error } : {});
 };
-console.log = fromConsole('info');
-console.info = fromConsole('info');
-console.warn = fromConsole('warn');
-console.error = fromConsole('error');
+// service: quién escribe ('backend' de una empresa, 'consola' de VALETEC).
+export function installConsoleLogger(options = {}) {
+  service = options.service ?? null;
+  console.log = fromConsole('info');
+  console.info = fromConsole('info');
+  console.warn = fromConsole('warn');
+  console.error = fromConsole('error');
+}
 
 // Peticiones exitosas que se repiten cada pocos segundos (latido de sesión, chequeo de salud):
 // solo se registran con LOG_LEVEL=debug.

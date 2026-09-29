@@ -37,10 +37,14 @@ CONTAINER="ferresys-$SLUG-backend-1"
 
 # Se comprueba en la instancia que está corriendo, ANTES de tocar la licencia: si un módulo no se
 # puede quitar (por el modo de trabajo de alguna sucursal), no se cambia nada.
+# Carpeta del backend dentro del contenedor: /app/backend desde que la imagen incluye packages/shared;
+# /app en las imágenes anteriores (empresas que todavía no se actualizaron).
+app_dir() { docker exec "$CONTAINER" sh -c '[ -d /app/backend ] && echo /app/backend || echo /app'; }
 modulos_en_la_empresa() { # modulos_en_la_empresa <verificar|aplicar>
+  local APP_DIR; APP_DIR="$(app_dir)"
   docker exec -e MODULOS="$VALUE" -e ACCION="$1" "$CONTAINER" node --input-type=module -e "
-    import { prisma } from '/app/src/db.js';
-    import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '/app/src/config/modules.js';
+    import { prisma } from '$APP_DIR/src/db.js';
+    import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '$APP_DIR/src/config/modules.js';
     const pedidos = (process.env.MODULOS || '').split(',').map(m => m.trim()).filter(Boolean);
     const licencia = pedidos.length > 0 ? pedidos : AVAILABLE_MODULES;
     const activos = AVAILABLE_MODULES.filter(m => licencia.includes(m) || ALWAYS_ENABLED_MODULES.includes(m));

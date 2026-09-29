@@ -1,6 +1,6 @@
 import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '../config/modules.js';
 import { AVAILABLE_FEATURES } from '../config/features.js';
-import { AppError, errorBody } from '../utils/errors.js';
+import { AppError, errorBody } from '@ferresys/shared/errors';
 
 // Módulos contratados por la empresa. Los define VALETEC en el .env de cada instancia
 // (LICENSED_MODULES=pos,caja,...); la empresa no puede cambiarlos. Sin la variable, se

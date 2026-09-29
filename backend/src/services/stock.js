@@ -7,7 +7,7 @@
 // Las fechas se escriben en UTC porque la sesión de PostgreSQL está en hora de Lima.
 
 import { roundQuantity } from '../utils/quantities.js';
-import { AppError } from '../utils/errors.js';
+import { AppError } from '@ferresys/shared/errors';
 
 export class StockError extends AppError {
   static area = 'STOCK';

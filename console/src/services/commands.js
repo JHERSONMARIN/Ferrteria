@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { prisma } from '../db.js';
+import { AppError } from '@ferresys/shared/errors';
 import { DEPLOY_DIR, readPlans, readThemes, readModules, companySlugs, readCompanyEnv, currentCommit } from './companies.js';
 
 const execFileAsync = promisify(execFile);
@@ -23,10 +24,12 @@ const SCRIPT_ENV = {
 const TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_OUTPUT = 20000;
 
-export class CommandError extends Error {
+// output: salida del script, para que VALETEC vea qué falló en el servidor.
+export class CommandError extends AppError {
+  static area = 'COMANDO';
+
   constructor(message, status = 400, output = null) {
-    super(message);
-    this.status = status;
+    super(message, status);
     this.output = output;
   }
 }

@@ -1,5 +1,5 @@
 import { requireFeature } from './license.js';
-import { AppError } from '../utils/errors.js';
+import { AppError } from '@ferresys/shared/errors';
 // Registro de auditoría. Se escribe con el mismo cliente (tx) que la operación auditada para que
 // ambas se confirmen o se descarten juntas.
 

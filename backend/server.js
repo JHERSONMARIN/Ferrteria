@@ -1,6 +1,7 @@
 // Primero: reemplaza console por el registro estructurado antes de que otros módulos escriban.
-import { requestLogger } from './src/utils/logger.js';
-import { errorEnvelope, finalErrorHandler } from './src/utils/errors.js';
+import './src/logging.js';
+import { requestLogger } from '@ferresys/shared/logger';
+import { errorEnvelope, finalErrorHandler } from '@ferresys/shared/errors';
 import express from 'express';
 import dotenv from 'dotenv';
 import authRoutes from './src/routes/auth.js';

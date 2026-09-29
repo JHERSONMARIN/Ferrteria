@@ -6,7 +6,7 @@
 import { recordAudit } from './audit.js';
 import { roundMoney } from '../utils/quantities.js';
 import { requireFeature, requireWithinLimit } from './license.js';
-import { AppError } from '../utils/errors.js';
+import { AppError } from '@ferresys/shared/errors';
 
 export class CashError extends AppError {
   static area = 'CAJA';

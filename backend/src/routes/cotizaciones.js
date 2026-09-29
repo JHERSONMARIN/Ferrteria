@@ -4,7 +4,7 @@ import { recordAudit } from '../services/audit.js';
 import {
   procesarVenta, responderErrorVenta, normalizarCarrito, cargarProductosActivos, priceListFor, unitPriceFor, saleUnitOf, unitFields, unitColumns, VentaError,
 } from '../services/ventas.js';
-import { errorBody } from '../utils/errors.js';
+import { errorBody } from '@ferresys/shared/errors';
 
 const router = express.Router();
 

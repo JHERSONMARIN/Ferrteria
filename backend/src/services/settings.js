@@ -1,7 +1,7 @@
 import { AVAILABLE_MODULES, ALWAYS_ENABLED_MODULES } from '../config/modules.js';
 import { isModuleLicensed } from './license.js';
 import { recordAudit, changedFields } from './audit.js';
-import { AppError } from '../utils/errors.js';
+import { AppError } from '@ferresys/shared/errors';
 
 export { AVAILABLE_MODULES };
 

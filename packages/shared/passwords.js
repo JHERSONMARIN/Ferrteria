@@ -1,6 +1,6 @@
-// Copia del backend de empresa: la consola es una aplicación independiente y no comparte código con él.
 import { scrypt, randomBytes, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import { AppError } from './errors.js';
 
 const scryptAsync = promisify(scrypt);
 
@@ -12,7 +12,9 @@ const PARALLELIZATION = 1;
 const KEY_LENGTH = 64;
 export const MIN_PASSWORD_LENGTH = 8;
 
-export class PasswordPolicyError extends Error {}
+export class PasswordPolicyError extends AppError {
+  static area = 'CLAVE';
+}
 
 export const isPasswordHashed = (stored) => typeof stored === 'string' && stored.startsWith(`${ALGORITHM}$`);
 

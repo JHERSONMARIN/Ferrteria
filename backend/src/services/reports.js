@@ -6,7 +6,7 @@
 import { Prisma } from '@prisma/client';
 import { roundMoney, roundQuantity } from '../utils/quantities.js';
 import { requireFeature } from './license.js';
-import { AppError } from '../utils/errors.js';
+import { AppError } from '@ferresys/shared/errors';
 
 export class ReportError extends AppError {
   static area = 'REPORTE';

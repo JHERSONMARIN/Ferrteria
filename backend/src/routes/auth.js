@@ -1,10 +1,10 @@
 import express from 'express';
 import { prisma } from '../db.js';
-import { hashPassword, verifyPassword, validateNewPassword, PasswordPolicyError } from '../services/passwords.js';
-import { createSessionToken } from '../services/sessionTokens.js';
-import { secondsBlocked, registerFailure, registerSuccess } from '../services/loginThrottle.js';
+import { hashPassword, verifyPassword, validateNewPassword, PasswordPolicyError } from '@ferresys/shared/passwords';
+import { createSessionToken } from '@ferresys/shared/sessionTokens';
+import { secondsBlocked, registerFailure, registerSuccess } from '@ferresys/shared/loginThrottle';
 import { authenticate, setSessionCookie, clearSessionCookie } from '../middleware/authenticate.js';
-import { errorBody } from '../utils/errors.js';
+import { errorBody } from '@ferresys/shared/errors';
 
 const router = express.Router();
 

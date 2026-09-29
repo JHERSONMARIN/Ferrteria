@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../src/db.js';
 import { AVAILABLE_MODULES } from '../src/services/settings.js';
-import { hashPassword } from '../src/services/passwords.js';
+import { hashPassword } from '@ferresys/shared/passwords';
 
 // Prepara una base recién creada para una empresa nueva: configuración y administrador inicial.
 // En bases que ya tienen usuarios no hace nada, por lo que puede ejecutarse en cada arranque.

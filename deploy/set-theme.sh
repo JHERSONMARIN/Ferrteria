@@ -34,10 +34,15 @@ RESUELTO=$(node -e '
 
 IFS='|' read -r PRIMARY NAV NOMBRE <<< "$RESUELTO"
 
+# Carpeta del backend dentro del contenedor: /app/backend desde que la imagen incluye packages/shared;
+# /app en las imágenes anteriores (empresas que todavía no se actualizaron).
+app_dir() { docker exec "$CONTAINER" sh -c '[ -d /app/backend ] && echo /app/backend || echo /app'; }
+APP_DIR="$(app_dir)"
+
 # Se guarda en la configuración de la empresa; sus pantallas lo toman en la siguiente carga.
 docker exec -e ESTILO_PRIMARY="$PRIMARY" -e ESTILO_NAV="$NAV" "$CONTAINER" \
   node --input-type=module -e "
-    import { prisma } from '/app/src/db.js';
+    import { prisma } from '$APP_DIR/src/db.js';
     const { count } = await prisma.businessSettings.updateMany({
       where: { id: 1 },
       data: {

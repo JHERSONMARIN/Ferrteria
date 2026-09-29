@@ -3,7 +3,9 @@
 services:
   backend:
     build:
-      context: ../../backend
+      # Desde la raíz del repositorio: la imagen incluye packages/shared.
+      context: ../..
+      dockerfile: backend/Dockerfile
       args:
         APP_COMMIT: ${FERRESYS_COMMIT:-}
     image: ferresys-backend:local
