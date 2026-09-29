@@ -3,6 +3,7 @@ import { roleLabel } from '../shared/constants/roles.ts';
 import type { AppInfo } from '@ferresys/contracts/app';
 import type { SessionUser } from '@ferresys/contracts/identity';
 import type { ScreenId } from './screens.ts';
+import { capitalize, useVocabulary } from '../shared/industry/vocabulary.ts';
 
 type Badge = 'cobros' | 'despacho';
 
@@ -119,6 +120,9 @@ export default function Sidebar({
   const version = appVersion?.number ? `v${appVersion.number}` : '';
   const versionTitle = appVersion?.commit ? `Versión ${appVersion.number} · ${appVersion.commit}` : undefined;
   const allowedModules = modules;
+  const vocabulary = useVocabulary();
+  // El nombre de lo que se vende depende del rubro (Productos, Medicamentos…).
+  const labelOf = (item: NavItem) => (item.id === 'inventory' ? capitalize(vocabulary.products) : item.label);
   // Menú del usuario: se cierra al tocar fuera o con Escape.
   const [menuUsuario, setMenuUsuario] = useState(false);
   const menuUsuarioRef = useRef<HTMLDivElement>(null);
@@ -185,7 +189,7 @@ export default function Sidebar({
                   return (
                     <Fragment key={item.id}>
                       <NavButton
-                        item={item}
+                        item={{ ...item, label: labelOf(item) }}
                         active={active}
                         count={item.badge ? counts[item.badge] : 0}
                         onClick={() => handleSwitchTab(item.id)}

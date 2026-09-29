@@ -19,7 +19,7 @@ const COMMON_REASONS: Record<MovementType, string[]> = {
     'Ajuste por Conteo Físico (Faltante)',
     'Merma por Rotura o Deterioro',
     'Producto Vencido / No Apto',
-    'Consumo o Uso Interno de Ferretería',
+    'Consumo o Uso Interno',
     'Devolución a Proveedor',
     'Otro motivo de salida',
   ],
