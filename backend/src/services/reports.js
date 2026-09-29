@@ -5,7 +5,7 @@
 
 import { Prisma } from '@prisma/client';
 import { roundMoney, roundQuantity } from '../utils/quantities.js';
-import { requireFeature } from './license.js';
+import { requireFeature } from '../modules/licensing/index.ts';
 import { AppError } from '@ferresys/shared/errors';
 
 export class ReportError extends AppError {

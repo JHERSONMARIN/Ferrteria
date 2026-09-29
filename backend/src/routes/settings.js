@@ -2,7 +2,7 @@ import express from 'express';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { prisma } from '../db.js';
-import { LICENSED_MODULES, LICENSED_FEATURES, LIMITS, licenseStatus } from '../services/license.js';
+import { LICENSED_MODULES, LICENSED_FEATURES, LIMITS, licenseStatus } from '../modules/licensing/index.ts';
 import {
   getSettings,
   updateSettings,
