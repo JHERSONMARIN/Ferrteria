@@ -84,7 +84,7 @@ export async function deleteCategory(client: Client, id: number, targetId: numbe
     }
     await tx.categoria.delete({ where: { id } });
   });
-  return { success: true, message: 'Categoría eliminada exitosamente.', reassignedCount: targetId ? count : 0 };
+  return { success: true as const, message: 'Categoría eliminada exitosamente.', reassignedCount: targetId ? count : 0 };
 }
 
 // Todo o nada: con una fila inválida no se guarda ninguna y se devuelven los errores por fila.

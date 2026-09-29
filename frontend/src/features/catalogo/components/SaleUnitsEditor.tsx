@@ -1,15 +1,30 @@
-import React from 'react';
-import { quantityProblem } from '../shared/utils/quantities.ts';
+import type { SaleUnit, SaleUnitInput } from '@ferresys/contracts/catalog';
+import { quantityProblem } from '../../../shared/utils/quantities.ts';
+
+/** Una fila del editor: los valores se guardan como texto mientras se escriben. */
+export interface SaleUnitRow {
+  key: string;
+  id: number | null;
+  name: string;
+  factor: string;
+  price: string;
+  wholesalePrice: string;
+  code: string;
+  allowsFractions: boolean;
+}
+
+/** Errores por fila: { [key]: 'mensaje' }. */
+export type SaleUnitErrors = Record<string, string>;
 
 let nextKey = 1;
 
 // Fila vacía del editor (los valores se guardan como texto mientras se escriben).
-export const emptySaleUnit = () => ({
+export const emptySaleUnit = (): SaleUnitRow => ({
   key: `n${nextKey++}`, id: null, name: '', factor: '', price: '', wholesalePrice: '', code: '', allowsFractions: false,
 });
 
 // Presentación que viene del servidor → fila del editor.
-export const toSaleUnitRow = (u) => ({
+export const toSaleUnitRow = (u: SaleUnit): SaleUnitRow => ({
   key: `u${u.id}`,
   id: u.id,
   name: u.name,
@@ -21,7 +36,7 @@ export const toSaleUnitRow = (u) => ({
 });
 
 // Fila del editor → lo que espera el servidor.
-export const toSaleUnitPayload = (row) => ({
+export const toSaleUnitPayload = (row: SaleUnitRow): SaleUnitInput => ({
   id: row.id,
   name: row.name.trim(),
   factor: Number(row.factor),
@@ -32,8 +47,8 @@ export const toSaleUnitPayload = (row) => ({
 });
 
 // Errores por fila: { [key]: 'mensaje' }. Mismas reglas que el servidor.
-export function validateSaleUnits(rows, baseUnit, productCode) {
-  const errors = {};
+export function validateSaleUnits(rows: readonly SaleUnitRow[], baseUnit: string, productCode: string): SaleUnitErrors {
+  const errors: SaleUnitErrors = {};
   const names = new Set([baseUnit.trim().toLowerCase()]);
   const codes = new Set([productCode.trim()]);
   for (const row of rows) {
@@ -55,13 +70,26 @@ export function validateSaleUnits(rows, baseUnit, productCode) {
   return errors;
 }
 
-const cell = (error) => `w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:border-brand bg-surface ${error ? 'border-danger' : 'border-line'}`;
+const cell = (error?: string) => `w-full border rounded-lg px-2 py-1.5 text-sm outline-none focus:border-brand bg-surface ${error ? 'border-danger' : 'border-line'}`;
 
 // Otras formas de vender el mismo producto: por paquete, por ciento, por kilo… El stock sigue
 // en la unidad base; cada presentación dice cuántas unidades base trae y su propio precio.
-export default function SaleUnitsEditor({ rows, onChange, baseUnit, basePrice, errors = {}, onScan }) {
-  const update = (key, field, value) => onChange(rows.map(r => (r.key === key ? { ...r, [field]: value } : r)));
-  const remove = (key) => onChange(rows.filter(r => r.key !== key));
+interface Props {
+  rows: SaleUnitRow[];
+  onChange: (rows: SaleUnitRow[]) => void;
+  baseUnit: string;
+  basePrice: string;
+  errors?: SaleUnitErrors;
+  /** Abre el escáner; el código leído se entrega a la función recibida. */
+  onScan?: (apply: (code: string) => void) => void;
+}
+
+type Field = 'name' | 'factor' | 'price' | 'wholesalePrice' | 'code';
+
+export default function SaleUnitsEditor({ rows, onChange, baseUnit, basePrice, errors = {}, onScan }: Props) {
+  const update = (key: string, field: Field | 'allowsFractions', value: string | boolean) =>
+    onChange(rows.map(r => (r.key === key ? { ...r, [field]: value } : r)));
+  const remove = (key: string) => onChange(rows.filter(r => r.key !== key));
 
   return (
     <div className="border border-line rounded-xl overflow-hidden">

@@ -20,17 +20,18 @@ import type { BusinessSettings, SettingsResponse } from '@ferresys/contracts/set
 import LoginScreen from './LoginScreen.tsx';
 import { SCREENS, firstScreen, isScreenId, screenFromPath, type ScreenId } from './screens.ts';
 import { useSession } from './useSession.ts';
+import { useBranches } from '../api/queries.ts';
 
 // Las pantallas se cargan por separado: entrar al sistema no descarga todo el programa de una vez.
 const page = (load: () => Promise<{ default: ComponentType<any> }>) => lazy(load);
 const PAGES = {
   pos: page(() => import('../features/ventas/PosPage.tsx')),
   caja: page(() => import('../pages/CajaPage.jsx')),
-  inventory: page(() => import('../pages/InventarioPage.jsx')),
-  categories: page(() => import('../pages/CategoriasPage.jsx')),
+  inventory: page(() => import('../features/catalogo/ProductosPage.tsx')),
+  categories: page(() => import('../features/catalogo/CategoriasPage.tsx')),
   cotizaciones: page(() => import('../features/ventas/CotizacionesPage.tsx')),
-  kardex: page(() => import('../pages/KardexPage.jsx')),
-  compras: page(() => import('../pages/ComprasPage.jsx')),
+  kardex: page(() => import('../features/inventario/MovimientosPage.tsx')),
+  compras: page(() => import('../features/compras/ComprasPage.tsx')),
   deliveries: page(() => import('../pages/EntregasPage.jsx')),
   'client-dir': page(() => import('../pages/ClientesPage.jsx')),
   customers: page(() => import('../pages/CreditosPage.jsx')),
@@ -38,7 +39,7 @@ const PAGES = {
   dashboard: page(() => import('../pages/DashboardPage.jsx')),
   settings: page(() => import('../pages/SettingsPage.jsx')),
   audit: page(() => import('../pages/AuditPage.jsx')),
-  transfers: page(() => import('../pages/TransfersPage.jsx')),
+  transfers: page(() => import('../features/inventario/TransferenciasPage.tsx')),
   cobros: page(() => import('../features/ventas/CashierQueuePage.tsx')),
   despacho: page(() => import('../features/ventas/DispatchQueuePage.tsx')),
 } satisfies Record<ScreenId, unknown>;
@@ -93,11 +94,7 @@ function Aplicacion() {
     enabled: signedIn,
   });
   // Las sucursales solo se muestran si hay más de una; un error aquí no bloquea la aplicación.
-  const branchCount = useQuery({
-    queryKey: queryKeys.branches,
-    queryFn: () => api.get<unknown[]>('/sucursales'),
-    enabled: signedIn,
-  }).data?.length ?? 1;
+  const branchCount = useBranches(signedIn).data?.length ?? 1;
 
   const settings = settingsQuery.data?.settings ?? null;
   const licensedModules = settingsQuery.data?.licensedModules ?? null;

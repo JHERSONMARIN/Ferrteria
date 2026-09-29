@@ -1,13 +1,55 @@
-import React, { useMemo, useRef, useState } from 'react';
-import Modal from '../shared/ui/Modal.tsx';
-import Button from '../shared/ui/Button.tsx';
-import { readSpreadsheet, rowsToObjects, downloadTemplate, normalizeHeader } from '../shared/utils/spreadsheet.ts';
+import { Fragment, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { ImportRowError } from '@ferresys/contracts/catalog';
+import { ApiError } from '../../api/client.ts';
+import Modal from '../ui/Modal.tsx';
+import Button from '../ui/Button.tsx';
+import {
+  readSpreadsheet, rowsToObjects, downloadTemplate, normalizeHeader, type Cell, type SheetColumn,
+} from '../utils/spreadsheet.ts';
+
+/** Una columna de la planilla: la plantilla, la lectura y la celda editable de la revisión. */
+export interface ImportColumn extends SheetColumn {
+  placeholder?: string;
+  type?: 'text' | 'number' | 'bool';
+}
+
+/** Los valores de una fila, como texto, por la clave de cada columna. */
+export type ImportValues = Record<string, string>;
+
+export interface RowCheck {
+  errors?: Record<string, string>;
+  warnings?: string[];
+}
+
+type Status = 'error' | 'warning' | 'ok';
+type Filter = 'all' | Status;
+
+interface Row {
+  id: number;
+  values: ImportValues;
+  selected: boolean;
+}
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  entityLabel: string;
+  columns: ImportColumn[];
+  examples: Record<string, Cell>[];
+  templateName: string;
+  validateRow: (values: ImportValues) => RowCheck;
+  /** Columna que no puede repetirse en el archivo (ej. el código). */
+  uniqueKey?: string;
+  onImport: (rows: ImportValues[]) => Promise<{ message?: string } | void>;
+  options?: ReactNode;
+}
 
 const PAGE_SIZE = 25;
 const MAX_ROWS = 2000;
 let nextRowId = 1;
 
-const FILTERS = [
+const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'Todas' },
   { id: 'error', label: 'Con errores' },
   { id: 'warning', label: 'Con advertencias' },
@@ -24,17 +66,17 @@ const FILTERS = [
 // onImport(rowsValues) → { message } | lanza un error con err.data.rows = [{ index, error }]
 export default function ImportModal({
   open, onClose, title, entityLabel, columns, examples, templateName, validateRow, uniqueKey, onImport, options,
-}) {
-  const fileRef = useRef(null);
-  const [rows, setRows] = useState([]);
+}: Props) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [rows, setRows] = useState<Row[]>([]);
   const [fileName, setFileName] = useState('');
   const [readError, setReadError] = useState('');
   const [reading, setReading] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState<Filter>('all');
   const [page, setPage] = useState(0);
-  const [serverErrors, setServerErrors] = useState({});
+  const [serverErrors, setServerErrors] = useState<Record<number, string | undefined>>({});
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<string | null>(null);
 
   const reset = () => {
     setRows([]); setFileName(''); setReadError(''); setFilter('all'); setPage(0); setServerErrors({}); setResult(null);
@@ -42,7 +84,7 @@ export default function ImportModal({
   };
   const close = () => { if (importing) return; reset(); onClose(); };
 
-  const handleFile = async (file) => {
+  const handleFile = async (file: File | undefined) => {
     if (!file) return;
     reset();
     setReading(true);
@@ -55,7 +97,7 @@ export default function ImportModal({
       setFileName(file.name);
       setRows(parsed.map(values => ({ id: nextRowId++, values, selected: true })));
     } catch (err) {
-      setReadError(err.message || 'No se pudo leer el archivo.');
+      setReadError((err as Error).message || 'No se pudo leer el archivo.');
     } finally {
       setReading(false);
     }
@@ -63,7 +105,7 @@ export default function ImportModal({
 
   // Validación de cada fila + repetidos dentro del archivo + errores que devolvió el servidor.
   const checked = useMemo(() => {
-    const counts = new Map();
+    const counts = new Map<string, number>();
     if (uniqueKey) {
       rows.forEach(r => {
         const k = normalizeHeader(r.values[uniqueKey]);
@@ -72,18 +114,19 @@ export default function ImportModal({
     }
     return rows.map(r => {
       const { errors = {}, warnings = [] } = validateRow(r.values) || {};
-      const all = { ...errors };
-      if (uniqueKey && counts.get(normalizeHeader(r.values[uniqueKey])) > 1) {
+      const all: Record<string, string> = { ...errors };
+      if (uniqueKey && (counts.get(normalizeHeader(r.values[uniqueKey])) ?? 0) > 1) {
         all[uniqueKey] = all[uniqueKey] || 'Se repite en el archivo.';
       }
       const messages = Object.values(all).filter(Boolean);
-      if (serverErrors[r.id]) messages.push(serverErrors[r.id]);
-      const status = messages.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'ok';
+      const serverError = serverErrors[r.id];
+      if (serverError) messages.push(serverError);
+      const status: Status = messages.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'ok';
       return { ...r, fieldErrors: all, messages, warnings, status };
     });
   }, [rows, validateRow, uniqueKey, serverErrors]);
 
-  const counts = useMemo(() => ({
+  const counts = useMemo((): Record<Filter, number> => ({
     all: checked.length,
     error: checked.filter(r => r.status === 'error').length,
     warning: checked.filter(r => r.status === 'warning').length,
@@ -94,13 +137,14 @@ export default function ImportModal({
   const pageRows = visible.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const importable = checked.filter(r => r.selected && r.status !== 'error');
 
-  const editCell = (id, key, value) => {
+  const editCell = (id: number, key: string, value: string) => {
     setRows(prev => prev.map(r => (r.id === id ? { ...r, values: { ...r.values, [key]: value } } : r)));
     setServerErrors(prev => (prev[id] ? { ...prev, [id]: undefined } : prev));
   };
-  const toggle = (id) => setRows(prev => prev.map(r => (r.id === id ? { ...r, selected: !r.selected } : r)));
-  const removeRow = (id) => setRows(prev => prev.filter(r => r.id !== id));
-  const selectWhere = (fn) => setRows(prev => prev.map(r => ({ ...r, selected: fn(checked.find(c => c.id === r.id)) })));
+  const toggle = (id: number) => setRows(prev => prev.map(r => (r.id === id ? { ...r, selected: !r.selected } : r)));
+  const removeRow = (id: number) => setRows(prev => prev.filter(r => r.id !== id));
+  const selectWhere = (fn: (row: (typeof checked)[number] | undefined) => boolean) =>
+    setRows(prev => prev.map(r => ({ ...r, selected: fn(checked.find(c => c.id === r.id)) })));
   const removeErrors = () => setRows(prev => prev.filter(r => checked.find(c => c.id === r.id)?.status !== 'error'));
 
   const handleImport = async () => {
@@ -113,15 +157,15 @@ export default function ImportModal({
       setResult(res?.message || 'Importación completada.');
       setRows([]);
     } catch (err) {
-      const rowErrors = err.data?.rows;
+      const rowErrors = err instanceof ApiError ? (err.data?.rows as ImportRowError[] | undefined) : undefined;
       if (Array.isArray(rowErrors)) {
-        const map = {};
-        rowErrors.forEach(({ index, error }) => { if (importable[index]) map[importable[index].id] = error; });
+        const map: Record<number, string> = {};
+        rowErrors.forEach(({ index, error }) => { const row = importable[index]; if (row) map[row.id] = error; });
         setServerErrors(map);
         setFilter('error');
         setPage(0);
       }
-      setReadError(err.message || 'No se pudo importar.');
+      setReadError((err as Error).message || 'No se pudo importar.');
     } finally {
       setImporting(false);
     }
@@ -211,7 +255,7 @@ export default function ImportModal({
               </button>
             ))}
             <span className="flex-1" />
-            <button type="button" onClick={() => selectWhere(r => r.status !== 'error')} className="text-xs font-bold text-brand hover:underline">
+            <button type="button" onClick={() => selectWhere(r => r?.status !== 'error')} className="text-xs font-bold text-brand hover:underline">
               Solo las correctas
             </button>
             <button type="button" onClick={() => selectWhere(() => false)} className="text-xs font-bold text-muted hover:underline">
@@ -243,7 +287,7 @@ export default function ImportModal({
                   <tr><td colSpan={columns.length + 3} className="px-3 py-6 text-center text-muted">No hay filas en este filtro.</td></tr>
                 )}
                 {pageRows.map(r => (
-                  <React.Fragment key={r.id}>
+                  <Fragment key={r.id}>
                     <tr className={r.status === 'error' ? 'bg-danger-soft/40' : r.status === 'warning' ? 'bg-warning-soft/40' : ''}>
                       <td className="px-2 py-1.5 text-center">
                         <input
@@ -289,7 +333,7 @@ export default function ImportModal({
                         </td>
                       </tr>
                     )}
-                  </React.Fragment>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

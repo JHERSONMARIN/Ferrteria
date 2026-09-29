@@ -5,6 +5,8 @@ import { AppError, errorBody } from '@ferresys/shared/errors';
 import { prisma } from '../../db.ts';
 import { id, optionalId, parseInput } from '../../lib/validation.ts';
 import { PurchaseError, createSupplier, listPurchases, listSuppliers, registerPurchase } from './purchasing.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type { Purchase, PurchaseSaved, Supplier } from '@ferresys/contracts/purchasing';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -36,21 +38,21 @@ const PurchaseBody = z.object({
 export const supplierRoutes = express.Router();
 
 supplierRoutes.get('/', handle('Error al listar proveedores.', async (req, res) => {
-  res.json(await listSuppliers(prisma));
+  res.json(await listSuppliers(prisma) satisfies Sendable<Supplier[]>);
 }));
 
 supplierRoutes.post('/', handle('Error al registrar proveedor.', async (req, res) => {
-  res.status(201).json(await createSupplier(prisma, (req.body ?? {}) as Record<string, unknown>));
+  res.status(201).json(await createSupplier(prisma, (req.body ?? {}) as Record<string, unknown>) satisfies Sendable<Supplier>);
 }, 'El proveedor con este RUC ya existe.'));
 
 export const purchaseRoutes = express.Router();
 
 purchaseRoutes.get('/', handle('Error al listar compras.', async (req, res) => {
-  res.json(await listPurchases(prisma));
+  res.json(await listPurchases(prisma) satisfies Sendable<Purchase[]>);
 }));
 
 // POST /api/compras { proveedorId, numDoc, items: [{ id, qty, cost }], branchId? }: suma stock y kardex.
 purchaseRoutes.post('/', handle('Error al registrar compra.', async (req, res) => {
   const input = parseInput(PurchaseBody, req.body, m => new PurchaseError(m));
-  res.status(201).json({ success: true, compra: await registerPurchase(prisma, input, req.user) });
+  res.status(201).json({ success: true, compra: await registerPurchase(prisma, input, req.user) } satisfies Sendable<PurchaseSaved>);
 }));
