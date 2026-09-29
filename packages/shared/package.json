@@ -9,9 +9,21 @@
       "types": "./errors.d.ts",
       "default": "./errors.js"
     },
-    "./logger": "./logger.js",
-    "./loginThrottle": "./loginThrottle.js",
-    "./passwords": "./passwords.js",
-    "./sessionTokens": "./sessionTokens.js"
+    "./logger": {
+      "types": "./logger.d.ts",
+      "default": "./logger.js"
+    },
+    "./loginThrottle": {
+      "types": "./loginThrottle.d.ts",
+      "default": "./loginThrottle.js"
+    },
+    "./passwords": {
+      "types": "./passwords.d.ts",
+      "default": "./passwords.js"
+    },
+    "./sessionTokens": {
+      "types": "./sessionTokens.d.ts",
+      "default": "./sessionTokens.js"
+    }
   }
 }

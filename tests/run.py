@@ -46,6 +46,7 @@ CADENAS = [
     ["api/consola.py"],
     ["api/clientes.py"],
     ["api/compras.py"],
+    ["api/personal.py"],
     ["api/pedidos_por_estados.py", "api/envios.py", "ui/pedidos_por_estados.mjs", "ui/envios.mjs"],
     ["api/cantidades_y_precios.py", "api/modo_por_sucursal.py"],
     ["api/cantidades_y_precios.py", "ui/cantidades_y_precios.mjs", "ui/una_sucursal.mjs", "api/auditoria.py",

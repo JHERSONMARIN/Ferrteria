@@ -4,8 +4,6 @@ import { requestLogger } from '@ferresys/shared/logger';
 import { errorEnvelope, finalErrorHandler } from '@ferresys/shared/errors';
 import express from 'express';
 import dotenv from 'dotenv';
-import authRoutes from './src/routes/auth.js';
-import personalRoutes from './src/routes/personal.js';
 import { creditRoutes as creditosRoutes, customerRoutes as clientesRoutes } from './src/modules/customers/index.ts';
 import { deliveryRoutes as entregasRoutes } from './src/modules/deliveries/index.ts';
 import { reportRoutes as dashboardRoutes } from './src/modules/reports/index.ts';
@@ -22,8 +20,9 @@ import {
   expireOrders, initializeDocumentSeries, orderRoutes as pedidosRoutes, quoteRoutes as cotizacionesRoutes,
   salesRoutes as ventasRoutes,
 } from './src/modules/sales/index.ts';
-import { authenticate, requirePasswordChanged } from './src/middleware/authenticate.js';
-import { allowModules } from './src/middleware/authorize.js';
+import {
+  allowModules, authenticate, authRoutes, requirePasswordChanged, staffRoutes as personalRoutes,
+} from './src/modules/identity/index.ts';
 import { APP_VERSION, APP_COMMIT, APP_BUILT_AT, versionLabel } from './src/config/version.js';
 
 dotenv.config();
