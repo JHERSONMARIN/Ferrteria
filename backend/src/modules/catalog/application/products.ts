@@ -2,7 +2,7 @@
 import type { Prisma } from '@prisma/client';
 import type { prisma, Tx } from '../../../db.ts';
 import { changedFields, recordAudit } from '../../audit/index.ts';
-import { resolveBranchId } from '../../../services/branches.js';
+import { resolveBranchId } from '../../branches/index.ts';
 import { quantityProblem } from '../../../utils/quantities.js';
 import type { SessionUser } from '../../../types/express.d.ts';
 import {

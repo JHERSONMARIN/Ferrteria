@@ -12,12 +12,12 @@ import { reportRoutes as dashboardRoutes } from './src/modules/reports/index.ts'
 import { cashRoutes as cajaRoutes } from './src/modules/cash/index.ts';
 import { purchaseRoutes as comprasRoutes, supplierRoutes as proveedoresRoutes } from './src/modules/purchasing/index.ts';
 import { categoryRoutes as categoriesRoutes, productRoutes as productosRoutes } from './src/modules/catalog/index.ts';
-import settingsRoutes from './src/routes/settings.js';
+import { settingsRoutes } from './src/modules/settings/index.ts';
 import { auditRoutes as auditoriaRoutes } from './src/modules/audit/index.ts';
 import { prisma } from './src/db.js';
 import { ensureBranchStockRows, kardexRoutes, transferRoutes as transferenciasRoutes } from './src/modules/inventory/index.ts';
 import { licenseStatus, readOnlyWhenExpired } from './src/modules/licensing/index.ts';
-import sucursalesRoutes from './src/routes/sucursales.js';
+import { branchRoutes as sucursalesRoutes } from './src/modules/branches/index.ts';
 import {
   expireOrders, initializeDocumentSeries, orderRoutes as pedidosRoutes, quoteRoutes as cotizacionesRoutes,
   salesRoutes as ventasRoutes,

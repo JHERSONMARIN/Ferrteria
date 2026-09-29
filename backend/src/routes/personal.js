@@ -3,7 +3,7 @@ import { prisma } from '../db.js';
 import { hashPassword, validateNewPassword, PasswordPolicyError } from '@ferresys/shared/passwords';
 import { recordAudit, changedFields } from '../modules/audit/index.ts';
 import { requireWithinLimit, respondIfLicenseError, getActiveModules } from '../modules/licensing/index.ts';
-import { getSettings } from '../services/settings.js';
+import { getSettings } from '../modules/settings/index.ts';
 import { errorBody } from '@ferresys/shared/errors';
 
 // Solo se pueden asignar módulos que la empresa tenga contratados y activos.

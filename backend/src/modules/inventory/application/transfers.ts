@@ -3,7 +3,7 @@
 // de kardex en cada sucursal. El total de la empresa no cambia.
 import type { prisma } from '../../../db.ts';
 import { recordAudit } from '../../audit/index.ts';
-import { resolveBranchId } from '../../../services/branches.js';
+import { resolveBranchId } from '../../branches/index.ts';
 import { quantityProblem } from '../../../utils/quantities.js';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { TransferError, normalizeTransferItems, transferNotes, transferNumber } from '../domain/inventory.ts';

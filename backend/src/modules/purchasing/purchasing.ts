@@ -2,7 +2,7 @@
 // Módulo simple: reglas y acceso a datos en un solo archivo.
 import type { prisma } from '../../db.ts';
 import { AppError } from '@ferresys/shared/errors';
-import { resolveBranchId } from '../../services/branches.js';
+import { resolveBranchId } from '../branches/index.ts';
 import { quantityProblem, roundMoney } from '../../utils/quantities.js';
 import type { SessionUser } from '../../types/express.d.ts';
 import { addStock } from '../inventory/index.ts';
