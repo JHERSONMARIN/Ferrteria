@@ -306,10 +306,10 @@ export async function findByBarcode(client: Client, rawCode: string, user: Sessi
       branchStocks: BRANCH_STOCK_SELECT,
     },
   });
-  if (local) return { foundInDb: true, product: withBranchStock(local, user.branchId) };
+  if (local) return { foundInDb: true as const, product: withBranchStock(local, user.branchId) };
 
   const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(code)}.json`);
   const data = await response.json() as { status?: number; product?: { product_name?: string } };
-  if (data.status === 1 && data.product?.product_name) return { foundInDb: false, name: data.product.product_name };
+  if (data.status === 1 && data.product?.product_name) return { foundInDb: false as const, name: data.product.product_name };
   throw new ProductError('Producto no encontrado.', 404);
 }

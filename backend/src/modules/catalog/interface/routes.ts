@@ -12,7 +12,9 @@ import {
   createCategory, deleteCategory, importCategories, listCategories, updateCategory,
 } from '../application/categories.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type { Category, Product } from '@ferresys/contracts/catalog';
+import type {
+  BarcodeLookup, Category, CategoryDeleted, CategoryImportResult, Product, ProductImportResult,
+} from '@ferresys/contracts/catalog';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -68,7 +70,7 @@ productRoutes.put('/:id', handle(async (req, res) => {
 // POST /api/productos/importar  { rows: [...], onExisting: 'update' | 'skip', branchId? }
 productRoutes.post('/importar', handle(async (req, res) => {
   const { rows, onExisting, branchId } = body(req);
-  res.json({ success: true, ...await importProducts(prisma, { rows, onExisting, branchId }, req.user) });
+  res.json({ success: true, ...await importProducts(prisma, { rows, onExisting, branchId }, req.user) } satisfies Sendable<ProductImportResult>);
 }, {
   failure: 'No se pudo completar la importación. No se guardó ningún producto.',
   duplicate: [409, 'Otro usuario registró uno de estos códigos mientras se importaba. Vuelva a intentarlo.'],
@@ -76,7 +78,7 @@ productRoutes.post('/importar', handle(async (req, res) => {
 
 // GET /api/productos/barcode/:code
 productRoutes.get('/barcode/:code', handle(async (req, res) => {
-  res.json(await findByBarcode(prisma, String(req.params.code), req.user));
+  res.json(await findByBarcode(prisma, String(req.params.code), req.user) satisfies Sendable<BarcodeLookup>);
 }, { failure: 'Error al buscar código de barras.' }));
 
 // ---------- /api/categorias ----------
@@ -99,7 +101,7 @@ categoryRoutes.post('/', handle(async (req, res) => {
 // POST /api/categorias/importar  { rows: [{ name, description, icon, color }], onExisting }
 categoryRoutes.post('/importar', handle(async (req, res) => {
   const { rows, onExisting } = body(req);
-  res.json({ success: true, ...await importCategories(prisma, { rows, onExisting }) });
+  res.json({ success: true, ...await importCategories(prisma, { rows, onExisting }) } satisfies Sendable<CategoryImportResult>);
 }, {
   failure: 'No se pudo completar la importación. No se guardó ninguna categoría.',
   duplicate: [409, 'Otra persona creó una de estas categorías mientras se importaba. Vuelva a intentarlo.'],
@@ -112,5 +114,5 @@ categoryRoutes.put('/:id', handle(async (req, res) => {
 // DELETE /api/categorias/:id?targetCategoryId=  (con productos, se reasignan a la de destino)
 categoryRoutes.delete('/:id', handle(async (req, res) => {
   const { targetCategoryId } = parseInput(DeleteQuery, req.query, m => new CategoryError(m));
-  res.json(await deleteCategory(prisma, categoryId(req), targetCategoryId ?? null));
+  res.json(await deleteCategory(prisma, categoryId(req), targetCategoryId ?? null) satisfies Sendable<CategoryDeleted>);
 }, { failure: 'Error al eliminar la categoría.' }));

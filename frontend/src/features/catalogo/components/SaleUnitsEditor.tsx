@@ -1,5 +1,5 @@
 import React from 'react';
-import { quantityProblem } from '../shared/utils/quantities.ts';
+import { quantityProblem } from '../../../shared/utils/quantities.ts';
 
 let nextKey = 1;
 

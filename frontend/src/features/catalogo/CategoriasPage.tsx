@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../api/client.ts';
-import FieldError from '../shared/ui/FieldError.tsx';
-import { borderClass } from '../shared/utils/validators.ts';
-import { useToast, EmptyState, SkeletonCards, Pagination, usePagination } from '../shared/ui/index.ts';
-import ImportModal from '../components/ImportModal.jsx';
-import { downloadTemplate } from '../shared/utils/spreadsheet.ts';
+import { api } from '../../api/client.ts';
+import FieldError from '../../shared/ui/FieldError.tsx';
+import { borderClass } from '../../shared/utils/validators.ts';
+import { useToast, EmptyState, SkeletonCards, Pagination, usePagination } from '../../shared/ui/index.ts';
+import ImportModal from '../../shared/import/ImportModal.tsx';
+import { downloadTemplate } from '../../shared/utils/spreadsheet.ts';
 
 // Paleta de colores temáticos para categorías
 const COLOR_CLASSES = {

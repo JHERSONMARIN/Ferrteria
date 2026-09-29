@@ -7,6 +7,8 @@ import { prisma } from '../../db.ts';
 import { id, parseInput } from '../../lib/validation.ts';
 import { initializeDocumentSeries } from '../sales/index.ts';
 import { BranchError, createBranch, listBranches, updateBranch } from './branches.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type { Branch } from '@ferresys/contracts/branches';
 
 const router = express.Router();
 
@@ -25,7 +27,7 @@ const body = (req: Request) => (req.body ?? {}) as Record<string, unknown>;
 
 // GET /api/sucursales (activas; ?todas=1 incluye las desactivadas, solo para el administrador)
 router.get('/', handle('listar las sucursales', async (req, res) => {
-  res.json(await listBranches(prisma, req.query.todas === '1' && req.user.role === 'ADMINISTRADOR'));
+  res.json(await listBranches(prisma, req.query.todas === '1' && req.user.role === 'ADMINISTRADOR') satisfies Sendable<Branch[]>);
 }));
 
 // POST /api/sucursales { name, address, saleFlowMode?, deliveriesEnabled? }

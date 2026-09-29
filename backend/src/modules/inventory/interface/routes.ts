@@ -7,6 +7,8 @@ import { id, optionalId, parseInput } from '../../../lib/validation.ts';
 import { StockError, TransferError } from '../domain/inventory.ts';
 import { listMovements, recordManualMovement } from '../application/kardex.ts';
 import { createTransfer, listTransfers } from '../application/transfers.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type { KardexResponse, ManualMovementSaved, Transfer } from '@ferresys/contracts/inventory';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -46,13 +48,13 @@ export const kardexRoutes = express.Router();
 
 // GET /api/kardex?productCode=&type=ENTRADA|SALIDA&period=today|week|month|all|custom&startDate=&endDate=&branchId=
 kardexRoutes.get('/', handle('obtener los movimientos de kardex', async (req, res) => {
-  res.json(await listMovements(prisma, parseInput(MovementQuery, req.query, m => new StockError(m, 400))));
+  res.json(await listMovements(prisma, parseInput(MovementQuery, req.query, m => new StockError(m, 400))) satisfies Sendable<KardexResponse>);
 }));
 
 // POST /api/kardex { productoId, type, qty, ref, branchId? }: ajuste manual (entrada, merma, conteo).
 kardexRoutes.post('/', handle('registrar el movimiento', async (req, res) => {
   const input = parseInput(MovementBody, req.body, m => new StockError(m, 400));
-  res.status(201).json(await recordManualMovement(prisma, input, req.user));
+  res.status(201).json(await recordManualMovement(prisma, input, req.user) satisfies Sendable<ManualMovementSaved>);
 }));
 
 // ---------- Transferencias ----------
@@ -70,11 +72,11 @@ export const transferRoutes = express.Router();
 
 // GET /api/transferencias?branchId=
 transferRoutes.get('/', handle('listar las transferencias', async (req, res) => {
-  res.json(await listTransfers(prisma, parseInput(TransferQuery, req.query, m => new TransferError(m))));
+  res.json(await listTransfers(prisma, parseInput(TransferQuery, req.query, m => new TransferError(m))) satisfies Sendable<Transfer[]>);
 }));
 
 // POST /api/transferencias { fromBranchId?, toBranchId, items: [{ id, qty }], notes }
 transferRoutes.post('/', handle('registrar la transferencia', async (req, res) => {
   const input = parseInput(TransferBody, req.body, m => new TransferError(m));
-  res.status(201).json(await createTransfer(prisma, input, req.user));
+  res.status(201).json(await createTransfer(prisma, input, req.user) satisfies Sendable<Transfer>);
 }));

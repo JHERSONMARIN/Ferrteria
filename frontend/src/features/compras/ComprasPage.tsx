@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api/client.ts';
-import FieldError from '../shared/ui/FieldError.tsx';
-import { borderClass } from '../shared/utils/validators.ts';
-import { quantityProblem, roundQuantity } from '../shared/utils/quantities.ts';
-import { useToast, Pagination, usePagination } from '../shared/ui/index.ts';
+import { api } from '../../api/client.ts';
+import FieldError from '../../shared/ui/FieldError.tsx';
+import { borderClass } from '../../shared/utils/validators.ts';
+import { quantityProblem, roundQuantity } from '../../shared/utils/quantities.ts';
+import { useToast, Pagination, usePagination } from '../../shared/ui/index.ts';
 
 export default function ComprasPage() {
   const aviso = useToast();
