@@ -6,6 +6,7 @@ import { AppError, errorBody } from '@ferresys/shared/errors';
 import { prisma } from '../../db.ts';
 import { AVAILABLE_MODULES } from '../../config/modules.js';
 import { INDUSTRY, LICENSED_FEATURES, LICENSED_MODULES, LIMITS, licenseStatus } from '../licensing/index.ts';
+import { vocabulary } from '../../industries/index.ts';
 import { getSettings, updateSettings } from './settings.ts';
 import type { Sendable } from '@ferresys/contracts/common';
 import type { SettingsResponse, SettingsSaved } from '@ferresys/contracts/settings';
@@ -27,7 +28,7 @@ router.get('/', async (req, res) => {
     ]);
     res.json({
       settings, documentSeries, themes: THEMES, availableModules: AVAILABLE_MODULES, licensedModules: LICENSED_MODULES,
-      licensedFeatures: LICENSED_FEATURES, limits: LIMITS, license: licenseStatus(), industry: INDUSTRY,
+      licensedFeatures: LICENSED_FEATURES, limits: LIMITS, license: licenseStatus(), industry: INDUSTRY, vocabulary,
     } satisfies Sendable<SettingsResponse>);
   } catch (error) {
     console.error('[configuración] Error al obtener la configuración:', error);

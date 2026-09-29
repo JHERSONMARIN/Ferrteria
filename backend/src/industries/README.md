@@ -20,7 +20,11 @@ Un enganche corre **dentro de la transacción** del paso del núcleo, y solo pue
 - **guardar sus propios datos** (a qué lote corresponde una entrada de stock).
 
 No cambia precios, cantidades ni estados. Si un rubro necesita eso, la regla es del núcleo y se hace
-configurable allí.
+configurable allí. Por eso las presentaciones (caja x 12, blíster x 10) y la venta fraccionada (metro,
+tableta) son del núcleo: cada producto las configura.
+
+Además de sus enganches, el paquete da su **vocabulario** (`business`, `product`…): `/api/settings` lo
+entrega y las pantallas lo usan en vez de escribir "ferretería" o "producto" a mano.
 
 | Enganche | Dónde lo llama el núcleo |
 |---|---|
