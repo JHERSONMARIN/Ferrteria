@@ -1,0 +1,10 @@
+# Contexto: la raíz del repositorio. Solo entran la consola y las piezas comunes.
+*
+!console
+!packages/shared
+**/node_modules
+**/.env
+**/.env.*
+**/npm-debug.log*
+console/web/dist
+console/.dev

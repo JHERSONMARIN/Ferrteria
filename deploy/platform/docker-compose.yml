@@ -4,7 +4,9 @@
 services:
   console:
     build:
-      context: ../../console
+      # Desde la raíz del repositorio: la imagen incluye packages/shared.
+      context: ../..
+      dockerfile: console/Dockerfile
     image: ferresys-console:local
     container_name: ferresys-console
     restart: unless-stopped
