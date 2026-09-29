@@ -1,5 +1,5 @@
 import { nextDocumentNumber } from './documentSeries.js';
-import { takeAvailableStock, reserveStock } from './stock.js';
+import { takeAvailableStock, reserveStock } from '../modules/inventory/index.ts';
 import { quantityProblem, roundQuantity, roundMoney, MAX_QUANTITY_DECIMALS } from '../utils/quantities.js';
 import { getSettings } from './settings.js';
 import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers } from './deliveries.js';

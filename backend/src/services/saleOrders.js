@@ -1,6 +1,6 @@
 import { nextDocumentNumber } from './documentSeries.js';
 import { getSettings } from './settings.js';
-import { reserveStock, consumeReservedStock, releaseReservedStock } from './stock.js';
+import { reserveStock, consumeReservedStock, releaseReservedStock } from '../modules/inventory/index.ts';
 import { parseDeliveryRequest, scheduleDeliveryForSale, assertBranchDelivers, assertCanDeliver } from './deliveries.js';
 import { roundMoney } from '../utils/quantities.js';
 import { canDispatch } from '../config/dispatch.js';
