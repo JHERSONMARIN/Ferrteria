@@ -3,7 +3,7 @@ import express, { type Request, type Response } from 'express';
 import { z } from 'zod';
 import { AppError, errorBody } from '@ferresys/shared/errors';
 import { prisma } from '../../../db.ts';
-import { allowModules } from '../../../middleware/authorize.js';
+import { allowModules } from '../../identity/index.ts';
 import { id, optionalId, parseInput } from '../../../lib/validation.ts';
 import { SaleError } from '../domain/sale.ts';
 import { processSale } from '../application/directSale.ts';

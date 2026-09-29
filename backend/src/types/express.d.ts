@@ -1,4 +1,4 @@
-// Lo que el backend agrega a cada petición de Express: el usuario de la sesión (middleware/authenticate.js)
+// Lo que el backend agrega a cada petición de Express: el usuario de la sesión (modules/identity/session.ts)
 // y el identificador de la petición (@ferresys/shared/logger).
 
 export interface SessionUser {
