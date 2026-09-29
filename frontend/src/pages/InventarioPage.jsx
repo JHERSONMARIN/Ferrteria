@@ -5,7 +5,7 @@ import FieldError from '../shared/ui/FieldError.tsx';
 import { borderClass } from '../shared/utils/validators.ts';
 import { quantityProblem, formatQuantity, FRACTIONAL_UNITS } from '../shared/utils/quantities.ts';
 import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../shared/ui/index.ts';
-import BarcodeScannerModal from '../components/BarcodeScannerModal.jsx';
+import BarcodeScannerModal from '../shared/scanner/BarcodeScannerModal.tsx';
 import ImportModal from '../components/ImportModal.jsx';
 import { downloadTemplate } from '../shared/utils/spreadsheet.ts';
 import SaleUnitsEditor, { toSaleUnitRow, toSaleUnitPayload, validateSaleUnits } from '../components/SaleUnitsEditor.jsx';

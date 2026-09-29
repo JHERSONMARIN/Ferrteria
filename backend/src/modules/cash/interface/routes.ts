@@ -7,6 +7,8 @@ import { id, optionalId, parseInput } from '../../../lib/validation.ts';
 import { respondIfLicenseError } from '../../licensing/index.ts';
 import { CashError } from '../domain/cash.ts';
 import * as cash from '../application/cashService.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type { CashStatus } from '@ferresys/contracts/cash';
 
 const router = express.Router();
 
@@ -45,7 +47,7 @@ const requireAdmin = (req: Request) => {
 
 // GET /api/caja/estado-actual: turno del usuario o, si no tiene, cajas para abrir o unirse.
 router.get('/estado-actual', handle('obtener el estado de caja', async (req, res) => {
-  res.json(await cash.getCashStatus(prisma, req.user));
+  res.json(await cash.getCashStatus(prisma, req.user) satisfies Sendable<CashStatus>);
 }));
 
 // POST /api/caja/apertura { cashRegisterId, montoInicial }

@@ -1,6 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { Product } from '@ferresys/contracts/catalog';
+import type { Customer } from '@ferresys/contracts/customers';
 import { api } from '../api/client.ts';
+import { queryKeys } from '../api/queryClient.ts';
 import type { ScreenId } from './screens.ts';
 import { formatSoles } from '../shared/utils/currency.ts';
 
@@ -16,25 +19,10 @@ interface Pantalla {
   icon: string;
 }
 
-interface ProductoHallado {
-  id: number;
-  code: string;
-  name: string;
-  price: number;
-  stock: number;
-}
-
-interface ClienteHallado {
-  id: number;
-  doc: string;
-  name: string;
-  debt: number;
-}
-
 type Resultado =
   | ({ tipo: 'pantalla' } & Pantalla & { key: string })
-  | { tipo: 'producto'; key: string; dato: ProductoHallado }
-  | { tipo: 'cliente'; key: string; dato: ClienteHallado };
+  | { tipo: 'producto'; key: string; dato: Product }
+  | { tipo: 'cliente'; key: string; dato: Customer };
 
 interface Props {
   open: boolean;
@@ -53,14 +41,14 @@ export default function BuscadorGlobal({ open, onClose, pantallas, onIr }: Props
 
   // Los datos se piden al abrir (si tienen más de unos segundos): así muestra stock y deudas al día.
   const productos = useQuery({
-    queryKey: ['productos'],
-    queryFn: () => api.get<ProductoHallado[]>('/productos'),
+    queryKey: queryKeys.products,
+    queryFn: () => api.get<Product[]>('/productos'),
     enabled: open,
     staleTime: 0,
   }).data ?? [];
   const clientes = useQuery({
-    queryKey: ['clientes'],
-    queryFn: () => api.get<ClienteHallado[]>('/clientes'),
+    queryKey: queryKeys.customers,
+    queryFn: () => api.get<Customer[]>('/clientes'),
     enabled: open,
     staleTime: 0,
   }).data ?? [];
@@ -174,7 +162,7 @@ export default function BuscadorGlobal({ open, onClose, pantallas, onIr }: Props
                     )}
                     {item.tipo === 'cliente' && (
                       <span className="block text-[11px] text-muted truncate">
-                        {item.dato.doc}{item.dato.debt > 0 && ` · debe ${formatSoles(item.dato.debt)}`}
+                        {item.dato.doc}{item.dato.currentDebt > 0 && ` · debe ${formatSoles(item.dato.currentDebt)}`}
                       </span>
                     )}
                   </span>

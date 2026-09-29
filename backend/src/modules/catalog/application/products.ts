@@ -30,7 +30,7 @@ function withBranchStock<T extends { branchStocks: BranchStockRow[]; stock: unkn
   const { branchStocks, stock, reserved, ...rest } = product;
   const branches = branchStocksOf(branchStocks);
   const own = branches.find(b => b.branchId === branchId);
-  return { ...rest, stock: own?.stock ?? 0, reserved: own?.reserved ?? 0, totalStock: stock, totalReserved: reserved, branches };
+  return { ...rest, stock: own?.stock ?? 0, reserved: own?.reserved ?? 0, totalStock: Number(stock), totalReserved: Number(reserved), branches };
 }
 
 export async function listProducts(client: Client, user: SessionUser) {

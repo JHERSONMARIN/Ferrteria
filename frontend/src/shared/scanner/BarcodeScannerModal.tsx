@@ -1,23 +1,33 @@
-import React, { useEffect, useRef, useState } from 'react';
-import Modal from '../shared/ui/Modal.tsx';
+import { useEffect, useRef, useState } from 'react';
+import Modal from '../ui/Modal.tsx';
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  /** El código leído (con la cámara, el lector o escrito). */
+  onDetected: (code: string) => void;
+  title?: string;
+}
+
+type Status = 'starting' | 'scanning' | 'unavailable';
 
 // La cámara del navegador solo funciona en HTTPS o en este mismo equipo (localhost).
 const cameraAllowed = () => window.isSecureContext && !!navigator.mediaDevices?.getUserMedia;
 
 // Escáner de código de barras: usa la cámara del equipo (celular o tablet) y, a la vez, acepta
 // lo que escriba un lector USB o el teclado, que es lo único disponible sin cámara o sin HTTPS.
-export default function BarcodeScannerModal({ open, onClose, onDetected, title = 'Escanear código de barras' }) {
-  const videoRef = useRef(null);
-  const inputRef = useRef(null);
+export default function BarcodeScannerModal({ open, onClose, onDetected, title = 'Escanear código de barras' }: Props) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [typed, setTyped] = useState('');
-  const [status, setStatus] = useState('starting'); // starting | scanning | unavailable
+  const [status, setStatus] = useState<Status>('starting');
   const [reason, setReason] = useState('');
   // La cámara lee varias veces por segundo: solo vale la primera lectura de cada apertura.
   const doneRef = useRef(false);
   const onDetectedRef = useRef(onDetected);
   onDetectedRef.current = onDetected;
 
-  const finish = (code) => {
+  const finish = (code: string | null | undefined) => {
     const clean = String(code || '').trim();
     if (!clean || doneRef.current) return;
     doneRef.current = true;
@@ -40,7 +50,7 @@ export default function BarcodeScannerModal({ open, onClose, onDetected, title =
       return undefined;
     }
 
-    let controls = null;
+    let controls: { stop: () => void } | null = null;
     let cancelled = false;
     setStatus('starting');
 
@@ -51,7 +61,7 @@ export default function BarcodeScannerModal({ open, onClose, onDetected, title =
         const reader = new BrowserMultiFormatReader();
         return reader.decodeFromConstraints(
           { video: { facingMode: 'environment' } },
-          videoRef.current,
+          videoRef.current ?? undefined,
           (result) => { if (result && !cancelled) finish(result.getText()); },
         );
       })
@@ -60,10 +70,10 @@ export default function BarcodeScannerModal({ open, onClose, onDetected, title =
         if (cancelled) c?.stop();
         else if (c) setStatus('scanning');
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         if (cancelled) return;
         setStatus('unavailable');
-        setReason(err?.name === 'NotAllowedError'
+        setReason((err as { name?: string } | null)?.name === 'NotAllowedError'
           ? 'No se dio permiso para usar la cámara.'
           : 'No se encontró una cámara disponible.');
         inputRef.current?.focus();

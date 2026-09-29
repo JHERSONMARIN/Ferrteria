@@ -1,8 +1,20 @@
-import React, { useId } from 'react';
-import FieldError from '../shared/ui/FieldError.tsx';
-import { customerOptionLabel } from '../shared/utils/customers.ts';
+import { useId, type Ref } from 'react';
+import type { Customer } from '@ferresys/contracts/customers';
+import FieldError from '../../../shared/ui/FieldError.tsx';
+import { customerOptionLabel } from '../../../shared/utils/customers.ts';
 
-export default function CustomerSelector({ clients, value, onChange, customer, error, inputRef }) {
+interface Props {
+  clients: readonly Customer[];
+  /** Lo escrito: "DNI - Nombre" al elegir de la lista. */
+  value: string;
+  onChange: (value: string) => void;
+  /** El cliente que coincide exactamente con lo escrito. */
+  customer: Customer | null;
+  error?: string;
+  inputRef?: Ref<HTMLInputElement>;
+}
+
+export default function CustomerSelector({ clients, value, onChange, customer, error, inputRef }: Props) {
   const listId = useId();
   const typed = value.trim() !== '';
 

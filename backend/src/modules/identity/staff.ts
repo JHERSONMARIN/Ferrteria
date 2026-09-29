@@ -6,7 +6,7 @@ import type { SessionUser } from '../../types/express.d.ts';
 import { changedFields, recordAudit } from '../audit/index.ts';
 import { getActiveModules, requireWithinLimit } from '../licensing/index.ts';
 import { getSettings } from '../settings/index.ts';
-import { MAIN_ADMIN_ID, StaffError, assertCanManage, parseRole } from './permissions.ts';
+import { MAIN_ADMIN_ID, StaffError, assertCanManage, moduleList, parseRole } from './permissions.ts';
 
 type Client = typeof prisma;
 
@@ -33,10 +33,13 @@ async function branchFor(client: Client, value: unknown, fallback: number): Prom
 
 const PUBLIC_FIELDS = { id: true, name: true, user: true, role: true, modules: true, active: true, branchId: true } as const;
 
-export const listStaff = (client: Client) => client.usuario.findMany({
-  select: { ...PUBLIC_FIELDS, createdAt: true, branch: { select: { id: true, name: true } } },
-  orderBy: { id: 'desc' },
-});
+export async function listStaff(client: Client) {
+  const staff = await client.usuario.findMany({
+    select: { ...PUBLIC_FIELDS, createdAt: true, branch: { select: { id: true, name: true } } },
+    orderBy: { id: 'desc' },
+  });
+  return staff.map(person => ({ ...person, modules: moduleList(person.modules) }));
+}
 
 // La clave la define quien da de alta: el empleado debe cambiarla al ingresar.
 export async function createStaff(client: Client, input: Record<string, unknown>, actor: SessionUser) {

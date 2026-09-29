@@ -1,15 +1,22 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../api/client.ts';
-import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../shared/ui/index.ts';
+// Cotizaciones: las proformas guardadas desde Vender, su estado y su anulación.
+import { useState, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { Quote, QuoteCancelled, QuoteStatus } from '@ferresys/contracts/sales';
+import { api } from '../../api/client.ts';
+import { queryKeys } from '../../api/queryClient.ts';
+import { useToast, EmptyState, SkeletonTable, Pagination, usePagination } from '../../shared/ui/index.ts';
+import { useQuotes } from './queries.ts';
 
-const STATUS_STYLE = {
+const STATUS_STYLE: Record<QuoteStatus, { label: string; badge: string }> = {
   PENDIENTE: { label: 'Pendiente', badge: 'bg-warning-soft text-warning border-warning/30' },
   CONVERTIDO: { label: 'Terminada', badge: 'bg-success-soft text-success border-success/30' },
   CANCELADO: { label: 'Cancelada', badge: 'bg-surface-muted text-ink-soft border-line' },
 };
 
+type Filter = QuoteStatus | 'TODAS';
+
 // Terminadas son las que ya se vendieron. Modificar una cotización genera otra nueva.
-const FILTER_TABS = [
+const FILTER_TABS: { id: Filter; label: string }[] = [
   { id: 'PENDIENTE', label: 'Pendientes' },
   { id: 'CONVERTIDO', label: 'Terminadas' },
   { id: 'CANCELADO', label: 'Canceladas' },
@@ -18,32 +25,21 @@ const FILTER_TABS = [
 
 export default function CotizacionesPage() {
   const aviso = useToast();
-  const [cotizaciones, setCotizaciones] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const quotesQuery = useQuotes();
+  const cotizaciones = useMemo(() => quotesQuery.data ?? [], [quotesQuery.data]);
+  const loading = quotesQuery.isFetching;
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('PENDIENTE');
-  const [sortDir, setSortDir] = useState('desc'); // desc = más recientes primero
+  const [statusFilter, setStatusFilter] = useState<Filter>('PENDIENTE');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc'); // desc = más recientes primero
 
-  const [detailTarget, setDetailTarget] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [detailTarget, setDetailTarget] = useState<Quote | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Quote | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    loadCotizaciones();
-  }, []);
-
-  const loadCotizaciones = async () => {
-    try {
-      setLoading(true);
-      const data = await api.get('/cotizaciones');
-      setCotizaciones(data || []);
-    } catch (err) {
-      console.error('Error cargando cotizaciones desde API:', err);
-      aviso.error('Error cargando cotizaciones: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (quotesQuery.error) aviso.error(`Error cargando cotizaciones: ${quotesQuery.error.message}`);
+  }, [quotesQuery.error, aviso]);
 
   const filteredCotizaciones = useMemo(() => {
     let list = cotizaciones;
@@ -61,12 +57,10 @@ export default function CotizacionesPage() {
       );
     }
 
-    const sorted = [...list].sort((a, b) => {
-      const diff = new Date(a.date) - new Date(b.date) || a.id - b.id;
+    return [...list].sort((a, b) => {
+      const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.id - b.id;
       return sortDir === 'asc' ? diff : -diff;
     });
-
-    return sorted;
   }, [cotizaciones, statusFilter, searchQuery, sortDir]);
 
   const pendingCount = useMemo(
@@ -74,19 +68,19 @@ export default function CotizacionesPage() {
     [cotizaciones]
   );
 
-  const openDeleteModal = (cot) => setDeleteTarget(cot);
+  const openDeleteModal = (cot: Quote) => setDeleteTarget(cot);
   const closeDeleteModal = () => setDeleteTarget(null);
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     try {
       setDeleting(true);
-      await api.delete(`/cotizaciones/${deleteTarget.id}`);
+      await api.delete<QuoteCancelled>(`/cotizaciones/${deleteTarget.id}`);
       closeDeleteModal();
-      await loadCotizaciones();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.quotes });
       aviso.exito('Cotización eliminada exitosamente.');
     } catch (err) {
-      aviso.error('Error al eliminar cotización: ' + err.message);
+      aviso.error(`Error al eliminar cotización: ${(err as Error).message}`);
     } finally {
       setDeleting(false);
     }
@@ -188,7 +182,7 @@ export default function CotizacionesPage() {
                   </tr>
                 ) : (
                   pg.pageItems.map(cot => {
-                    const style = STATUS_STYLE[cot.status] || STATUS_STYLE.PENDIENTE;
+                    const style = STATUS_STYLE[cot.status] ?? STATUS_STYLE.PENDIENTE;
                     return (
                       <tr key={cot.id} className="border-b border-line hover:bg-surface-muted transition-colors">
                         <td className="py-2.5 px-2 font-mono text-xs font-bold text-ink-soft">{cot.numDoc}</td>

@@ -1,69 +1,45 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../api/client.ts';
-import { formatSoles } from '../shared/utils/currency.ts';
+// Por despachar: ventas cobradas que esperan salir del local. Por etapas, todo lo cobrado; en los demás
+// modos, las ventas con envío a domicilio (se entregan al repartidor). La atiende quien la sucursal eligió.
+import { useState, useEffect, useMemo, type KeyboardEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { DispatchRequest, OrderSaved } from '@ferresys/contracts/sales';
+import { api } from '../../api/client.ts';
+import { queryKeys } from '../../api/queryClient.ts';
+import { useStaff } from '../../api/queries.ts';
+import { formatSoles } from '../../shared/utils/currency.ts';
+import { formatHour, minutesAgo } from './time.ts';
+import { useDispatchedToday, useOrderQueue } from './queries.ts';
 
-const REFRESH_MS = 5000;
+type Notice = { type: 'success' | 'warning'; text: string };
 
-const formatHour = (date) => (date ? new Date(date).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '');
-
-function minutesAgo(date) {
-  const minutes = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
-  if (minutes < 1) return 'recién';
-  if (minutes < 60) return `hace ${minutes} min`;
-  return `hace ${Math.floor(minutes / 60)} h ${minutes % 60} min`;
-}
-
-// Cola de ventas cobradas que esperan salir del local: por etapas, todo lo cobrado; en los demás modos,
-// las ventas con envío a domicilio (se entregan al repartidor). La atiende quien la sucursal eligió.
 export default function DispatchQueuePage() {
-  const [orders, setOrders] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+  const queryClient = useQueryClient();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
-  const [loadError, setLoadError] = useState('');
-  const [notice, setNotice] = useState(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [dispatching, setDispatching] = useState(false);
   // Con envío a domicilio hay que registrar a qué repartidor se le entrega la mercadería.
-  const [couriers, setCouriers] = useState([]);
   const [courierId, setCourierId] = useState('');
-  const [dispatchedToday, setDispatchedToday] = useState([]);
-  const [view, setView] = useState('cola');
+  const [view, setView] = useState<'cola' | 'hoy'>('cola');
 
-  const selected = orders.find(o => o.id === selectedId) || null;
-
-  const loadOrders = async () => {
-    try {
-      const [pendientes, hoy] = await Promise.all([
-        api.get('/pedidos?status=PAID'),
-        api.get('/pedidos/despachados-hoy').catch(() => []),
-      ]);
-      setOrders(pendientes);
-      setDispatchedToday(hoy);
-      setLoadError('');
-    } catch (err) {
-      setLoadError(err.message || 'No se pudo cargar la cola de despacho.');
-    }
-  };
+  const queue = useOrderQueue('PAID');
+  const orders = useMemo(() => queue.data ?? [], [queue.data]);
+  const loadError = queue.error ? queue.error.message || 'No se pudo cargar la cola de despacho.' : '';
+  const dispatchedToday = useDispatchedToday().data ?? [];
 
   // Repartidores de la sucursal, para decir a quién se le entrega cada envío.
-  useEffect(() => {
-    api.get('/personal')
-      .then(staff => setCouriers(staff.filter(persona => persona.active !== false && (
-        persona.role === 'REPARTIDOR' || persona.role === 'ADMINISTRADOR'
-        || (Array.isArray(persona.modules) && persona.modules.includes('deliveries'))
-      ))))
-      .catch(() => setCouriers([]));
-  }, []);
+  const staff = useStaff().data;
+  const couriers = useMemo(() => (staff ?? []).filter(persona => persona.active !== false && (
+    persona.role === 'REPARTIDOR' || persona.role === 'ADMINISTRADOR' || persona.modules.includes('deliveries')
+  )), [staff]);
+
+  const selected = orders.find(o => o.id === selectedId) ?? null;
+  const refreshQueue = () => queryClient.invalidateQueries({ queryKey: queryKeys.orders });
 
   // Al elegir un pedido se propone el repartidor que lo solicitó.
   useEffect(() => {
     setCourierId(selected?.delivery?.courier?.id ? String(selected.delivery.courier.id) : '');
   }, [selectedId]);
-
-  useEffect(() => {
-    loadOrders();
-    const interval = setInterval(loadOrders, REFRESH_MS);
-    return () => clearInterval(interval);
-  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase().replace(/^n°?\s*/, '');
@@ -71,10 +47,10 @@ export default function DispatchQueuePage() {
     return orders.filter(o => String(o.id) === q || o.customer.toLowerCase().includes(q) || (o.numDoc || '').toLowerCase().includes(q));
   }, [orders, search]);
 
-  const handleSearchKeyDown = (e) => {
+  const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
     const number = parseInt(search.replace(/\D/g, ''), 10);
-    const match = orders.find(o => o.id === number) || (filtered.length === 1 ? filtered[0] : null);
+    const match = orders.find(o => o.id === number) ?? (filtered.length === 1 ? filtered[0] : undefined);
     if (match) {
       setSelectedId(match.id);
       setNotice(null);
@@ -88,8 +64,8 @@ export default function DispatchQueuePage() {
     if (!selected) return;
     try {
       setDispatching(true);
-      await api.post(`/pedidos/${selected.id}/despachar`,
-        selected.delivery ? { repartidorId: Number(courierId) } : {});
+      await api.post<OrderSaved>(`/pedidos/${selected.id}/despachar`,
+        (selected.delivery ? { repartidorId: Number(courierId) } : {}) satisfies DispatchRequest);
       setNotice({
         type: 'success',
         text: selected.delivery
@@ -97,11 +73,12 @@ export default function DispatchQueuePage() {
           : `Pedido N° ${selected.id} entregado.`,
       });
       setSelectedId(null);
-      loadOrders();
+      // La mercadería salió: cambia el stock y los envíos pasan a Entregas.
+      queryClient.invalidateQueries({ queryKey: queryKeys.products });
     } catch (err) {
-      setNotice({ type: 'warning', text: err.message || 'No se pudo registrar la entrega.' });
-      loadOrders();
+      setNotice({ type: 'warning', text: (err as Error).message || 'No se pudo registrar la entrega.' });
     } finally {
+      refreshQueue();
       setDispatching(false);
     }
   };
@@ -290,7 +267,7 @@ export default function DispatchQueuePage() {
             <div className="p-4 border-t border-line bg-surface-muted">
               <button
                 onClick={dispatchSelected}
-                disabled={dispatching || (selected.delivery && !courierId)}
+                disabled={dispatching || Boolean(selected.delivery && !courierId)}
                 className="w-full py-3 font-bold text-white bg-success hover:brightness-95 rounded-lg text-base shadow-md transition-colors disabled:opacity-60"
               >
                 {dispatching
