@@ -37,3 +37,33 @@ export interface RegisterToJoin {
 export type CashStatus =
   | { abierta: true; caja: CashSession; registers: RegisterToJoin[] }
   | { abierta: false; caja: null; registers: RegisterToJoin[] };
+
+/** POST /api/caja/apertura (sin cashRegisterId, la única caja activa de la sucursal). */
+export interface OpenCashRequest {
+  cashRegisterId?: number;
+  montoInicial: number;
+}
+
+/** POST /api/caja/cierre */
+export interface CloseCashRequest {
+  cajaId: number;
+  montoCierreConteo: number;
+}
+
+export interface CashClosed {
+  success: true;
+  saldoTeorico: number;
+  /** Contado menos teórico: positivo = sobrante, negativo = faltante. */
+  diferencia: number;
+}
+
+/** Una caja física: GET /api/caja/registros (solo administrador). */
+export interface CashRegister {
+  id: number;
+  name: string;
+  active: boolean;
+  branchId: number;
+  branch: { id: number; name: string };
+  /** Hay un turno abierto en esta caja. */
+  isOpen: boolean;
+}

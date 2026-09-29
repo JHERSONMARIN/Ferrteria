@@ -1,5 +1,6 @@
 // Sesión del usuario: se recuerda en el navegador, se confirma con el servidor cada 8 s (latido) y se
-// cierra sola si el servidor la invalida (clave cambiada, usuario desactivado o sesión vencida).
+// cierra sola si el servidor la invalida (clave cambiada, usuario desactivado o sesión vencida). Quien
+// cambie algo de la sesión (el modo de la sucursal, por ejemplo) invalida queryKeys.me y se refresca al momento.
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client.ts';
@@ -51,13 +52,6 @@ export function useSession(onExpired: () => void) {
       return updated;
     });
   }, [heartbeat.data]);
-
-  // Al cambiar el modo de una sucursal en Configuración se refresca al momento.
-  useEffect(() => {
-    const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.me });
-    window.addEventListener('refrescar-sesion', refresh);
-    return () => window.removeEventListener('refrescar-sesion', refresh);
-  }, [queryClient]);
 
   // api/client.ts emite "sesion-expirada" cuando el servidor rechaza la sesión.
   useEffect(() => {

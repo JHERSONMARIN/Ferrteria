@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../api/client.ts';
-import { SkeletonTable } from '../shared/ui/index.ts';
+// Auditoría: quién hizo cada cambio y cuándo, con filtros por acción, usuario y fechas.
+import { Fragment, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { AuditPage } from '@ferresys/contracts/audit';
+import { api } from '../../api/client.ts';
+import { queryKeys } from '../../api/queryClient.ts';
+import { useStaff } from '../../api/queries.ts';
+import { SkeletonTable } from '../../shared/ui/index.ts';
 
 // Color por tipo de acción: rojo para anulaciones/bajas, ámbar para dinero y precios.
-const ACTION_STYLE = {
+const ACTION_STYLE: Record<string, string> = {
   SALE_CANCELLED: 'bg-danger-soft text-danger border-danger/30',
   QUOTE_CANCELLED: 'bg-danger-soft text-danger border-danger/30',
   DELIVERY_CANCELLED: 'bg-danger-soft text-danger border-danger/30',
@@ -15,13 +20,15 @@ const ACTION_STYLE = {
 };
 const DEFAULT_STYLE = 'bg-surface-muted text-ink-soft border-line';
 
-const EMPTY_FILTERS = { action: '', userId: '', from: '', to: '' };
+type Filters = { action: string; userId: string; from: string; to: string };
 
-const formatDateTime = (value) => new Date(value).toLocaleString('es-PE', {
+const EMPTY_FILTERS: Filters = { action: '', userId: '', from: '', to: '' };
+
+const formatDateTime = (value: string) => new Date(value).toLocaleString('es-PE', {
   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
-const formatValue = (value) => {
+const formatValue = (value: unknown) => {
   if (value === null || value === undefined || value === '') return '—';
   if (Array.isArray(value)) return value.join(', ') || '—';
   if (typeof value === 'object') return JSON.stringify(value);
@@ -29,10 +36,14 @@ const formatValue = (value) => {
 };
 
 // Los cambios con forma { campo: { before, after } } se muestran como tabla antes/después.
-function AuditDetails({ details }) {
-  if (!details) return <p className="text-xs text-muted">Sin detalle adicional.</p>;
-  const entries = Object.entries(details);
-  const isDiff = entries.every(([, v]) => v && typeof v === 'object' && !Array.isArray(v) && 'before' in v && 'after' in v);
+type Change = { before: unknown; after: unknown };
+const isChange = (v: unknown): v is Change => Boolean(v) && typeof v === 'object' && !Array.isArray(v) && 'before' in (v as object) && 'after' in (v as object);
+
+function AuditDetails({ details }: { details: unknown }) {
+  if (!details || typeof details !== 'object') return <p className="text-xs text-muted">Sin detalle adicional.</p>;
+  const entries = Object.entries(details as Record<string, unknown>);
+  const diffs = entries.filter((entry): entry is [string, Change] => isChange(entry[1]));
+  const isDiff = diffs.length === entries.length;
 
   if (isDiff) {
     return (
@@ -45,7 +56,7 @@ function AuditDetails({ details }) {
           </tr>
         </thead>
         <tbody>
-          {entries.map(([field, change]) => (
+          {diffs.map(([field, change]) => (
             <tr key={field} className="border-t border-line align-top">
               <td className="py-1 pr-3 font-mono text-ink-soft">{field}</td>
               <td className="py-1 pr-3 text-danger break-all">{formatValue(change.before)}</td>
@@ -60,45 +71,34 @@ function AuditDetails({ details }) {
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
       {entries.map(([key, value]) => (
-        <React.Fragment key={key}>
+        <Fragment key={key}>
           <dt className="font-mono text-muted">{key}</dt>
           <dd className="text-ink break-all">{formatValue(value)}</dd>
-        </React.Fragment>
+        </Fragment>
       ))}
     </dl>
   );
 }
 
-export default function AuditPage() {
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+export default function AuditoriaPage() {
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
-  const [data, setData] = useState(null);
-  const [staff, setStaff] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [expanded, setExpanded] = useState(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const staff = useStaff().data ?? [];
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const params = new URLSearchParams({ page: String(page) });
-      Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
-      setData(await api.get(`/auditoria?${params}`));
-    } catch (err) {
-      setError(err.message || 'No se pudo cargar la auditoría.');
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, page]);
+  // La página y los filtros son parte de la clave: cambiarlos pide los registros de nuevo.
+  const params = new URLSearchParams({ page: String(page) });
+  Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
+  const auditQuery = useQuery({
+    queryKey: [...queryKeys.audit, params.toString()],
+    queryFn: () => api.get<AuditPage>(`/auditoria?${params}`),
+    placeholderData: previous => previous,
+  });
+  const data = auditQuery.data ?? null;
+  const loading = auditQuery.isFetching;
+  const error = auditQuery.error ? auditQuery.error.message || 'No se pudo cargar la auditoría.' : '';
 
-  useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    api.get('/personal').then(setStaff).catch(() => setStaff([]));
-  }, []);
-
-  const setFilter = (key, value) => {
+  const setFilter = (key: keyof Filters, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setPage(1);
   };
@@ -167,7 +167,7 @@ export default function AuditPage() {
                       className="w-full text-left py-3 px-2 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 hover:bg-surface-muted rounded-lg"
                     >
                       <span className="text-xs text-muted tabular-nums sm:w-36 shrink-0">{formatDateTime(item.createdAt)}</span>
-                      <span className={`self-start sm:self-auto px-2 py-0.5 rounded-full text-[11px] font-bold border whitespace-nowrap ${ACTION_STYLE[item.action] || DEFAULT_STYLE}`}>
+                      <span className={`self-start sm:self-auto px-2 py-0.5 rounded-full text-[11px] font-bold border whitespace-nowrap ${ACTION_STYLE[item.action] ?? DEFAULT_STYLE}`}>
                         {item.actionLabel}
                       </span>
                       <span className="text-sm text-ink flex-1 min-w-0">{item.summary}</span>

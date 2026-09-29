@@ -8,7 +8,7 @@ import { respondIfLicenseError } from '../../licensing/index.ts';
 import { CashError } from '../domain/cash.ts';
 import * as cash from '../application/cashService.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type { CashStatus } from '@ferresys/contracts/cash';
+import type { CashClosed, CashRegister, CashStatus } from '@ferresys/contracts/cash';
 
 const router = express.Router();
 
@@ -72,13 +72,13 @@ router.post('/turnos/:id/salir', handle('salir del turno', async (req, res) => {
 router.post('/cierre', handle('cerrar la caja', async (req, res) => {
   const { cajaId, montoCierreConteo } = body(CloseBody, req);
   const result = await cash.closeSession(prisma, { sessionId: cajaId, montoCierreConteo }, req.user);
-  res.json({ success: true, ...result });
+  res.json({ success: true, ...result } satisfies Sendable<CashClosed>);
 }));
 
 // Administración de cajas físicas (solo administrador).
 router.get('/registros', handle('listar las cajas', async (req, res) => {
   requireAdmin(req);
-  res.json(await cash.listRegisters(prisma));
+  res.json(await cash.listRegisters(prisma) satisfies Sendable<CashRegister[]>);
 }));
 
 router.post('/registros', handle('crear la caja', async (req, res) => {

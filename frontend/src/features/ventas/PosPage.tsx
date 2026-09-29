@@ -370,8 +370,6 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       throw err;
     }
 
-    // La pantalla de Caja (si sigue abierta en otra parte del sistema) se actualiza con la venta.
-    window.dispatchEvent(new Event('venta-registrada'));
     const sale = res.venta;
     print(buildSaleTicket({ ...payment, numDoc: sale.numDoc ?? '', items: sale.items, total: sale.total, discount: sale.discount, sellerName: currentUser.name }));
 

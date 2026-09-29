@@ -1,26 +1,61 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { api } from '../api/client.ts';
-import CashRegistersSettings from '../components/CashRegistersSettings.jsx';
-import BranchesSettings from '../components/BranchesSettings.jsx';
-import { DISPATCH_ROLE_OPTIONS, effectiveDispatchRole } from '../shared/constants/dispatch.ts';
-import { FEATURE_LABELS, FEATURE_ORDER } from '../shared/constants/features.ts';
-import FieldError from '../shared/ui/FieldError.tsx';
-import { borderClass } from '../shared/utils/validators.ts';
-import { MODULE_OPTIONS, ALWAYS_ENABLED_MODULES } from '../shared/constants/modules.ts';
-import { useConfirm } from '../shared/ui/index.ts';
+// Configuración: plan, identidad, datos de la empresa, comprobantes, descuentos, sucursales, cajas y
+// modo de trabajo. El formulario se guarda con su botón; sucursales, cajas y modo, al momento.
+import { useState, useEffect, useMemo, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { Branch } from '@ferresys/contracts/branches';
+import type { DispatchRole, SaleFlowMode, SessionUser } from '@ferresys/contracts/identity';
+import type { BusinessSettings, DocumentType, LicenseStatus, SettingsResponse, SettingsSaved, SettingsUpdate } from '@ferresys/contracts/settings';
+import { api } from '../../api/client.ts';
+import { queryKeys } from '../../api/queryClient.ts';
+import { useBranches, useSettings } from '../../api/queries.ts';
+import CashRegistersSettings from './components/CashRegistersSettings.tsx';
+import BranchesSettings from './components/BranchesSettings.tsx';
+import { DISPATCH_ROLE_OPTIONS, effectiveDispatchRole } from '../../shared/constants/dispatch.ts';
+import { FEATURE_LABELS, FEATURE_ORDER } from '../../shared/constants/features.ts';
+import FieldError from '../../shared/ui/FieldError.tsx';
+import { borderClass } from '../../shared/utils/validators.ts';
+import { MODULE_OPTIONS } from '../../shared/constants/modules.ts';
+import { useConfirm } from '../../shared/ui/index.ts';
 
-const DOCUMENT_TYPE_LABELS = {
+const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   NOTA_VENTA: 'Nota de venta',
   BOLETA: 'Boleta',
   FACTURA: 'Factura',
 };
 
-const EDITABLE_FIELDS = [
+interface SettingsForm {
+  legalName: string;
+  tradeName: string;
+  taxId: string;
+  address: string;
+  phone: string;
+  email: string;
+  currencySymbol: string;
+  taxRate: string;
+  ticketFooter: string;
+  logo: string | null;
+  maxDiscountPercent: string;
+}
+
+type TextField = Exclude<keyof SettingsForm, 'logo'>;
+type Errors = Partial<Record<keyof SettingsForm, string>>;
+type Message = { type: 'success' | 'error'; text: string };
+
+interface SaleFlowOption {
+  id: SaleFlowMode;
+  title: string;
+  icon: string;
+  description: string;
+  steps: string[];
+  requires: string[];
+}
+
+const EDITABLE_FIELDS: (keyof SettingsForm)[] = [
   'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email',
   'currencySymbol', 'taxRate', 'ticketFooter', 'logo', 'maxDiscountPercent',
 ];
 
-const SALE_FLOW_OPTIONS = [
+const SALE_FLOW_OPTIONS: SaleFlowOption[] = [
   {
     id: 'DIRECT',
     title: 'Directo',
@@ -47,8 +82,7 @@ const SALE_FLOW_OPTIONS = [
   },
 ];
 
-// Los módulos no contratados se muestran apagados y no se envían al guardar.
-const toForm = (settings, licensedModules) => ({
+const toForm = (settings: BusinessSettings): SettingsForm => ({
   legalName: settings.legalName || '',
   tradeName: settings.tradeName || '',
   taxId: settings.taxId || '',
@@ -62,8 +96,8 @@ const toForm = (settings, licensedModules) => ({
   maxDiscountPercent: String(settings.maxDiscountPercent ?? 0),
 });
 
-function validateForm(form) {
-  const errors = {};
+function validateForm(form: SettingsForm): Errors {
+  const errors: Errors = {};
   if (form.legalName.trim().length < 2) errors.legalName = 'La razón social es obligatoria.';
   if (form.taxId.trim() && !/^\d{11}$/.test(form.taxId.trim())) errors.taxId = 'El RUC debe tener 11 dígitos.';
   if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = 'Correo no válido.';
@@ -77,7 +111,7 @@ function validateForm(form) {
   return errors;
 }
 
-function Field({ label, error, hint, children }) {
+function Field({ label, error, hint, children }: { label: string; error?: string; hint?: string; children?: ReactNode }) {
   return (
     <div>
       <label className="text-xs font-bold text-ink-soft mb-1 block">{label}</label>
@@ -89,10 +123,16 @@ function Field({ label, error, hint, children }) {
 
 // Resumen del plan: lo que la empresa tiene y lo que podría sumar. Es el único lugar donde se nombra
 // lo no contratado; en el resto de las pantallas simplemente no aparece.
-function MiPlan({ license, licensedModules, licensedFeatures, enabledModules }) {
+interface MiPlanProps {
+  license: LicenseStatus | null;
+  licensedModules: readonly string[] | null;
+  licensedFeatures: readonly string[] | null;
+}
+
+function MiPlan({ license, licensedModules, licensedFeatures }: MiPlanProps) {
   const incluidos = (licensedModules ?? MODULE_OPTIONS.map(m => m.value));
   const funcionesIncluidas = licensedFeatures ?? FEATURE_ORDER;
-  const moduloLabel = (value) => MODULE_OPTIONS.find(m => m.value === value)?.label ?? value;
+  const moduloLabel = (value: string) => MODULE_OPTIONS.find(m => m.value === value)?.label ?? value;
   const faltantes = [
     ...MODULE_OPTIONS.filter(m => !incluidos.includes(m.value)).map(m => m.label),
     ...FEATURE_ORDER.filter(f => !funcionesIncluidas.includes(f)).map(f => FEATURE_LABELS[f]),
@@ -141,7 +181,7 @@ function MiPlan({ license, licensedModules, licensedFeatures, enabledModules }) 
   );
 }
 
-function Card({ icon, title, description, children }) {
+function Card({ icon, title, description, children }: { icon: string; title: string; description?: string; children?: ReactNode }) {
   return (
     <section className="bg-surface rounded-2xl border border-line/80">
       <div className="px-6 pt-5 pb-4 flex items-start gap-3">
@@ -159,15 +199,21 @@ function Card({ icon, title, description, children }) {
 }
 
 // Logo de la empresa: se guarda con el resto de la configuración y se ve en el inicio y en el menú.
-function LogoField({ logo, onChange }) {
+function LogoField({ logo, onChange }: { logo: string | null; onChange: (logo: string | null) => void }) {
   const [mensaje, setMensaje] = useState('');
 
-  const elegir = (file) => {
+  const elegir = (file: File | undefined) => {
     if (!file) return;
-    if (!/^image\/(png|jpeg|jpg|webp|svg\+xml)$/.test(file.type)) return setMensaje('Use una imagen PNG, JPG, WEBP o SVG.');
-    if (file.size > 280 * 1024) return setMensaje('La imagen no puede superar 280 KB.');
+    if (!/^image\/(png|jpeg|jpg|webp|svg\+xml)$/.test(file.type)) {
+      setMensaje('Use una imagen PNG, JPG, WEBP o SVG.');
+      return;
+    }
+    if (file.size > 280 * 1024) {
+      setMensaje('La imagen no puede superar 280 KB.');
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => { setMensaje(''); onChange(reader.result); };
+    reader.onload = () => { setMensaje(''); onChange(typeof reader.result === 'string' ? reader.result : null); };
     reader.readAsDataURL(file);
   };
 
@@ -202,98 +248,98 @@ function LogoField({ logo, onChange }) {
   );
 }
 
-export default function SettingsPage({ currentUser, onSaved, hasFeature = () => true, licensedFeatures = null, license = null }) {
+interface Props {
+  currentUser: SessionUser;
+  hasFeature?: (feature: string) => boolean;
+  licensedFeatures?: string[] | null;
+  license?: LicenseStatus | null;
+}
+
+export default function ConfiguracionPage({ currentUser, hasFeature = () => true, licensedFeatures = null, license = null }: Props) {
   const confirmar = useConfirm();
-  // Al crear o renombrar sucursales se recarga la lista de cajas (muestra su sucursal).
-  const [branchesVersion, setBranchesVersion] = useState(0);
-  const [savedSettings, setSavedSettings] = useState(null);
-  const [form, setForm] = useState(null);
-  const [documentSeries, setDocumentSeries] = useState([]);
-  const [licensedModules, setLicensedModules] = useState(null);
-  const [errors, setErrors] = useState({});
-  const [loadError, setLoadError] = useState('');
-  const [saveMessage, setSaveMessage] = useState(null);
+  const queryClient = useQueryClient();
+  const settingsQuery = useSettings();
+  const savedSettings = settingsQuery.data?.settings ?? null;
+  const licensedModules = settingsQuery.data?.licensedModules ?? null;
+  const documentSeries = settingsQuery.data?.documentSeries ?? [];
+  const loadError = settingsQuery.error ? settingsQuery.error.message || 'No se pudo cargar la configuración.' : '';
+  const [form, setForm] = useState<SettingsForm | null>(null);
+  const [errors, setErrors] = useState<Errors>({});
+  const [saveMessage, setSaveMessage] = useState<Message | null>(null);
   const [saving, setSaving] = useState(false);
   // Modo de trabajo: es de cada sucursal y se guarda al momento, aparte del formulario.
-  const [branches, setBranches] = useState([]);
-  const [modeBranchId, setModeBranchId] = useState(currentUser?.branchId ?? null);
-  const [modeMessage, setModeMessage] = useState(null);
+  const branches = useBranches().data ?? [];
+  const [modeBranchId, setModeBranchId] = useState<number | null>(currentUser.branchId ?? null);
+  const [modeMessage, setModeMessage] = useState<Message | null>(null);
   const [savingMode, setSavingMode] = useState(false);
 
-  const loadBranches = () => api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
-  useEffect(() => { loadBranches(); }, [branchesVersion]);
-
+  // El formulario parte de lo guardado cuando llega.
   useEffect(() => {
-    loadSettings();
-  }, []);
+    if (savedSettings && !form) setForm(toForm(savedSettings));
+  }, [savedSettings, form]);
 
-  const loadSettings = async () => {
-    try {
-      setLoadError('');
-      const res = await api.get('/settings');
-      setSavedSettings(res.settings);
-      setLicensedModules(res.licensedModules || null);
-      setForm(toForm(res.settings, res.licensedModules));
-      setDocumentSeries(res.documentSeries || []);
-    } catch (err) {
-      setLoadError(err.message || 'No se pudo cargar la configuración.');
-    }
-  };
+  // Lo guardado se comparte con el resto del sistema (nombre, logo y colores del menú, descuento del POS).
+  const storeSettings = (saved: BusinessSettings) =>
+    queryClient.setQueryData<SettingsResponse>(queryKeys.settings, old => (old ? { ...old, settings: saved } : old));
+
+  // El modo, los envíos y quién despacha cambian las pantallas de quien trabaja en esa sucursal:
+  // se refrescan las sucursales y la sesión (sin volver a entrar).
+  const refreshBranches = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.branches }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+  ]);
 
   const hasChanges = useMemo(() => {
     if (!form || !savedSettings) return false;
-    const saved = toForm(savedSettings, licensedModules);
+    const saved = toForm(savedSettings);
     return EDITABLE_FIELDS.some(field => JSON.stringify(form[field]) !== JSON.stringify(saved[field]));
-  }, [form, savedSettings, licensedModules]);
+  }, [form, savedSettings]);
 
-  const setField = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+  const setField = <K extends keyof SettingsForm>(field: K, value: SettingsForm[K]) => {
+    setForm(prev => (prev ? { ...prev, [field]: value } : prev));
     setErrors(prev => ({ ...prev, [field]: '' }));
     setSaveMessage(null);
   };
 
-  const isLicensed = (moduleId) => !licensedModules || licensedModules.includes(moduleId);
+  const isLicensed = (moduleId: string) => !licensedModules || licensedModules.includes(moduleId);
 
-  const modeBranch = branches.find(b => b.id === modeBranchId) || branches[0] || null;
+  const modeBranch: Branch | null = branches.find(b => b.id === modeBranchId) ?? branches[0] ?? null;
   // Envíos a domicilio: hacen falta la función del plan y el módulo Entregas contratado.
   const deliveriesAvailable = hasFeature('deliveries') && isLicensed('deliveries');
 
-  const chooseDispatchRole = async (roleId) => {
-    if (!modeBranch || roleId === effectiveDispatchRole(modeBranch)) return;
+  // Guarda un cambio de la sucursal elegida y muestra el resultado junto al modo de trabajo.
+  const saveBranchMode = async (change: () => Promise<unknown>, successText: string) => {
     try {
       setSavingMode(true);
       setModeMessage(null);
-      await api.put(`/sucursales/${modeBranch.id}`, { dispatchRole: roleId });
-      await loadBranches();
-      setModeMessage({ type: 'success', text: `Ahora despacha: ${DISPATCH_ROLE_OPTIONS.find(o => o.id === roleId).title.toLowerCase()}.` });
-      window.dispatchEvent(new Event('refrescar-sesion'));
+      await change();
+      await refreshBranches();
+      setModeMessage({ type: 'success', text: successText });
     } catch (err) {
-      setModeMessage({ type: 'error', text: err.message });
+      setModeMessage({ type: 'error', text: (err as Error).message });
     } finally {
       setSavingMode(false);
     }
+  };
+
+  const chooseDispatchRole = async (roleId: DispatchRole) => {
+    if (!modeBranch || roleId === effectiveDispatchRole(modeBranch)) return;
+    const title = DISPATCH_ROLE_OPTIONS.find(o => o.id === roleId)?.title ?? roleId;
+    await saveBranchMode(() => api.put(`/sucursales/${modeBranch.id}`, { dispatchRole: roleId }), `Ahora despacha: ${title.toLowerCase()}.`);
   };
 
   const toggleDeliveries = async () => {
     if (!modeBranch) return;
     const enable = !modeBranch.deliveriesEnabled;
-    try {
-      setSavingMode(true);
-      setModeMessage(null);
-      await api.put(`/sucursales/${modeBranch.id}`, { deliveriesEnabled: enable });
-      await loadBranches();
-      setModeMessage({ type: 'success', text: enable ? 'Envíos a domicilio activados.' : 'Envíos a domicilio desactivados: la opción ya no aparece al cobrar.' });
-      window.dispatchEvent(new Event('refrescar-sesion'));
-    } catch (err) {
-      setModeMessage({ type: 'error', text: err.message });
-    } finally {
-      setSavingMode(false);
-    }
+    await saveBranchMode(
+      () => api.put(`/sucursales/${modeBranch.id}`, { deliveriesEnabled: enable }),
+      enable ? 'Envíos a domicilio activados.' : 'Envíos a domicilio desactivados: la opción ya no aparece al cobrar.',
+    );
   };
 
   // Al elegir un modo se activan (y guardan) los módulos que necesita, y se guarda el modo de la sucursal.
-  const selectSaleFlow = async (option) => {
-    if (!modeBranch || option.id === modeBranch.saleFlowMode || option.requires.some(m => !isLicensed(m))) return;
+  const selectSaleFlow = async (option: SaleFlowOption) => {
+    if (!modeBranch || !savedSettings || option.id === modeBranch.saleFlowMode || option.requires.some(m => !isLicensed(m))) return;
     const label = branches.length > 1 ? `${modeBranch.name}` : 'la empresa';
     const seguro = await confirmar({
       title: 'Cambiar el modo de trabajo',
@@ -301,28 +347,18 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
       confirmText: 'Cambiar',
     });
     if (!seguro) return;
-    try {
-      setSavingMode(true);
-      setModeMessage(null);
+    await saveBranchMode(async () => {
       const missing = option.requires.filter(m => !savedSettings.enabledModules.includes(m));
       if (missing.length > 0) {
-        const res = await api.put('/settings', { ...savedSettings, enabledModules: [...savedSettings.enabledModules, ...missing] });
-        setSavedSettings(res.settings);
-        if (onSaved) onSaved(res.settings);
+        const res = await api.put<SettingsSaved>('/settings', { ...savedSettings, enabledModules: [...savedSettings.enabledModules, ...missing] } satisfies SettingsUpdate);
+        storeSettings(res.settings);
       }
       await api.put(`/sucursales/${modeBranch.id}`, { saleFlowMode: option.id });
-      await loadBranches();
-      setModeMessage({ type: 'success', text: `Modo "${option.title}" guardado. Asigne en Personal los módulos a cada empleado.` });
-      // Quien esté en esa sucursal ve sus pantallas nuevas sin volver a entrar.
-      window.dispatchEvent(new Event('refrescar-sesion'));
-    } catch (err) {
-      setModeMessage({ type: 'error', text: err.message });
-    } finally {
-      setSavingMode(false);
-    }
+    }, `Modo "${option.title}" guardado. Asigne en Personal los módulos a cada empleado.`);
   };
 
   const handleSave = async () => {
+    if (!form) return;
     const validation = validateForm(form);
     setErrors(validation);
     if (Object.values(validation).some(Boolean)) {
@@ -332,13 +368,14 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
 
     try {
       setSaving(true);
-      const res = await api.put('/settings', { ...form, taxRate: Number(form.taxRate), maxDiscountPercent: Number(form.maxDiscountPercent) });
-      setSavedSettings(res.settings);
-      setForm(toForm(res.settings, licensedModules));
+      const res = await api.put<SettingsSaved>('/settings', {
+        ...form, taxRate: Number(form.taxRate), maxDiscountPercent: Number(form.maxDiscountPercent),
+      } satisfies SettingsUpdate);
+      storeSettings(res.settings);
+      setForm(toForm(res.settings));
       setSaveMessage({ type: 'success', text: 'Configuración guardada.' });
-      if (onSaved) onSaved(res.settings);
     } catch (err) {
-      setSaveMessage({ type: 'error', text: err.message || 'No se pudo guardar la configuración.' });
+      setSaveMessage({ type: 'error', text: (err as Error).message || 'No se pudo guardar la configuración.' });
     } finally {
       setSaving(false);
     }
@@ -349,12 +386,12 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
       <div className="h-full flex flex-col items-center justify-center text-center p-6">
         <i className="fa-solid fa-triangle-exclamation text-3xl text-danger mb-3"></i>
         <p className="text-sm text-ink-soft mb-3">{loadError}</p>
-        <button onClick={loadSettings} className="text-sm font-bold text-brand hover:underline">Reintentar</button>
+        <button onClick={() => settingsQuery.refetch()} className="text-sm font-bold text-brand hover:underline">Reintentar</button>
       </div>
     );
   }
 
-  if (!form) {
+  if (!form || !savedSettings) {
     return (
       <div className="h-full flex items-center justify-center text-muted text-sm">
         <i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando configuración…
@@ -362,7 +399,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
     );
   }
 
-  const input = (field, props = {}) => (
+  const input = (field: TextField, props: InputHTMLAttributes<HTMLInputElement> = {}) => (
     <input
       value={form[field]}
       onChange={e => setField(field, e.target.value)}
@@ -379,7 +416,6 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
             license={license}
             licensedModules={licensedModules}
             licensedFeatures={licensedFeatures}
-            enabledModules={savedSettings.enabledModules}
           />
         </Card>
 
@@ -450,7 +486,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
                 {documentSeries.map(s => (
                   <div key={s.id} className="border border-line rounded-lg px-3 py-2 bg-surface-muted">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted">{DOCUMENT_TYPE_LABELS[s.documentType] || s.documentType}</span>
+                      <span className="text-xs text-muted">{DOCUMENT_TYPE_LABELS[s.documentType] ?? s.documentType}</span>
                       {!s.isActive && <span className="text-[10px] font-bold text-muted">INACTIVA</span>}
                     </div>
                     <p className="font-mono font-bold text-ink">{s.series}</p>
@@ -481,13 +517,14 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
 
         {hasFeature('branches') && (
           <Card icon="fa-store" title="Sucursales" description="Sucursales o almacenes con stock propio. Con una sola, el sistema no muestra nada de sucursales. Se guarda al momento.">
-            <BranchesSettings onChanged={() => setBranchesVersion(v => v + 1)} />
+            {/* Las cajas muestran el nombre de su sucursal. */}
+            <BranchesSettings onChanged={() => queryClient.invalidateQueries({ queryKey: queryKeys.cashRegisters })} />
           </Card>
         )}
 
         {hasFeature('shared_cash') && (
           <Card icon="fa-cash-register" title="Cajas" description="Gavetas físicas. Varios cajeros pueden compartir el turno de una caja. Se guarda al momento.">
-            <CashRegistersSettings key={branchesVersion} />
+            <CashRegistersSettings />
           </Card>
         )}
 
@@ -627,7 +664,7 @@ export default function SettingsPage({ currentUser, onSaved, hasFeature = () => 
           </p>
           <div className="flex gap-2">
             <button
-              onClick={() => { setForm(toForm(savedSettings, licensedModules)); setErrors({}); setSaveMessage(null); }}
+              onClick={() => { setForm(toForm(savedSettings)); setErrors({}); setSaveMessage(null); }}
               disabled={!hasChanges || saving}
               className="px-4 py-2 rounded-lg text-sm font-bold text-ink-soft bg-surface-muted hover:bg-surface-muted disabled:opacity-40"
             >

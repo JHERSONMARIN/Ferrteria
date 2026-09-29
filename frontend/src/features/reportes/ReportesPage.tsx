@@ -1,39 +1,35 @@
-import React, { useState, useEffect } from 'react';
-import { roleLabel } from '../shared/constants/roles.ts';
-import { api } from '../api/client.ts';
-import SalesReports from '../components/SalesReports.jsx';
-import { useToast } from '../shared/ui/index.ts';
+// Reportes: el resumen general del negocio y, si el plan lo incluye, los reportes por período.
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { DashboardStats } from '@ferresys/contracts/reports';
+import { roleLabel } from '../../shared/constants/roles.ts';
+import { api } from '../../api/client.ts';
+import { queryKeys } from '../../api/queryClient.ts';
+import SalesReports from './components/SalesReports.tsx';
+import { useToast } from '../../shared/ui/index.ts';
 
-export default function DashboardPage({ periodReports = true }) {
+const EMPTY_STATS: DashboardStats = {
+  ingresosCaja: 0,
+  deudaCreditos: 0,
+  salesCount: 0,
+  totalProductsCount: 0,
+  totalInventoryValue: 0,
+  lowStockCount: 0,
+  vendedores: [],
+  recentSales: [],
+};
+
+export default function ReportesPage({ periodReports = true }: { periodReports?: boolean }) {
   const aviso = useToast();
-  const [stats, setStats] = useState({
-    ingresosCaja: 0,
-    deudaCreditos: 0,
-    salesCount: 0,
-    totalProductsCount: 0,
-    totalInventoryValue: 0,
-    lowStockCount: 0,
-    vendedores: [],
-    recentSales: [],
-  });
-  const [loading, setLoading] = useState(false);
-  const [view, setView] = useState('summary');
+  const statsQuery = useQuery({ queryKey: queryKeys.dashboard, queryFn: () => api.get<DashboardStats>('/dashboard/stats') });
+  const stats = statsQuery.data ?? EMPTY_STATS;
+  const loading = statsQuery.isFetching;
+  const loadDashboardStats = () => { statsQuery.refetch(); };
+  const [view, setView] = useState<'summary' | 'reports'>('summary');
 
   useEffect(() => {
-    loadDashboardStats();
-  }, []);
-
-  const loadDashboardStats = async () => {
-    try {
-      setLoading(true);
-      const data = await api.get('/dashboard/stats');
-      setStats(data);
-    } catch (err) {
-      aviso.error('Error cargando estadísticas del Dashboard: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (statsQuery.error) aviso.error(`Error cargando estadísticas del Dashboard: ${statsQuery.error.message}`);
+  }, [statsQuery.error, aviso]);
 
   return (
     <div className="tab-content active h-full p-4 overflow-auto">
@@ -54,7 +50,7 @@ export default function DashboardPage({ periodReports = true }) {
       </div>
 
       <div className="flex gap-1 mb-5 border-b border-line" role="tablist">
-        {[['summary', 'Resumen general', 'fa-gauge'], ...(periodReports ? [['reports', 'Reportes por período', 'fa-chart-column']] : [])].map(([id, label, icon]) => (
+        {([['summary', 'Resumen general', 'fa-gauge'], ...(periodReports ? [['reports', 'Reportes por período', 'fa-chart-column']] : [])] as ['summary' | 'reports', string, string][]).map(([id, label, icon]) => (
           <button
             key={id}
             type="button"

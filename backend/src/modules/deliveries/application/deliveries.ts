@@ -177,7 +177,8 @@ export async function scheduleDeliveryForExistingSale(client: Client, numDoc: un
 export async function findSaleForDelivery(db: Db, numDoc: unknown, user: SessionUser) {
   const sale = await paidSaleOfBranch(db, numDoc, user);
   return {
-    numDoc: sale.numDoc,
+    // Se buscó por su número: siempre lo tiene.
+    numDoc: sale.numDoc ?? String(numDoc),
     total: Number(sale.total),
     existingDelivery: sale.entrega?.ref ?? null,
     customer: sale.cliente ? { name: sale.cliente.name, phone: sale.cliente.phone, address: sale.cliente.address } : null,

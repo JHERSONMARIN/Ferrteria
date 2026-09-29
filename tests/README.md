@@ -30,15 +30,21 @@ Termina con código 0 si todo pasa y 1 si algo falla, así que sirve igual en un
 1. Levanta `tests/docker-compose.yml`: PostgreSQL con los datos en memoria, backend y web en
    `http://127.0.0.1:23990` (`TEST_WEB_PORT`), y la consola de VALETEC en `http://127.0.0.1:23991`
    (`TEST_CONSOLE_PORT`). La consola de pruebas no tiene acceso a Docker ni ve las empresas reales.
-2. Antes de cada **cadena** borra la base: la empresa queda recién creada, con el administrador `admin`
+2. Corre los chequeos del código dentro de las imágenes de prueba: tipos del backend y del frontend
+   (TypeScript) y las pruebas unitarias de las reglas. Con un filtro (`python3 tests/run.py sucursales`)
+   se saltan.
+3. Antes de cada **cadena** borra la base: la empresa queda recién creada, con el administrador `admin`
    y la clave temporal `ClaveTemporal2026`.
-3. Corre en orden las pruebas de la cadena. Dentro de una cadena comparten la base: cada prueba parte
+4. Corre en orden las pruebas de la cadena. Dentro de una cadena comparten la base: cada prueba parte
    de lo que dejó la anterior (usuarios, productos, turnos de caja).
-4. Muestra cada falla y guarda la salida completa de cada prueba en `tests/.salida/` (las capturas de
+5. Muestra cada falla y guarda la salida completa de cada prueba en `tests/.salida/` (las capturas de
    pantalla, en `tests/.salida/capturas/`).
-5. Al terminar baja el entorno.
+6. Al terminar baja el entorno.
 
 Las cadenas están en `CADENAS`, en `tests/run.py`.
+
+No hacer commits mientras corre la suite: la prueba de versión compara el commit de la imagen con el del
+repositorio y falla si cambió a mitad de camino.
 
 ## Organización
 

@@ -1,49 +1,50 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../api/client.ts';
+import { useState, type FormEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { CashRegister } from '@ferresys/contracts/cash';
+import { api } from '../../../api/client.ts';
+import { queryKeys } from '../../../api/queryClient.ts';
+import { useBranches } from '../../../api/queries.ts';
+
+type Message = { type: 'success' | 'error'; text: string };
 
 // Cajas físicas de la empresa. Los cambios se guardan al momento (no dependen del botón Guardar).
 export default function CashRegistersSettings() {
-  const [registers, setRegisters] = useState([]);
-  const [branches, setBranches] = useState([]);
+  const queryClient = useQueryClient();
+  const registersQuery = useQuery({ queryKey: queryKeys.cashRegisters, queryFn: () => api.get<CashRegister[]>('/caja/registros') });
+  const registers = registersQuery.data ?? [];
+  const branches = useBranches().data ?? [];
   const [newName, setNewName] = useState('');
   const [newBranchId, setNewBranchId] = useState('');
-  const [editing, setEditing] = useState(null); // { id, name }
+  const [editing, setEditing] = useState<{ id: number; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(null);
-
-  const load = async () => {
-    try {
-      setRegisters(await api.get('/caja/registros'));
-    } catch (err) {
-      setMessage({ type: 'error', text: err.message || 'No se pudieron cargar las cajas.' });
-    }
-  };
-
-  useEffect(() => {
-    load();
-    api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
-  }, []);
+  const [result, setResult] = useState<Message | null>(null);
+  const message: Message | null = result
+    ?? (registersQuery.error ? { type: 'error', text: registersQuery.error.message || 'No se pudieron cargar las cajas.' } : null);
 
   // Con una sola sucursal no se muestra nada de sucursales.
   const multiBranch = branches.length > 1;
 
-  const run = async (action, successText) => {
+  // Las cajas cambian también lo que se ve en Caja (cajas para abrir o unirse).
+  const run = async (action: () => Promise<unknown>, successText: string) => {
     try {
       setBusy(true);
-      setMessage(null);
+      setResult(null);
       await action();
-      await load();
-      if (successText) setMessage({ type: 'success', text: successText });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.cashRegisters }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.cashStatus }),
+      ]);
+      if (successText) setResult({ type: 'success', text: successText });
       return true;
     } catch (err) {
-      setMessage({ type: 'error', text: err.message });
+      setResult({ type: 'error', text: (err as Error).message });
       return false;
     } finally {
       setBusy(false);
     }
   };
 
-  const addRegister = async (e) => {
+  const addRegister = async (e: FormEvent) => {
     e.preventDefault();
     const name = newName.trim();
     if (!name) return;
@@ -52,10 +53,11 @@ export default function CashRegistersSettings() {
   };
 
   const saveName = async () => {
+    if (!editing) return;
     if (await run(() => api.put(`/caja/registros/${editing.id}`, { name: editing.name.trim() }), 'Nombre actualizado.')) setEditing(null);
   };
 
-  const toggleActive = (register) => run(
+  const toggleActive = (register: CashRegister) => run(
     () => api.put(`/caja/registros/${register.id}`, { active: !register.active }),
     register.active ? `${register.name} desactivada.` : `${register.name} activada.`
   );

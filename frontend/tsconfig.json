@@ -1,6 +1,6 @@
 {
-  // Solo verifica tipos (npm run typecheck): Vite compila los .tsx sin esperar al chequeo.
-  // Los .jsx que todavía no se migraron se pueden importar desde .tsx, pero no se revisan.
+  // Solo verifica tipos (npm run typecheck, y en npm test): Vite compila los .tsx sin esperar al chequeo.
+  // Todo el frontend es TypeScript estricto; los datos de la API se tipan con @ferresys/contracts.
   "compilerOptions": {
     "target": "es2022",
     "lib": ["es2022", "dom", "dom.iterable"],
@@ -12,9 +12,9 @@
     "verbatimModuleSyntax": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "skipLibCheck": true,
-    "allowJs": true,
-    "checkJs": false,
     "types": ["vite/client"]
   },
   "include": ["src"]

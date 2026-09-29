@@ -58,3 +58,14 @@ export interface StaffMember {
   branch: { id: number; name: string };
   createdAt: IsoDate;
 }
+
+/** POST /api/personal y PUT /api/personal/:id (sin pass al editar = conserva la contraseña). */
+export interface StaffRequest {
+  name: string;
+  user: string;
+  pass?: string;
+  role: Role;
+  modules: string[];
+  active: boolean;
+  branchId?: number;
+}

@@ -1,32 +1,44 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../api/client.ts';
-import { formatSoles } from '../shared/utils/currency.ts';
-import { formatQuantity } from '../shared/utils/quantities.ts';
-import { downloadCsv, csvNumber } from '../shared/utils/csv.ts';
+// Reportes por período: ventas, medios de pago, vendedores, cajeros, productos y rotación del stock.
+import { useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import type { PersonTotals, SalesReport } from '@ferresys/contracts/reports';
+import { api } from '../../../api/client.ts';
+import { queryKeys } from '../../../api/queryClient.ts';
+import { useBranches } from '../../../api/queries.ts';
+import { formatSoles } from '../../../shared/utils/currency.ts';
+import { formatQuantity } from '../../../shared/utils/quantities.ts';
+import { downloadCsv, csvNumber } from '../../../shared/utils/csv.ts';
 
 const todayInLima = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date());
 
-const shiftDay = (day, n) => {
+const shiftDay = (day: string, n: number) => {
   const date = new Date(`${day}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + n);
   return date.toISOString().slice(0, 10);
 };
 
-const PRESETS = [
+const PRESETS: { id: string; label: string; range: (today: string) => [string, string] }[] = [
   { id: 'today', label: 'Hoy', range: (t) => [t, t] },
   { id: '7', label: '7 días', range: (t) => [shiftDay(t, -6), t] },
   { id: '30', label: '30 días', range: (t) => [shiftDay(t, -29), t] },
   { id: 'month', label: 'Este mes', range: (t) => [`${t.slice(0, 8)}01`, t] },
 ];
 
-const formatDay = (day) => {
+const formatDay = (day: string) => {
   const [, m, d] = day.split('-');
   return `${d}/${m}`;
 };
 
-function Section({ title, subtitle, onExport, children }) {
+interface SectionProps {
+  title: string;
+  subtitle?: string;
+  onExport?: () => void;
+  children?: ReactNode;
+}
+
+function Section({ title, subtitle, onExport, children }: SectionProps) {
   return (
     <section className="bg-surface rounded-xl shadow-sm border border-line overflow-hidden">
       <div className="p-4 border-b border-line bg-surface-muted flex flex-wrap justify-between items-center gap-2">
@@ -45,7 +57,7 @@ function Section({ title, subtitle, onExport, children }) {
   );
 }
 
-function Kpi({ label, value, hint, accent }) {
+function Kpi({ label, value, hint, accent }: { label: string; value: ReactNode; hint?: string; accent: string }) {
   return (
     <div className={`bg-surface p-4 rounded-xl shadow-sm border border-line border-l-4 ${accent}`}>
       <p className="text-[11px] font-bold uppercase tracking-wider text-muted">{label}</p>
@@ -55,12 +67,12 @@ function Kpi({ label, value, hint, accent }) {
   );
 }
 
-function Empty({ text }) {
+function Empty({ text }: { text: string }) {
   return <p className="px-4 py-6 text-center text-sm text-muted">{text}</p>;
 }
 
 // Barras simples por día: alto proporcional al día de mayor venta.
-function DailyChart({ daily }) {
+function DailyChart({ daily }: { daily: SalesReport['daily'] }) {
   const max = Math.max(...daily.map(d => d.total), 0);
   if (max === 0) return <Empty text="No hay ventas cobradas en este período." />;
   const labelEvery = Math.ceil(daily.length / 10);
@@ -88,7 +100,9 @@ function DailyChart({ daily }) {
   );
 }
 
-function PeopleTable({ rows, showDiscounts }) {
+type PersonRow = PersonTotals & { discounts?: number };
+
+function PeopleTable({ rows, showDiscounts = false }: { rows: PersonRow[]; showDiscounts?: boolean }) {
   if (rows.length === 0) return <Empty text="Sin ventas en el período." />;
   return (
     <div className="overflow-x-auto">
@@ -109,7 +123,7 @@ function PeopleTable({ rows, showDiscounts }) {
               <td className="px-4 py-2 text-right tabular-nums">{r.sales}</td>
               <td className="px-4 py-2 text-right tabular-nums font-bold">{formatSoles(r.total)}</td>
               <td className="px-4 py-2 text-right tabular-nums">{formatSoles(r.average)}</td>
-              {showDiscounts && <td className="px-4 py-2 text-right tabular-nums text-success">{r.discounts > 0 ? formatSoles(r.discounts) : '—'}</td>}
+              {showDiscounts && <td className="px-4 py-2 text-right tabular-nums text-success">{(r.discounts ?? 0) > 0 ? formatSoles(r.discounts) : '—'}</td>}
             </tr>
           ))}
         </tbody>
@@ -121,41 +135,29 @@ function PeopleTable({ rows, showDiscounts }) {
 export default function SalesReports() {
   const today = todayInLima();
   const [range, setRange] = useState({ from: shiftDay(today, -29), to: today });
-  const [preset, setPreset] = useState('30');
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [productSort, setProductSort] = useState('amount');
-  const [rotationView, setRotationView] = useState('low');
+  const [preset, setPreset] = useState<string | null>('30');
+  const [productSort, setProductSort] = useState<'amount' | 'quantity'>('amount');
+  const [rotationView, setRotationView] = useState<'low' | 'none'>('low');
   const [branchId, setBranchId] = useState('');
-  const [branches, setBranches] = useState([]);
+  const branches = useBranches().data ?? [];
 
-  useEffect(() => {
-    api.get('/sucursales').then(setBranches).catch(() => setBranches([]));
-  }, []);
+  // El período y la sucursal son parte de la clave: cambiarlos pide el reporte de nuevo.
+  const reportQuery = useQuery({
+    queryKey: [...queryKeys.reports, range.from, range.to, branchId],
+    queryFn: () => api.get<SalesReport>(`/dashboard/reportes?from=${range.from}&to=${range.to}${branchId ? `&branchId=${branchId}` : ''}`),
+    placeholderData: previous => previous,
+  });
+  const data = reportQuery.data ?? null;
+  const loading = reportQuery.isFetching;
+  const error = reportQuery.error ? reportQuery.error.message || 'No se pudieron cargar los reportes.' : '';
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const branchParam = branchId ? `&branchId=${branchId}` : '';
-      setData(await api.get(`/dashboard/reportes?from=${range.from}&to=${range.to}${branchParam}`));
-    } catch (err) {
-      setError(err.message || 'No se pudieron cargar los reportes.');
-    } finally {
-      setLoading(false);
-    }
-  }, [range, branchId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const applyPreset = (p) => {
+  const applyPreset = (p: (typeof PRESETS)[number]) => {
     const [from, to] = p.range(todayInLima());
     setPreset(p.id);
     setRange({ from, to });
   };
 
-  const setDay = (key, value) => {
+  const setDay = (key: 'from' | 'to', value: string) => {
     if (!value) return;
     setPreset(null);
     setRange(prev => ({ ...prev, [key]: value }));
@@ -167,12 +169,12 @@ export default function SalesReports() {
     ? [...data.topProducts].sort((a, b) => (productSort === 'amount' ? b.amount - a.amount : b.quantity - a.quantity))
     : [];
 
-  const exportPeople = (rows, name, withDiscounts) => downloadCsv(`${name}_${suffix}.csv`, [
+  const exportPeople = (rows: PersonRow[], name: string, withDiscounts: boolean) => downloadCsv<PersonRow>(`${name}_${suffix}.csv`, [
     { label: 'Nombre', value: r => r.name },
     { label: 'Ventas', value: r => r.sales },
     { label: 'Total', value: r => csvNumber(r.total) },
     { label: 'Ticket promedio', value: r => csvNumber(r.average) },
-    ...(withDiscounts ? [{ label: 'Descuentos', value: r => csvNumber(r.discounts) }] : []),
+    ...(withDiscounts ? [{ label: 'Descuentos', value: (r: PersonRow) => csvNumber(r.discounts) }] : []),
   ], rows);
 
   const exportProducts = () => downloadCsv(`productos_mas_vendidos_${suffix}.csv`, [
@@ -184,7 +186,7 @@ export default function SalesReports() {
     { label: 'Ventas', value: p => p.sales },
   ], products);
 
-  const rotationRows = data ? (rotationView === 'low' ? data.rotation.lowCoverage : data.rotation.noMovement) : [];
+  const rotationRows: SalesReport['rotation']['lowCoverage'] = data ? (rotationView === 'low' ? data.rotation.lowCoverage : data.rotation.noMovement) : [];
   const exportRotation = () => downloadCsv(`${rotationView === 'low' ? 'por_agotarse' : 'sin_movimiento'}_${suffix}.csv`, [
     { label: 'Código', value: p => p.code },
     { label: 'Producto', value: p => p.name },
@@ -274,10 +276,10 @@ export default function SalesReports() {
           <Section
             title="Productos más vendidos"
             subtitle="Importe según precio de cada línea (antes del descuento sobre el total)."
-            onExport={products.length ? exportProducts : null}
+            onExport={products.length ? exportProducts : undefined}
           >
             <div className="px-4 pt-3 flex gap-2">
-              {[['amount', 'Por importe'], ['quantity', 'Por cantidad']].map(([id, label]) => (
+              {([['amount', 'Por importe'], ['quantity', 'Por cantidad']] as const).map(([id, label]) => (
                 <button
                   key={id}
                   type="button"
@@ -321,7 +323,7 @@ export default function SalesReports() {
           <Section
             title="Rotación de inventario"
             subtitle={`Días de stock = stock actual ÷ venta diaria promedio del período (${data.range.days} días).`}
-            onExport={rotationRows.length ? exportRotation : null}
+            onExport={rotationRows.length ? exportRotation : undefined}
           >
             <div className="px-4 pt-3 flex flex-wrap gap-2">
               <button
@@ -366,7 +368,7 @@ export default function SalesReports() {
                         <td className="px-4 py-2 text-right tabular-nums">{formatQuantity(p.stock)} <span className="text-xs text-muted">{p.unit}</span></td>
                         <td className="px-4 py-2 text-right tabular-nums">{formatQuantity(p.sold)}</td>
                         {rotationView === 'low' ? (
-                          <td className={`px-4 py-2 text-right tabular-nums font-bold ${p.coverageDays < 3 ? 'text-danger' : 'text-warning'}`}>
+                          <td className={`px-4 py-2 text-right tabular-nums font-bold ${(p.coverageDays ?? 0) < 3 ? 'text-danger' : 'text-warning'}`}>
                             {p.coverageDays === 0 ? 'Agotado' : p.coverageDays}
                           </td>
                         ) : (

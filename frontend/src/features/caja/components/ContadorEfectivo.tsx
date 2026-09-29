@@ -1,7 +1,16 @@
-import React from 'react';
+type Tipo = 'BILLETE' | 'MONEDA';
+
+interface Denominacion {
+  centimos: number;
+  label: string;
+  tipo: Tipo;
+}
+
+/** Piezas contadas por denominación (en céntimos); '' mientras se borra el número. */
+export type Conteo = Record<number, number | ''>;
 
 // Los valores se guardan en céntimos para evitar errores de redondeo con decimales.
-export const DENOMINACIONES = [
+export const DENOMINACIONES: Denominacion[] = [
   { centimos: 20000, label: 'S/ 200', tipo: 'BILLETE' },
   { centimos: 10000, label: 'S/ 100', tipo: 'BILLETE' },
   { centimos: 5000, label: 'S/ 50', tipo: 'BILLETE' },
@@ -15,22 +24,30 @@ export const DENOMINACIONES = [
   { centimos: 10, label: 'S/ 0.10', tipo: 'MONEDA' },
 ];
 
-export function calcularTotalConteo(conteo) {
+const piezas = (conteo: Conteo, centimos: number) => Number(conteo[centimos] ?? 0) || 0;
+
+export function calcularTotalConteo(conteo: Conteo) {
   const totalCentimos = DENOMINACIONES.reduce(
-    (sum, d) => sum + d.centimos * (parseInt(conteo[d.centimos], 10) || 0),
+    (sum, d) => sum + d.centimos * piezas(conteo, d.centimos),
     0
   );
   return totalCentimos / 100;
 }
 
-export function contarPiezas(conteo, tipo) {
+export function contarPiezas(conteo: Conteo, tipo: Tipo) {
   return DENOMINACIONES
     .filter(d => d.tipo === tipo)
-    .reduce((sum, d) => sum + (parseInt(conteo[d.centimos], 10) || 0), 0);
+    .reduce((sum, d) => sum + piezas(conteo, d.centimos), 0);
 }
 
-function FilaDenominacion({ den, cantidad, onCantidadChange }) {
-  const cant = parseInt(cantidad, 10) || 0;
+interface FilaProps {
+  den: Denominacion;
+  cantidad: number | '' | undefined;
+  onCantidadChange: (cantidad: number | '') => void;
+}
+
+function FilaDenominacion({ den, cantidad, onCantidadChange }: FilaProps) {
+  const cant = Number(cantidad ?? 0) || 0;
   const subtotal = (den.centimos * cant) / 100;
 
   return (
@@ -72,12 +89,17 @@ function FilaDenominacion({ den, cantidad, onCantidadChange }) {
   );
 }
 
-export default function ContadorEfectivo({ conteo, onChange }) {
+interface Props {
+  conteo: Conteo;
+  onChange: (conteo: Conteo) => void;
+}
+
+export default function ContadorEfectivo({ conteo, onChange }: Props) {
   const total = calcularTotalConteo(conteo);
   const totalBilletes = contarPiezas(conteo, 'BILLETE');
   const totalMonedas = contarPiezas(conteo, 'MONEDA');
 
-  const setCantidad = (centimos, cantidad) => {
+  const setCantidad = (centimos: number, cantidad: number | '') => {
     onChange({ ...conteo, [centimos]: cantidad });
   };
 
