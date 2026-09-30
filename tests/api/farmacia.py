@@ -1,6 +1,7 @@
 from lib import *  # noqa: F401,F403
 
 # La empresa de esta cadena es una farmacia: el backend arranca con su rubro.
+# La cadena siguiente vuelve a crear el backend con el rubro por defecto.
 reiniciar_backend(INDUSTRY="farmacia")
 admin = entrar("admin", CLAVE_TEMPORAL)
 admin.api("POST", "/auth/change-password", {"currentPassword": CLAVE_TEMPORAL, "newPassword": "AdminFarmacia2026"})
@@ -125,5 +126,28 @@ verificar("Si no alcanza lo vigente → 409 que dice cuánto hay vigente y cuán
 st, r = venta(admin, [(JARABE, 2)], 20)
 verificar("…y lo vigente sí se vende", st == 201 and stock("JARABE") == (5, 0) and lotes("JARABE") == ["J1:5"], (st, r, lotes("JARABE")))
 
-reiniciar_backend()
+print("\n=== Vencimientos ===")
+admin.api("POST", "/compras", {"proveedorId": PROV, "numDoc": "F001-4", "items": [
+    {"id": AMOX, "qty": 6, "cost": 1, "industryData": {"lotNumber": "S", "expiresAt": dia(20)}}]})
+st, r = admin.api("GET", "/rubro/vencimientos?days=30")
+por_lote = {l["lotNumber"]: l for l in r.get("lots", [])} if st == 200 else {}
+verificar("Lista lo vencido y lo que vence en los próximos días",
+          st == 200 and por_lote.get("J1", {}).get("expired") is True and por_lote.get("S", {}).get("expired") is False
+          and por_lote["S"]["quantity"] == 6, (st, r))
+sin_lote = {u["code"]: u["quantity"] for u in r.get("unlotted", [])}
+verificar("…y lo que no tiene lote, con su cantidad", sin_lote.get("AMOX") == 19 and sin_lote.get("CLONA") == 29 and "JARABE" not in sin_lote, sin_lote)
+st, r = admin.api("GET", "/rubro/vencimientos?days=10")
+verificar("Lo que vence después del plazo no aparece", st == 200 and "S" not in {l["lotNumber"] for l in r["lots"]}, r.get("lots"))
+
+print("\n=== Libro de controlados ===")
+st, r = admin.api("GET", f"/rubro/controlados?from={dia(-1)}&to={dia(0)}")
+verificar("Cada venta de un controlado con su receta, médico y paciente",
+          st == 200 and len(r) == 1 and r[0]["code"] == "CLONA" and r[0]["quantity"] == 1 and r[0]["prescriptionNumber"] == "R-002"
+          and r[0]["prescriber"] == "Dra. Salas CMP 23456" and r[0]["patient"] == "Ana Ruiz", (st, r))
+
+vendedor = usuario(admin, "vendedor", ["pos"], "VENDEDOR")
+verificar("Vencimientos pide inventario o movimientos → 403", vendedor.api("GET", "/rubro/vencimientos")[0] == 403)
+verificar("El libro de controlados es del administrador → 403", vendedor.api("GET", "/rubro/controlados")[0] == 403)
+
+# La prueba de interfaz de la cadena sigue con esta farmacia (la cadena siguiente arranca con la base vacía).
 resumen()

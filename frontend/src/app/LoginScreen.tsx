@@ -4,6 +4,7 @@ import FieldError from '../shared/ui/FieldError.tsx';
 import { api } from '../api/client.ts';
 import type { AppInfo } from '@ferresys/contracts/app';
 import type { LoginRequest, LoginResponse, SessionUser } from '@ferresys/contracts/identity';
+import { industryIcon } from '../industries/index.ts';
 
 // Usuarios de la instancia de demostración (DEMO_MODE): se muestran solo allí.
 const DEMO_TEST_USERS = [
@@ -73,7 +74,7 @@ export default function LoginScreen({ appInfo, onSignedIn }: Props) {
         <div className="p-5 bg-panel-strong text-white text-center border-b-2 border-brand">
           {brand?.logo
             ? <img src={brand.logo} alt="" className="h-14 mx-auto mb-2 object-contain" />
-            : <i className="fa-solid fa-screwdriver-wrench text-brand text-3xl mb-2"></i>}
+            : <i className={`fa-solid ${industryIcon(appInfo?.industry)} text-brand text-3xl mb-2`}></i>}
           <h2 className="text-xl font-bold tracking-wide">
             {brand?.name || <>FerreSys {version?.number && <span className="text-xs text-brand align-top">v{version.number}</span>}</>}
           </h2>

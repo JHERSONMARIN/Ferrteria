@@ -22,6 +22,8 @@ export interface SaleFieldsProps extends IndustryFieldsProps {
 }
 
 interface IndustryUi {
+  /** Ícono del negocio en el menú cuando la empresa no tiene logo. */
+  icon: string;
   /** Campos propios en el formulario de producto. */
   ProductFields?: ComponentType<IndustryFieldsProps>;
   /** Datos de una línea que entra al stock (compra o ingreso manual), con su validación y su resumen. */
@@ -32,6 +34,8 @@ interface IndustryUi {
     /** Título de la columna en la lista de la compra. */
     label: string;
   };
+  /** Pantallas propias (app/screens.ts): quién las ve. admin = solo el administrador. */
+  screens?: { id: string; access: 'admin' | readonly string[] }[];
   /** Datos de una venta o pedido (farmacia: la receta), solo cuando los productos del carrito los piden. */
   sale?: {
     Fields: ComponentType<SaleFieldsProps>;
@@ -41,11 +45,16 @@ interface IndustryUi {
 }
 
 const INDUSTRY_UI: Record<Industry, IndustryUi> = {
-  ferreteria: {},
+  ferreteria: { icon: 'fa-screwdriver-wrench' },
   farmacia: {
+    icon: 'fa-prescription-bottle-medical',
     ProductFields: PharmacyProductFields,
     stockEntry: { Fields: LotFields, problem: lotProblem, describe: describeLot, label: 'Lote' },
     sale: { Fields: PrescriptionFields, needs: needsPrescription, problem: prescriptionProblem },
+    screens: [
+      { id: 'vencimientos', access: ['inventory', 'kardex'] },
+      { id: 'controlados', access: 'admin' },
+    ],
   },
 };
 
@@ -55,3 +64,6 @@ export function useIndustry(): Industry {
 }
 
 export const useIndustryUi = (): IndustryUi => INDUSTRY_UI[useIndustry()];
+
+// Antes de iniciar sesión no hay configuración: el rubro viene en /app-info.
+export const industryIcon = (industry: Industry | undefined) => INDUSTRY_UI[industry ?? 'ferreteria'].icon;

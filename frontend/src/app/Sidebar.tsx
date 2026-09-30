@@ -3,7 +3,7 @@ import { roleLabel } from '../shared/constants/roles.ts';
 import type { AppInfo } from '@ferresys/contracts/app';
 import type { SessionUser } from '@ferresys/contracts/identity';
 import type { ScreenId } from './screens.ts';
-import { capitalize, useVocabulary } from '../industries/vocabulary.ts';
+import { capitalize, useIndustryUi, useVocabulary } from '../industries/index.ts';
 
 type Badge = 'cobros' | 'despacho';
 
@@ -32,6 +32,7 @@ const NAV_GROUPS: { section: string; items: NavItem[] }[] = [
     { id: 'kardex', label: 'Movimientos', icon: 'fa-receipt' },
     { id: 'compras', label: 'Compras', icon: 'fa-cart-flatbed' },
     { id: 'transfers', label: 'Transferencias', icon: 'fa-right-left' },
+    { id: 'vencimientos', label: 'Vencimientos', icon: 'fa-calendar-xmark' },
   ]},
   { section: 'Administración', items: [
     { id: 'client-dir', label: 'Clientes', icon: 'fa-users' },
@@ -39,6 +40,7 @@ const NAV_GROUPS: { section: string; items: NavItem[] }[] = [
     { id: 'personal', label: 'Personal', icon: 'fa-id-badge' },
     { id: 'dashboard', label: 'Reportes', icon: 'fa-chart-pie' },
     { id: 'audit', label: 'Auditoría', icon: 'fa-shield-halved' },
+    { id: 'controlados', label: 'Libro de controlados', icon: 'fa-book-medical' },
   ]},
 ];
 
@@ -121,6 +123,7 @@ export default function Sidebar({
   const versionTitle = appVersion?.commit ? `Versión ${appVersion.number} · ${appVersion.commit}` : undefined;
   const allowedModules = modules;
   const vocabulary = useVocabulary();
+  const industryIcon = useIndustryUi().icon;
   // El nombre de lo que se vende depende del rubro (Productos, Medicamentos…).
   const labelOf = (item: NavItem) => (item.id === 'inventory' ? capitalize(vocabulary.products) : item.label);
   // Menú del usuario: se cierra al tocar fuera o con Escape.
@@ -158,7 +161,7 @@ export default function Sidebar({
           <div className="flex items-center min-w-0 gap-3">
             {businessLogo
               ? <img src={businessLogo} alt="" className="w-9 h-9 rounded-lg object-contain bg-white/90 p-0.5 shrink-0" />
-              : <i className="fa-solid fa-screwdriver-wrench text-brand text-xl w-9 text-center shrink-0"></i>}
+              : <i className={`fa-solid ${industryIcon} text-brand text-xl w-9 text-center shrink-0`}></i>}
             <div className="min-w-0">
               <span className="block font-bold text-base truncate leading-tight text-nav-ink">
                 {businessName || 'FerreSys'}

@@ -1,11 +1,14 @@
 // Las pantallas del sistema: su dirección web, su título (el mismo nombre del menú) y su ícono.
-// El id es el del módulo que da acceso a la pantalla.
+// El id es el del módulo que da acceso a la pantalla. Las de un rubro llevan su industry: solo existen en las
+// empresas de ese rubro (quién las ve lo dice industries/index.ts).
+import type { Industry } from '@ferresys/contracts/settings';
 
 export interface Screen {
   path: string;
   title: string;
   hint: string;
   icon: string;
+  industry?: Industry;
 }
 
 export const SCREENS = {
@@ -25,6 +28,14 @@ export const SCREENS = {
   personal: { path: '/personal', title: 'Personal', hint: 'Usuarios, accesos y permisos.', icon: 'fa-id-badge' },
   dashboard: { path: '/reportes', title: 'Reportes', hint: 'Ventas, ganancias y estado del negocio.', icon: 'fa-chart-pie' },
   audit: { path: '/auditoria', title: 'Auditoría', hint: 'Quién hizo cada cambio y cuándo.', icon: 'fa-shield-halved' },
+  vencimientos: {
+    path: '/vencimientos', title: 'Vencimientos', hint: 'Lotes vencidos, por vencer y stock sin lote.', icon: 'fa-calendar-xmark',
+    industry: 'farmacia',
+  },
+  controlados: {
+    path: '/controlados', title: 'Libro de controlados', hint: 'Cada venta de un controlado, con su receta.', icon: 'fa-book-medical',
+    industry: 'farmacia',
+  },
   settings: { path: '/configuracion', title: 'Configuración', hint: 'Datos de la empresa, sucursales, cajas y comprobantes.', icon: 'fa-gear' },
 } satisfies Record<string, Screen>;
 

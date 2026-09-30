@@ -9,6 +9,7 @@ industries/
   hooks.ts        Los puntos de enganche: qué puede hacer un paquete y con qué datos.
   registry.ts     Un paquete por rubro y cómo los llama el núcleo.
   index.ts        El paquete de esta empresa. Es lo único que importan los módulos.
+  http.ts         Rutas propias de cada rubro (/api/rubro/...). Solo lo importa server.ts.
   ferreteria/     El paquete de ferretería.
 ```
 
@@ -59,6 +60,8 @@ llena desde `onStockMovement`.
   el médico (con su CMP) y el paciente (`FARMACIA_RECETA`). La receta queda en `ventas.industryData`, de
   donde sale el libro de controlados. Lo vencido no cuenta como disponible: si no alcanza lo vigente, la
   venta o el pedido se rechaza diciendo cuánto hay vigente y cuánto vencido.
+- Rutas (`farmacia/routes.ts`): `GET /api/rubro/vencimientos?days=` (inventario o movimientos) y
+  `GET /api/rubro/controlados?from=&to=` (solo el administrador). En otros rubros no existen (404).
 
 ## Sumar un rubro
 

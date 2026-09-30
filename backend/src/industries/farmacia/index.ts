@@ -1,5 +1,5 @@
 // Paquete de farmacia: registro sanitario y receta en los productos, lotes con vencimiento en el stock, y
-// ventas que piden receta y no toman lo vencido.
+// ventas que piden receta y no toman lo vencido. Sus pantallas (vencimientos, libro de controlados): routes.ts.
 import type { IndustryPackage } from '../hooks.ts';
 import { stockEntry } from './lots.ts';
 import { pharmacySale } from './prescription.ts';

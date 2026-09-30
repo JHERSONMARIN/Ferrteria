@@ -34,7 +34,8 @@ src/
 - **Imports**: con la extensión (`./cart.ts`, `./PosPage.tsx`).
 - `npm run typecheck` verifica los tipos (también corre en `npm test` desde la raíz). La imagen se
   construye desde la raíz del repositorio para incluir los contratos (ver `Dockerfile.dockerignore`).
-- **Rubro**: las palabras que dependen del rubro ("ferretería", "productos"…) salen de `useVocabulary()`
-  (`shared/industry/`), que las toma de la configuración; no se escriben a mano. Las pantallas propias de
-  un rubro (control de vencimientos en farmacia) se agregan cuando exista el primero: se muestran según el
-  `industry` que devuelve `/api/settings`.
+- **Rubro**: `src/industries/` tiene lo que cada rubro agrega a las pantallas (`INDUSTRY_UI` en su
+  `index.ts`): campos del producto, de una entrada de stock y de una venta, el ícono y quién ve sus
+  pantallas propias. Las palabras que dependen del rubro ("ferretería", "productos"…) salen de
+  `useVocabulary()`; no se escriben a mano. Una pantalla de rubro se registra en `app/screens.ts` con su
+  `industry` y su página vive en `industries/<rubro>/`.
