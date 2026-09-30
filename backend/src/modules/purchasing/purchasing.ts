@@ -6,7 +6,7 @@ import { resolveBranchId } from '../branches/index.ts';
 import { quantityProblem, roundMoney } from '../../utils/quantities.ts';
 import type { SessionUser } from '../../types/express.d.ts';
 import { addStock } from '../inventory/index.ts';
-import { industryHooks } from '../../industries/index.ts';
+import { industryHooks, parseStockEntryData, type IndustryData } from '../../industries/index.ts';
 
 type Client = typeof prisma;
 
@@ -52,7 +52,7 @@ export async function listPurchases(client: Client) {
 export interface PurchaseInput {
   proveedorId: number;
   numDoc: string;
-  items: { id: number; qty: number; cost: number; name?: string }[];
+  items: { id: number; qty: number; cost: number; name?: string; industryData?: unknown }[];
   branchId?: number;
 }
 
@@ -66,7 +66,7 @@ export async function registerPurchase(client: Client, input: PurchaseInput, use
     const supplier = await tx.proveedor.findUnique({ where: { id: input.proveedorId }, select: { id: true } });
     if (!supplier) throw new PurchaseError('El proveedor no existe.', 404);
 
-    const lines: { id: number; qty: number; cost: number; subtotal: number }[] = [];
+    const lines: { id: number; qty: number; cost: number; subtotal: number; data?: IndustryData }[] = [];
     for (const item of input.items) {
       const product = await tx.producto.findUnique({
         where: { id: item.id },
@@ -76,7 +76,8 @@ export async function registerPurchase(client: Client, input: PurchaseInput, use
       const problem = quantityProblem(item.qty, product.allowsFractions);
       if (problem) throw new PurchaseError(`La cantidad de ${product.name} ${problem}.`);
       if (!Number.isFinite(item.cost) || item.cost < 0) throw new PurchaseError(`El costo de ${product.name} no es válido.`);
-      lines.push({ id: product.id, qty: item.qty, cost: item.cost, subtotal: roundMoney(item.qty * item.cost) });
+      const data = parseStockEntryData(item.industryData);
+      lines.push({ id: product.id, qty: item.qty, cost: item.cost, subtotal: roundMoney(item.qty * item.cost), data });
     }
 
     const purchase = await tx.compra.create({
@@ -92,7 +93,7 @@ export async function registerPurchase(client: Client, input: PurchaseInput, use
         data: { productoId: line.id, type: 'ENTRADA', qty: line.qty, stockAfter, ref, usuarioId: user.id, branchId },
       });
       await industryHooks.onStockMovement(tx, {
-        direction: 'in', source: 'purchase', productId: line.id, qty: line.qty, branchId, ref, userId: user.id,
+        direction: 'in', source: 'purchase', productId: line.id, qty: line.qty, branchId, stockAfter, ref, userId: user.id, data: line.data,
       });
     }
     return purchase;

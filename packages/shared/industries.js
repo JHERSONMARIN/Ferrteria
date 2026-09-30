@@ -3,6 +3,7 @@
 // (variable INDUSTRY). Lo leen el backend de las empresas, la consola de VALETEC y deploy/.
 export const INDUSTRIES = {
   ferreteria: { nombre: 'Ferretería' },
+  farmacia: { nombre: 'Farmacia' },
 };
 
 // Empresas creadas antes de los rubros, o sin la variable: ferretería.

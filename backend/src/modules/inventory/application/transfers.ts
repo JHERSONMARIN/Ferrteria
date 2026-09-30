@@ -89,8 +89,10 @@ export async function createTransfer(client: Client, input: TransferInput, user:
         ],
       });
       const movement = { source: 'transfer', productId: item.id, qty: item.qty, userId: user.id } as const;
-      await industryHooks.onStockMovement(tx, { ...movement, direction: 'out', branchId: fromBranchId, ref: `${number} a ${to.name}` });
-      await industryHooks.onStockMovement(tx, { ...movement, direction: 'in', branchId: toBranchId, ref: `${number} desde ${from.name}` });
+      await industryHooks.onStockMovement(tx, { ...movement, direction: 'out', branchId: fromBranchId, stockAfter: originAfter, ref: `${number} a ${to.name}` });
+      await industryHooks.onStockMovement(tx, {
+        ...movement, direction: 'in', branchId: toBranchId, stockAfter: destinationAfter, ref: `${number} desde ${from.name}`,
+      });
     }
 
     const describe = (id: number) => {

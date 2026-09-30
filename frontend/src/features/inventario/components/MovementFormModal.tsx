@@ -7,6 +7,7 @@ import FieldError from '../../../shared/ui/FieldError.tsx';
 import { useToast } from '../../../shared/ui/index.ts';
 import { borderClass } from '../../../shared/utils/validators.ts';
 import { quantityProblem, roundQuantity, formatQuantity } from '../../../shared/utils/quantities.ts';
+import { useIndustryUi } from '../../../industries/index.ts';
 
 const COMMON_REASONS: Record<MovementType, string[]> = {
   ENTRADA: [
@@ -25,7 +26,7 @@ const COMMON_REASONS: Record<MovementType, string[]> = {
   ],
 };
 
-type Errors = { producto?: string; qty?: string };
+type Errors = { producto?: string; qty?: string; industry?: string };
 
 interface Props {
   products: readonly Product[];
@@ -42,6 +43,10 @@ export default function MovementFormModal({ products, onClose, onSaved }: Props)
   const [qty, setQty] = useState('1');
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+  // Farmacia: un ingreso entra a un lote (una salida la reparte el servidor, primero lo que vence antes).
+  const { stockEntry } = useIndustryUi();
+  const [entryData, setEntryData] = useState<Record<string, unknown>>({});
+  const entryFields = type === 'ENTRADA' ? stockEntry : undefined;
 
   const clearError = (field: keyof Errors) => setErrors((prev) => ({ ...prev, [field]: '' }));
 
@@ -58,6 +63,8 @@ export default function MovementFormModal({ products, onClose, onSaved }: Props)
     else if (type === 'SALIDA' && prod && qtyNum > available) {
       e.qty = `Stock insuficiente. Disponible: ${formatQuantity(available)}${prod.reserved > 0 ? ' (el resto está reservado para pedidos)' : ''}.`;
     }
+    const industryProblem = entryFields?.problem(entryData);
+    if (industryProblem) e.industry = industryProblem;
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -79,6 +86,7 @@ export default function MovementFormModal({ products, onClose, onSaved }: Props)
         type,
         qty: Number(qty),
         ref: fullRef,
+        ...(entryFields ? { industryData: entryData } : {}),
       } satisfies ManualMovementRequest);
       onSaved();
     } catch (err) {
@@ -161,6 +169,13 @@ export default function MovementFormModal({ products, onClose, onSaved }: Props)
               <FieldError msg={errors.qty} />
             </div>
           </div>
+
+          {entryFields && (
+            <div>
+              <entryFields.Fields value={entryData} onChange={value => { setEntryData(value); clearError('industry'); }} />
+              <FieldError msg={errors.industry} />
+            </div>
+          )}
 
           {/* Motivo Predefinido */}
           <div>

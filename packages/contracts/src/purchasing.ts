@@ -34,7 +34,8 @@ export interface Purchase {
 export interface PurchaseRequest {
   proveedorId: number;
   numDoc: string;
-  items: { id: number; qty: number; cost: number; name?: string; code?: string }[];
+  /** industryData: datos del rubro de la línea (farmacia: lotNumber y expiresAt). */
+  items: { id: number; qty: number; cost: number; name?: string; code?: string; industryData?: Record<string, unknown> }[];
 }
 
 export interface PurchaseSaved {

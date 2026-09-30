@@ -12,7 +12,7 @@ const sale: SaleContext = {
   kind: 'direct', branchId: 1, customerId: null, user: {} as SaleContext['user'],
   lines: [{ productId: 7, unitId: null, qty: 2, baseQty: 2, name: 'Paracetamol' }],
 };
-const movement: StockMovement = { direction: 'in', source: 'purchase', productId: 7, qty: 10, branchId: 1, ref: 'Compra', userId: 1 };
+const movement: StockMovement = { direction: 'in', source: 'purchase', productId: 7, qty: 10, branchId: 1, stockAfter: 10, ref: 'Compra', userId: 1 };
 
 test('un paquete sin enganches no cambia nada', async () => {
   const hooks = hooksFor({ id: 'vacio', hooks: {}, vocabulary });

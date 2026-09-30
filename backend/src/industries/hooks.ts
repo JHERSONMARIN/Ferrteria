@@ -3,7 +3,9 @@
 // rechazarlo (lanzando un AppError con un mensaje para el usuario) o guardar sus propios datos. No cambia
 // precios, cantidades ni estados: si un rubro necesita eso, la regla es del núcleo y se configura allí.
 import type { Tx } from '../db.ts';
+import type { Router } from 'express';
 import type { z } from 'zod';
+import type { allowModules } from '../modules/identity/index.ts';
 import type { Vocabulary } from '@ferresys/contracts/settings';
 import type { SessionUser } from '../types/express.d.ts';
 
@@ -23,6 +25,8 @@ export interface SaleContext {
   customerId: number | null;
   lines: readonly SaleLine[];
   user: SessionUser;
+  /** Datos del rubro de la venta (la receta), ya validados con fields.sale. Se guardan en la venta. */
+  data?: IndustryData;
 }
 
 /** Un cambio del stock físico de una sucursal (las reservas no lo son). qty, en la unidad del stock. */
@@ -32,9 +36,13 @@ export interface StockMovement {
   productId: number;
   qty: number;
   branchId: number;
+  /** Stock de la sucursal después del movimiento. */
+  stockAfter: number;
   /** Texto del kardex: "Compra a Proveedor (Doc: F001-12)", "Venta B001-00000045"… */
   ref: string;
   userId: number | null;
+  /** Datos del rubro que vinieron en la línea (el lote de una compra), ya validados con fields.stockEntry. */
+  data?: IndustryData;
 }
 
 export interface IndustryHooks {
@@ -47,6 +55,13 @@ export interface IndustryHooks {
 /** Datos propios del rubro en una entidad del núcleo; se guardan en su columna industryData. */
 export type IndustryData = Record<string, unknown>;
 
+/** Una ruta propia del paquete (http.ts): se monta en /api/rubro/<path>, con los mismos permisos que el resto. */
+export interface IndustryRoute {
+  path: string;
+  access: Parameters<typeof allowModules>[0];
+  router: Router;
+}
+
 // Un paquete aporta, además de sus enganches, las palabras con que las pantallas nombran las cosas y
 // los campos que agrega a las entidades del núcleo (con su esquema, que también da los mensajes de error).
 export interface IndustryPackage {
@@ -55,5 +70,9 @@ export interface IndustryPackage {
   vocabulary: Vocabulary;
   fields?: {
     product?: z.ZodType<IndustryData>;
+    /** Datos de una línea que entra al stock (compra o ingreso manual). */
+    stockEntry?: z.ZodType<IndustryData>;
+    /** Datos de una venta o pedido. */
+    sale?: z.ZodType<IndustryData>;
   };
 }

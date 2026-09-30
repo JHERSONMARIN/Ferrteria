@@ -42,6 +42,8 @@ const MovementBody = z.object({
   qty: z.coerce.number({ error: INVALID_MOVEMENT }).positive({ error: INVALID_MOVEMENT }),
   ref: z.string().optional(),
   branchId: optionalId('Sucursal no válida.'),
+  // Datos del rubro de un ingreso (farmacia: lote y vencimiento); los valida su paquete.
+  industryData: z.unknown().optional(),
 });
 
 export const kardexRoutes = express.Router();

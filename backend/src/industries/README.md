@@ -9,6 +9,7 @@ industries/
   hooks.ts        Los puntos de enganche: qué puede hacer un paquete y con qué datos.
   registry.ts     Un paquete por rubro y cómo los llama el núcleo.
   index.ts        El paquete de esta empresa. Es lo único que importan los módulos.
+  http.ts         Rutas propias de cada rubro (/api/rubro/...). Solo lo importa server.ts.
   ferreteria/     El paquete de ferretería.
 ```
 
@@ -39,8 +40,28 @@ esquema Zod en `fields.product`, y el núcleo lo valida al crear o editar (`pars
 como en ferretería, solo se acepta vacío (`RUBRO_DATOS_INVALIDOS`): nada se guarda sin que el paquete lo
 haya validado.
 
+Una línea que entra al stock (compra o ingreso manual) también puede traer datos del rubro: el paquete
+los valida con `fields.stockEntry` y llegan a `onStockMovement` en `movement.data`.
+
 Lo que tiene varias filas por producto (los lotes de farmacia, con su cantidad y vencimiento) no es un
-campo: el paquete trae sus propias tablas y las llena desde `onStockMovement`.
+campo: el paquete trae sus propias tablas (sección del paquete al final de `prisma/schema.prisma`) y las
+llena desde `onStockMovement`.
+
+## Farmacia
+
+- Productos: registro sanitario, principio activo, laboratorio, «requiere receta» y «controlado» (un
+  controlado siempre pide receta).
+- Lotes (`farmacia_lotes`): solo los identificados. Lo que no tiene lote es el stock de la sucursal menos la
+  suma de sus lotes, así el stock inicial y las importaciones no descuadran nada.
+- Salidas: primero lo que vence antes (FEFO) y al final lo que no tiene lote. Una venta no toma lotes
+  vencidos (`FARMACIA_STOCK_VENCIDO`); una salida manual o una transferencia sí, empezando por lo vencido.
+  Una transferencia lleva los mismos lotes a la sucursal de destino.
+- Ventas (`beforeSale`): si el carrito tiene productos con receta pide el número; con un controlado, también
+  el médico (con su CMP) y el paciente (`FARMACIA_RECETA`). La receta queda en `ventas.industryData`, de
+  donde sale el libro de controlados. Lo vencido no cuenta como disponible: si no alcanza lo vigente, la
+  venta o el pedido se rechaza diciendo cuánto hay vigente y cuánto vencido.
+- Rutas (`farmacia/routes.ts`): `GET /api/rubro/vencimientos?days=` (inventario o movimientos) y
+  `GET /api/rubro/controlados?from=&to=` (solo el administrador). En otros rubros no existen (404).
 
 ## Sumar un rubro
 

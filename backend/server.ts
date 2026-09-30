@@ -14,7 +14,7 @@ import { settingsRoutes } from './src/modules/settings/index.ts';
 import { auditRoutes as auditoriaRoutes } from './src/modules/audit/index.ts';
 import { prisma } from './src/db.js';
 import { ensureBranchStockRows, kardexRoutes, transferRoutes as transferenciasRoutes } from './src/modules/inventory/index.ts';
-import { licenseStatus, readOnlyWhenExpired } from './src/modules/licensing/index.ts';
+import { INDUSTRY, licenseStatus, readOnlyWhenExpired } from './src/modules/licensing/index.ts';
 import { branchRoutes as sucursalesRoutes } from './src/modules/branches/index.ts';
 import {
   expireOrders, initializeDocumentSeries, orderRoutes as pedidosRoutes, quoteRoutes as cotizacionesRoutes,
@@ -26,6 +26,7 @@ import {
 import { APP_VERSION, APP_COMMIT, APP_BUILT_AT, versionLabel } from './src/config/version.ts';
 import type { Sendable } from '@ferresys/contracts/common';
 import type { AppInfo } from '@ferresys/contracts/app';
+import { industryRoutes } from './src/industries/http.ts';
 
 dotenv.config();
 
@@ -91,6 +92,7 @@ app.get('/api/app-info', async (req, res) => {
     quickLogin: QUICK_LOGIN_USERS,
     business,
     version: { number: APP_VERSION, commit: APP_COMMIT },
+    industry: INDUSTRY,
   } satisfies Sendable<AppInfo>);
 });
 
@@ -130,6 +132,11 @@ app.use('/api/proveedores', allowModules({ default: ['compras'] }), proveedoresR
 app.use('/api/compras', allowModules({ default: ['compras'] }), comprasRoutes);
 // Permisos por acción dentro del router (crear: POS, cobrar: caja, despachar: despacho).
 app.use('/api/pedidos', pedidosRoutes);
+
+// Rutas propias del paquete de rubro de la empresa (farmacia: vencimientos y libro de controlados).
+for (const route of industryRoutes) {
+  app.use(`/api/rubro/${route.path}`, allowModules(route.access), route.router);
+}
 
 // Cualquier otra ruta de la API
 app.use('/api', (req, res) => res.status(404).json({ error: 'Recurso no encontrado.' }));

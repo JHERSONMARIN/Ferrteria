@@ -22,6 +22,7 @@ import LoginScreen from './LoginScreen.tsx';
 import { SCREENS, firstScreen, isScreenId, screenFromPath, type ScreenId } from './screens.ts';
 import { useSession } from './useSession.ts';
 import { useBranches, useSettings } from '../api/queries.ts';
+import { useIndustryUi } from '../industries/index.ts';
 
 // Todo lo que App entrega a las pantallas. Cada una declara lo que usa; TypeScript comprueba que
 // App le da eso con el tipo correcto.
@@ -65,6 +66,8 @@ const PAGES = {
   transfers: page(() => import('../features/inventario/TransferenciasPage.tsx')),
   cobros: page(() => import('../features/ventas/CashierQueuePage.tsx')),
   despacho: page(() => import('../features/ventas/DispatchQueuePage.tsx')),
+  vencimientos: page(() => import('../industries/farmacia/VencimientosPage.tsx')),
+  controlados: page(() => import('../industries/farmacia/ControladosPage.tsx')),
 } satisfies Record<ScreenId, unknown>;
 
 const COUNTS_INTERVAL_MS = 20000;
@@ -139,6 +142,8 @@ function Aplicacion() {
 
   const isAdmin = currentUser?.role === 'ADMINISTRADOR';
   const hasFeature = useCallback((feature: string) => !licensedFeatures || licensedFeatures.includes(feature), [licensedFeatures]);
+  // Lo que agrega el rubro de la empresa (pantallas propias, campos…).
+  const industryUi = useIndustryUi();
   // El modo de trabajo es de la sucursal del usuario.
   const saleFlowMode = currentUser?.branch?.saleFlowMode || 'DIRECT';
   // El envío a domicilio se ofrece si la empresa usa (y tiene contratado) Entregas y la sucursal los tiene activados.
@@ -158,9 +163,13 @@ function Aplicacion() {
     // Transferencias: solo con más de una sucursal, para quien maneja inventario o kardex.
     if (branchCount > 1 && (effectiveModules.includes('inventory') || effectiveModules.includes('kardex'))) tabs.push('transfers');
     if (isAdmin && hasFeature('audit')) tabs.push('audit');
+    // Pantallas del rubro de la empresa (farmacia: vencimientos y libro de controlados).
+    for (const extra of industryUi.screens ?? []) {
+      if (extra.access === 'admin' ? isAdmin : extra.access.some(m => effectiveModules.includes(m))) tabs.push(extra.id);
+    }
     if (isAdmin) tabs.push('settings');
     return tabs.filter(isScreenId);
-  }, [effectiveModules, isAdmin, saleFlowMode, branchCount, hasFeature, dispatchNeeded, canDispatchHere]);
+  }, [effectiveModules, isAdmin, saleFlowMode, branchCount, hasFeature, dispatchNeeded, canDispatchHere, industryUi]);
 
   // Pendientes que se muestran en el menú: así se sabe si hay trabajo sin entrar a la pantalla.
   const verCobros = navigableTabs.includes('cobros');
@@ -341,9 +350,9 @@ function Aplicacion() {
   );
 }
 
-// Configuración y Auditoría son solo del administrador, aunque alguien escriba su dirección.
+// Configuración, Auditoría y el libro de controlados son solo del administrador, aunque alguien escriba su dirección.
 function Screen({ tab, props, isAdmin }: { tab: ScreenId; props: ScreenProps; isAdmin: boolean }) {
-  if ((tab === 'settings' || tab === 'audit') && !isAdmin) return null;
+  if ((tab === 'settings' || tab === 'audit' || tab === 'controlados') && !isAdmin) return null;
   const Page = PAGES[tab];
   return <Page {...props} />;
 }

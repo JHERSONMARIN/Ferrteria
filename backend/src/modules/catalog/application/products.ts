@@ -133,7 +133,8 @@ export async function createProduct(client: Client, input: Record<string, unknow
   const unit = text(input.unit) || 'Unidad';
   const category = text(input.category) || 'General';
   const saleUnits = parseSaleUnits(input.saleUnits, unit);
-  const industryData = parseProductData(input.industryData) ?? {};
+  // Al crear se valida siempre: el paquete completa sus valores por defecto aunque no vengan datos.
+  const industryData = parseProductData(input.industryData ?? {}) ?? {};
   await assertUnitCodesFree(client, saleUnits);
   await assertProductCodeFree(client, code);
   const categoriaId = await categoryIdFor(client, input.categoriaId, category);

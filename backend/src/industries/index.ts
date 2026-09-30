@@ -16,3 +16,5 @@ export const industryDataOf = (value: unknown): IndustryData =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? value as IndustryData : {};
 
 export const parseProductData = (raw: unknown) => parseIndustryData(industryPackage, 'product', raw);
+export const parseStockEntryData = (raw: unknown) => parseIndustryData(industryPackage, 'stockEntry', raw);
+export const parseSaleData = (raw: unknown) => parseIndustryData(industryPackage, 'sale', raw);

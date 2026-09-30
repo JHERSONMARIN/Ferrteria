@@ -31,6 +31,8 @@ const PurchaseBody = z.object({
     qty: z.coerce.number({ error: 'Cantidad inválida.' }),
     cost: z.coerce.number({ error: 'Costo inválido.' }),
     name: z.string().optional(),
+    // Datos del rubro de la línea (farmacia: lote y vencimiento); los valida su paquete.
+    industryData: z.unknown().optional(),
   }), { error: REQUIRED }).min(1, { error: REQUIRED }),
   branchId: optionalId('Sucursal no válida.'),
 });

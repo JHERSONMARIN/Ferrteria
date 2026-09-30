@@ -7,6 +7,7 @@ import { useToast } from '../../../shared/ui/index.ts';
 import BarcodeScannerModal from '../../../shared/scanner/BarcodeScannerModal.tsx';
 import { borderClass } from '../../../shared/utils/validators.ts';
 import { quantityProblem, FRACTIONAL_UNITS } from '../../../shared/utils/quantities.ts';
+import { useIndustryUi } from '../../../industries/index.ts';
 import SaleUnitsEditor, {
   toSaleUnitRow, toSaleUnitPayload, validateSaleUnits, type SaleUnitErrors, type SaleUnitRow,
 } from './SaleUnitsEditor.tsx';
@@ -42,6 +43,9 @@ export default function ProductFormModal({ product, initialCategory, categoryOpt
   const [productErrors, setProductErrors] = useState<Errors>({});
   const [saleUnits, setSaleUnits] = useState<SaleUnitRow[]>(() => (product?.saleUnits ?? []).map(toSaleUnitRow));
   const [saleUnitErrors, setSaleUnitErrors] = useState<SaleUnitErrors>({});
+  // Campos del rubro de la empresa (farmacia: registro sanitario, receta…); ferretería no tiene.
+  const { ProductFields } = useIndustryUi();
+  const [industryData, setIndustryData] = useState<Record<string, unknown>>(product?.industryData ?? {});
   // Escáner abierto: guarda a qué campo va el código leído.
   const [scanTarget, setScanTarget] = useState<((code: string) => void) | null>(null);
 
@@ -96,6 +100,7 @@ export default function ProductFormModal({ product, initialCategory, categoryOpt
       price: parseFloat(price),
       wholesalePrice: wholesalePrice === '' ? null : parseFloat(wholesalePrice),
       saleUnits: saleUnits.map(toSaleUnitPayload),
+      ...(ProductFields ? { industryData } : {}),
     };
     try {
       setSaving(true);
@@ -292,6 +297,8 @@ export default function ProductFormModal({ product, initialCategory, categoryOpt
               <FieldError msg={productErrors.wholesalePrice} />
             </div>
           </div>
+
+          {ProductFields && <ProductFields value={industryData} onChange={setIndustryData} />}
 
           <SaleUnitsEditor
             rows={saleUnits}
