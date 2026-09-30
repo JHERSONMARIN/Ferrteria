@@ -1,7 +1,7 @@
 // Kardex: historial de movimientos de stock y ajustes manuales (entradas, mermas, conteos).
 import type { prisma } from '../../../db.ts';
 import { recordAudit } from '../../audit/index.ts';
-import { industryHooks } from '../../../industries/index.ts';
+import { industryHooks, parseStockEntryData } from '../../../industries/index.ts';
 import { resolveBranchId } from '../../branches/index.ts';
 import { quantityProblem } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
@@ -68,12 +68,15 @@ export interface ManualMovement {
   type: MovementType;
   qty: number;
   ref?: string;
+  industryData?: unknown;
   branchId?: number;
 }
 
 // Lo reservado por pedidos no se puede sacar a mano: la salida solo toma del disponible.
 export async function recordManualMovement(client: Client, input: ManualMovement, user: SessionUser) {
   const branchId: number = await resolveBranchId(client, user, input.branchId);
+  // Solo un ingreso trae datos del rubro (el lote que entra); una salida la reparte el paquete.
+  const data = input.type === 'ENTRADA' ? parseStockEntryData(input.industryData) : undefined;
   return client.$transaction(async (tx) => {
     const product = await tx.producto.findUnique({ where: { id: input.productoId } });
     if (!product) throw new StockError('Producto no encontrado.', 404);
@@ -99,7 +102,7 @@ export async function recordManualMovement(client: Client, input: ManualMovement
 
     await industryHooks.onStockMovement(tx, {
       direction: input.type === 'ENTRADA' ? 'in' : 'out', source: 'manual', productId: product.id, qty: input.qty, branchId,
-      ref: km.ref, userId: user.id,
+      stockAfter: newStock, ref: km.ref, userId: user.id, data,
     });
 
     await recordAudit(tx, {

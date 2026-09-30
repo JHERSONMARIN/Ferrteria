@@ -1,10 +1,12 @@
-// Paquete de farmacia: registro sanitario y receta en los productos.
+// Paquete de farmacia: registro sanitario y receta en los productos, y lotes con vencimiento en el stock.
 import type { IndustryPackage } from '../hooks.ts';
+import { stockEntry } from './lots.ts';
 import { pharmacyProduct } from './product.ts';
+import { onStockMovement } from './stock.ts';
 
 export const farmacia: IndustryPackage = {
   id: 'farmacia',
-  hooks: {},
+  hooks: { onStockMovement },
   vocabulary: {
     business: 'farmacia',
     businesses: 'farmacias',
@@ -14,5 +16,6 @@ export const farmacia: IndustryPackage = {
   },
   fields: {
     product: pharmacyProduct,
+    stockEntry,
   },
 };

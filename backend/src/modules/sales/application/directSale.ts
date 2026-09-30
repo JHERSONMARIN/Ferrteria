@@ -96,7 +96,7 @@ async function executeSale(tx: Tx, data: SaleData) {
     const ref = data.quoteId ? `Venta ${numDoc} (por cotización)` : `Venta ${numDoc}`;
     await repo.writeKardexExit(tx, { productId: line.id, qty: line.baseQty, stockAfter, ref, userId: data.sellerId, branchId: data.user.branchId });
     await industryHooks.onStockMovement(tx, {
-      direction: 'out', source: 'sale', productId: line.id, qty: line.baseQty, branchId: data.user.branchId, ref, userId: data.sellerId,
+      direction: 'out', source: 'sale', productId: line.id, qty: line.baseQty, branchId: data.user.branchId, stockAfter, ref, userId: data.sellerId,
     });
   }
 

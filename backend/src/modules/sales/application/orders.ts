@@ -78,7 +78,7 @@ async function dispatchLines(tx: Tx, order: OrderRow, numDoc: string | null, use
     const ref = `Venta ${numDoc} (despacho)`;
     await repo.writeKardexExit(tx, { productId: line.id, qty: line.baseQty, stockAfter, ref, userId, branchId: order.branchId });
     await industryHooks.onStockMovement(tx, {
-      direction: 'out', source: 'sale', productId: line.id, qty: line.baseQty, branchId: order.branchId, ref, userId,
+      direction: 'out', source: 'sale', productId: line.id, qty: line.baseQty, branchId: order.branchId, stockAfter, ref, userId,
     });
   }
 }

@@ -7,6 +7,7 @@ import FieldError from '../../../shared/ui/FieldError.tsx';
 import { useToast } from '../../../shared/ui/index.ts';
 import { borderClass } from '../../../shared/utils/validators.ts';
 import { quantityProblem, roundQuantity } from '../../../shared/utils/quantities.ts';
+import { useIndustryUi } from '../../../industries/index.ts';
 
 interface CartItem {
   id: number;
@@ -14,10 +15,12 @@ interface CartItem {
   code: string;
   qty: number;
   cost: number;
+  /** Datos del rubro de la línea (farmacia: lote y vencimiento). */
+  industryData?: Record<string, unknown>;
 }
 
 type CompraErrors = { proveedor?: string; numDoc?: string; cart?: string };
-type ItemErrors = { product?: string; qty?: string; cost?: string };
+type ItemErrors = { product?: string; qty?: string; cost?: string; industry?: string };
 
 interface Props {
   proveedores: readonly Supplier[];
@@ -37,6 +40,11 @@ export default function PurchaseFormModal({ proveedores, productos, onClose, onS
   const [compraErrors, setCompraErrors] = useState<CompraErrors>({});
   const [itemErrors, setItemErrors] = useState<ItemErrors>({});
   const [saving, setSaving] = useState(false);
+  // Farmacia: cada línea entra a un lote. El mismo producto en otro lote es otra línea.
+  const { stockEntry } = useIndustryUi();
+  const [lineData, setLineData] = useState<Record<string, unknown>>({});
+  const sameLine = (item: CartItem, id: number) =>
+    item.id === id && JSON.stringify(item.industryData ?? {}) === JSON.stringify(stockEntry ? lineData : {});
 
   const clearCompraError = (f: keyof CompraErrors) => setCompraErrors(p => ({ ...p, [f]: '' }));
   const clearItemError = (f: keyof ItemErrors) => setItemErrors(p => ({ ...p, [f]: '' }));
@@ -70,26 +78,28 @@ export default function PurchaseFormModal({ proveedores, productos, onClose, onS
     const problem = prod ? quantityProblem(qty, prod.allowsFractions) : null;
     if (productQty === '' || Number.isNaN(qty)) e.qty = 'Ingrese la cantidad.';
     else if (problem) e.qty = `La cantidad ${problem}.`;
+    const industryProblem = stockEntry?.problem(lineData);
+    if (industryProblem) e.industry = industryProblem;
 
     setItemErrors(e);
     if (Object.keys(e).length > 0 || !prod) return;
 
     setCompraErrors(p => ({ ...p, cart: '' }));
     setCompraCart(prev => {
-      const exist = prev.find(item => item.id === prod.id);
-      if (exist) {
-        return prev.map(item => item.id === prod.id ? { ...item, qty: roundQuantity(item.qty + qty), cost } : item);
+      if (prev.some(item => sameLine(item, prod.id))) {
+        return prev.map(item => sameLine(item, prod.id) ? { ...item, qty: roundQuantity(item.qty + qty), cost } : item);
       }
-      return [...prev, { id: prod.id, name: prod.name, code: prod.code, qty, cost }];
+      return [...prev, { id: prod.id, name: prod.name, code: prod.code, qty, cost, ...(stockEntry ? { industryData: lineData } : {}) }];
     });
+    setLineData({});
 
     setProductInput('');
     setProductQty('1');
     setProductCost('');
   };
 
-  const handleRemoveCompraItem = (id: number) => {
-    setCompraCart(prev => prev.filter(i => i.id !== id));
+  const handleRemoveCompraItem = (index: number) => {
+    setCompraCart(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSaveCompra = async () => {
@@ -197,6 +207,12 @@ export default function PurchaseFormModal({ proveedores, productos, onClose, onS
               Agregar
             </button>
           </div>
+          {stockEntry && (
+            <div className="mt-2 max-w-md">
+              <stockEntry.Fields value={lineData} onChange={value => { setLineData(value); clearItemError('industry'); }} />
+              <FieldError msg={itemErrors.industry} />
+            </div>
+          )}
           <FieldError msg={compraErrors.cart} />
         </div>
 
@@ -206,6 +222,7 @@ export default function PurchaseFormModal({ proveedores, productos, onClose, onS
               <tr>
                 <th className="px-3 py-2">Código</th>
                 <th className="px-3 py-2">Producto</th>
+                {stockEntry && <th className="px-3 py-2">{stockEntry.label}</th>}
                 <th className="px-3 py-2">Cant.</th>
                 <th className="px-3 py-2 text-right">Costo U.</th>
                 <th className="px-3 py-2 text-right">Subtotal</th>
@@ -213,15 +230,16 @@ export default function PurchaseFormModal({ proveedores, productos, onClose, onS
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-line">
-              {compraCart.map(item => (
-                <tr key={item.id}>
+              {compraCart.map((item, index) => (
+                <tr key={`${item.id}-${index}`}>
                   <td className="px-3 py-2 font-mono text-xs">{item.code}</td>
                   <td className="px-3 py-2 font-semibold">{item.name}</td>
+                  {stockEntry && <td className="px-3 py-2 text-xs">{stockEntry.describe(item.industryData ?? {})}</td>}
                   <td className="px-3 py-2 font-bold">{item.qty}</td>
                   <td className="px-3 py-2 text-right">S/ {item.cost.toFixed(2)}</td>
                   <td className="px-3 py-2 text-right font-bold">S/ {(item.qty * item.cost).toFixed(2)}</td>
                   <td className="px-3 py-2">
-                    <button onClick={() => handleRemoveCompraItem(item.id)} className="text-danger hover:text-danger">
+                    <button onClick={() => handleRemoveCompraItem(index)} className="text-danger hover:text-danger">
                       <i className="fa-solid fa-trash"></i>
                     </button>
                   </td>

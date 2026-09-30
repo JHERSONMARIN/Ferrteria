@@ -35,6 +35,8 @@ export interface ManualMovementRequest {
   type: MovementType;
   qty: number;
   ref: string;
+  /** Datos del rubro de un ingreso (farmacia: lotNumber y expiresAt). */
+  industryData?: Record<string, unknown>;
 }
 
 export interface ManualMovementSaved {

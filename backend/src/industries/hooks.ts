@@ -32,9 +32,13 @@ export interface StockMovement {
   productId: number;
   qty: number;
   branchId: number;
+  /** Stock de la sucursal después del movimiento. */
+  stockAfter: number;
   /** Texto del kardex: "Compra a Proveedor (Doc: F001-12)", "Venta B001-00000045"… */
   ref: string;
   userId: number | null;
+  /** Datos del rubro que vinieron en la línea (el lote de una compra), ya validados con fields.stockEntry. */
+  data?: IndustryData;
 }
 
 export interface IndustryHooks {
@@ -55,5 +59,7 @@ export interface IndustryPackage {
   vocabulary: Vocabulary;
   fields?: {
     product?: z.ZodType<IndustryData>;
+    /** Datos de una línea que entra al stock (compra o ingreso manual). */
+    stockEntry?: z.ZodType<IndustryData>;
   };
 }

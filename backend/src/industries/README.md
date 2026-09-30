@@ -39,8 +39,22 @@ esquema Zod en `fields.product`, y el núcleo lo valida al crear o editar (`pars
 como en ferretería, solo se acepta vacío (`RUBRO_DATOS_INVALIDOS`): nada se guarda sin que el paquete lo
 haya validado.
 
+Una línea que entra al stock (compra o ingreso manual) también puede traer datos del rubro: el paquete
+los valida con `fields.stockEntry` y llegan a `onStockMovement` en `movement.data`.
+
 Lo que tiene varias filas por producto (los lotes de farmacia, con su cantidad y vencimiento) no es un
-campo: el paquete trae sus propias tablas y las llena desde `onStockMovement`.
+campo: el paquete trae sus propias tablas (sección del paquete al final de `prisma/schema.prisma`) y las
+llena desde `onStockMovement`.
+
+## Farmacia
+
+- Productos: registro sanitario, principio activo, laboratorio, «requiere receta» y «controlado» (un
+  controlado siempre pide receta).
+- Lotes (`farmacia_lotes`): solo los identificados. Lo que no tiene lote es el stock de la sucursal menos la
+  suma de sus lotes, así el stock inicial y las importaciones no descuadran nada.
+- Salidas: primero lo que vence antes (FEFO) y al final lo que no tiene lote. Una venta no toma lotes
+  vencidos (`FARMACIA_STOCK_VENCIDO`); una salida manual o una transferencia sí, empezando por lo vencido.
+  Una transferencia lleva los mismos lotes a la sucursal de destino.
 
 ## Sumar un rubro
 

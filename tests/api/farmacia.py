@@ -44,5 +44,56 @@ st, r = admin.api("PUT", f"/productos/{PARA}", {**base, "industryData": {"sanita
 verificar("Editarlos los reemplaza", st == 200 and r.get("industryData") == {"sanitaryRegistration": "EE-09999", "requiresPrescription": True,
                                                                            "controlled": False}, (st, r))
 
+
+print("\n=== Lotes ===")
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+hoy = datetime.now(ZoneInfo("America/Lima")).date()
+dia = lambda dias: (hoy + timedelta(days=dias)).isoformat()
+
+
+def lotes(code, branch_id=1):
+    filas = sql(f"select l.\"lotNumber\" || ':' || l.quantity::float from farmacia_lotes l join productos p on p.id = l.\"productoId\" "
+                f"where p.code = '{code}' and l.\"branchId\" = {branch_id} and l.quantity > 0 order by l.\"expiresAt\"")
+    return [f for f in filas.split("\n") if f]
+
+
+PROV = admin.api("POST", "/proveedores", {"ruc": "20100000009", "name": "Droguería Lima"})[1]["id"]
+st, r = admin.api("POST", "/compras", {"proveedorId": PROV, "numDoc": "F001-1", "items": [
+    {"id": PARA, "qty": 20, "cost": 0.2, "industryData": {"lotNumber": "A", "expiresAt": dia(60)}},
+    {"id": PARA, "qty": 10, "cost": 0.2, "industryData": {"lotNumber": "B", "expiresAt": dia(300)}},
+]})
+verificar("Una compra registra cada línea en su lote", st == 201 and lotes("PARA500") == ["A:20", "B:10"], (st, r, lotes("PARA500")))
+st, r = admin.api("POST", "/compras", {"proveedorId": PROV, "numDoc": "F001-2", "items": [
+    {"id": PARA, "qty": 5, "cost": 0.2, "industryData": {"lotNumber": "C"}}]})
+verificar("Lote sin vencimiento → 400 sin registrar la compra",
+          st == 400 and "vencimiento" in r.get("error", "") and sql("select count(*) from compras where \"numDoc\" = 'F001-2'") == "0", (st, r))
+st, r = admin.api("POST", "/kardex", {"productoId": PARA, "type": "ENTRADA", "qty": 4, "ref": "Devolución de Cliente",
+                                      "industryData": {"lotNumber": "V", "expiresAt": dia(-1)}})
+verificar("Un ingreso manual también entra a su lote (aunque ya esté vencido)", st == 201 and lotes("PARA500")[0] == "V:4", (st, r, lotes("PARA500")))
+verificar("El stock sin lote es el resto: 100 iniciales", stock("PARA500") == (134, 0), stock("PARA500"))
+
+caja = int(sql("select id from cash_registers order by id limit 1"))
+abrir_caja(admin, caja)
+st, r = venta(admin, [(PARA, 25)], 12.5)
+verificar("Una venta sale de lo que vence antes y no toca lo vencido", st == 201 and lotes("PARA500") == ["V:4", "B:5"], (st, r, lotes("PARA500")))
+st, r = venta(admin, [(PARA, 103)], 51.5)
+verificar("…y después, de lo que no tiene lote", st == 201 and lotes("PARA500") == ["V:4"] and stock("PARA500") == (6, 0),
+          (st, r, lotes("PARA500"), stock("PARA500")))
+st, r = venta(admin, [(PARA, 3)], 1.5)
+verificar("Si para completarla haría falta lo vencido → 409 sin vender",
+          st == 409 and r.get("codigo") == "FARMACIA_STOCK_VENCIDO" and stock("PARA500") == (6, 0), (st, r, stock("PARA500")))
+st, r = admin.api("POST", "/kardex", {"productoId": PARA, "type": "SALIDA", "qty": 4, "ref": "Producto Vencido / No Apto"})
+verificar("Una salida manual retira primero lo vencido", st == 201 and lotes("PARA500") == [] and stock("PARA500") == (2, 0),
+          (st, r, lotes("PARA500"), stock("PARA500")))
+
+admin.api("POST", "/compras", {"proveedorId": PROV, "numDoc": "F001-3", "items": [
+    {"id": PARA, "qty": 3, "cost": 0.2, "industryData": {"lotNumber": "D", "expiresAt": dia(90)}}]})
+SUC = admin.api("POST", "/sucursales", {"name": "Farmacia Norte"})[1]["id"]
+st, r = admin.api("POST", "/transferencias", {"fromBranchId": 1, "toBranchId": SUC, "items": [{"id": PARA, "qty": 4}]})
+verificar("Una transferencia lleva sus lotes a la otra sucursal (y lo sin lote queda sin lote)",
+          st == 201 and lotes("PARA500") == [] and lotes("PARA500", SUC) == ["D:3"] and stock_en("PARA500", SUC) == (4, 0),
+          (st, r, lotes("PARA500"), lotes("PARA500", SUC)))
+
 reiniciar_backend()
 resumen()
