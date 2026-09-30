@@ -9,7 +9,7 @@ import type { SessionUser } from '../../../types/express.d.ts';
 import { requireOpenSession } from '../../cash/index.ts';
 import { assertBranchDelivers, assertCanDeliver, parseDeliveryRequest, scheduleDeliveryForSale } from '../../deliveries/index.ts';
 import { consumeReservedStock, releaseReservedStock, reserveStock } from '../../inventory/index.ts';
-import { industryHooks } from '../../../industries/index.ts';
+import { industryHooks, parseSaleData } from '../../../industries/index.ts';
 import { canDispatch } from '../domain/dispatch.ts';
 import {
   EXPIRED_REASON, SaleError, assertCanCancel, assertExpectedTotal, assertSameBranch, endOfBusinessDay, normalizeCart,
@@ -93,12 +93,15 @@ export async function createOrder(client: Client, payload: Record<string, unknow
   const quoteId = toId(payload.cotizacionId);
   const clienteId = toId(payload.clienteId);
   const discountRequest = parseDiscountRequest(payload.discount);
+  const industryData = parseSaleData(payload.industryData);
 
   return client.$transaction(async (tx) => {
     const { lines, total: subtotal } = await priceLines(tx, items, quoteId, clienteId);
     const { discount, total } = applyDiscount(subtotal, discountRequest, user, Number(settings.maxDiscountPercent));
     assertExpectedTotal(payload.totalEsperado, lines, total);
-    await industryHooks.beforeSale(tx, { kind: 'order', branchId: user.branchId, customerId: clienteId, lines: saleLinesFor(lines), user });
+    await industryHooks.beforeSale(tx, {
+      kind: 'order', branchId: user.branchId, customerId: clienteId, lines: saleLinesFor(lines), user, data: industryData,
+    });
 
     const order = await tx.venta.create({
       data: {
@@ -111,6 +114,7 @@ export async function createOrder(client: Client, payload: Record<string, unknow
         vendedorId: user.id,
         cotizacionId: quoteId,
         expiresAt: endOfBusinessDay(),
+        industryData: industryData ?? {},
       },
     });
     await auditDiscount(tx, { saleId: order.id, reference: `el pedido N° ${order.id}`, subtotal, discount, total, request: discountRequest, user });

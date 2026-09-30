@@ -5,7 +5,7 @@ import type { SessionUser } from '../../../types/express.d.ts';
 import { requireOpenSession } from '../../cash/index.ts';
 import { assertBranchDelivers, parseDeliveryRequest, scheduleDeliveryForSale, type DeliveryRequest } from '../../deliveries/index.ts';
 import { reserveStock, takeAvailableStock } from '../../inventory/index.ts';
-import { industryHooks } from '../../../industries/index.ts';
+import { industryHooks, parseSaleData, type IndustryData } from '../../../industries/index.ts';
 import {
   SaleError, assertExpectedTotal, normalizeCart, parseDiscountRequest, publicLines, toDocType, toPayMethod, unitColumns,
   type CartItem, type DiscountRequest, type DocType, type PayMethod,
@@ -35,6 +35,7 @@ interface SaleData {
   discountRequest: DiscountRequest | null;
   user: SessionUser;
   maxDiscountPercent: number;
+  industryData: IndustryData | undefined;
 }
 
 async function executeSale(tx: Tx, data: SaleData) {
@@ -43,6 +44,7 @@ async function executeSale(tx: Tx, data: SaleData) {
   assertExpectedTotal(data.expectedTotal, lines, total);
   await industryHooks.beforeSale(tx, {
     kind: 'direct', branchId: data.user.branchId, customerId: data.clienteId, lines: saleLinesFor(lines), user: data.user,
+    data: data.industryData,
   });
   if (data.quoteId) await markQuoteConverted(tx, data.quoteId);
 
@@ -75,6 +77,7 @@ async function executeSale(tx: Tx, data: SaleData) {
       paidAt: now,
       dispatchedAt: delivery ? null : now,
       dispatchedById: delivery ? null : data.sellerId,
+      industryData: data.industryData ?? {},
     },
   });
 
@@ -138,6 +141,7 @@ export async function processSale(client: Client, payload: Record<string, unknow
     discountRequest: parseDiscountRequest(payload.discount),
     user,
     maxDiscountPercent: Number(settings.maxDiscountPercent),
+    industryData: parseSaleData(payload.industryData),
   };
   if (data.delivery) assertBranchDelivers(user.branch);
 

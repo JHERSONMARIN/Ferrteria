@@ -23,6 +23,8 @@ export interface SaleContext {
   customerId: number | null;
   lines: readonly SaleLine[];
   user: SessionUser;
+  /** Datos del rubro de la venta (la receta), ya validados con fields.sale. Se guardan en la venta. */
+  data?: IndustryData;
 }
 
 /** Un cambio del stock físico de una sucursal (las reservas no lo son). qty, en la unidad del stock. */
@@ -61,5 +63,7 @@ export interface IndustryPackage {
     product?: z.ZodType<IndustryData>;
     /** Datos de una línea que entra al stock (compra o ingreso manual). */
     stockEntry?: z.ZodType<IndustryData>;
+    /** Datos de una venta o pedido. */
+    sale?: z.ZodType<IndustryData>;
   };
 }

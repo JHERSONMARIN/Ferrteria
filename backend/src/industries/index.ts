@@ -17,3 +17,4 @@ export const industryDataOf = (value: unknown): IndustryData =>
 
 export const parseProductData = (raw: unknown) => parseIndustryData(industryPackage, 'product', raw);
 export const parseStockEntryData = (raw: unknown) => parseIndustryData(industryPackage, 'stockEntry', raw);
+export const parseSaleData = (raw: unknown) => parseIndustryData(industryPackage, 'sale', raw);

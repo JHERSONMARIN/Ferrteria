@@ -59,6 +59,8 @@ export interface DirectSaleRequest extends PaymentRequest {
   totalEsperado: number;
   discount: DiscountRequest | null;
   cart: CartLine[];
+  /** Datos del rubro de la venta (farmacia: la receta, PharmacySaleData). */
+  industryData?: Record<string, unknown>;
 }
 
 /** POST /api/pedidos: el vendedor envía el pedido a caja. */
@@ -68,6 +70,8 @@ export interface OrderRequest {
   cotizacionId: number | null;
   totalEsperado: number;
   discount: DiscountRequest | null;
+  /** Datos del rubro del pedido (farmacia: la receta, PharmacySaleData). */
+  industryData?: Record<string, unknown>;
 }
 
 /** POST /api/pedidos/:id/cobrar */

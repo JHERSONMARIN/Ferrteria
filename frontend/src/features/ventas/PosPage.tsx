@@ -15,6 +15,8 @@ import { findCustomerByInput } from '../../shared/utils/customers.ts';
 import { buildSaleTicket, type TicketData } from '../../shared/utils/tickets.ts';
 import { quantityProblem, roundQuantity, roundMoney, formatQuantity } from '../../shared/utils/quantities.ts';
 import { useToast, useConfirm, SkeletonCards } from '../../shared/ui/index.ts';
+import FieldError from '../../shared/ui/FieldError.tsx';
+import { useIndustryUi } from '../../industries/index.ts';
 import CustomerSelector from './components/CustomerSelector.tsx';
 import CheckoutModal, { type CheckoutPayment } from './components/CheckoutModal.tsx';
 import SaleSuccessModal, { type SaleSuccess } from './components/SaleSuccessModal.tsx';
@@ -253,8 +255,26 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
     if (cart.length === 0) clearDiscount();
   }, [cart.length]);
 
+  // Datos del rubro de la venta (farmacia: la receta), solo si los productos del carrito los piden.
+  const { sale: saleUi } = useIndustryUi();
+  const [saleData, setSaleData] = useState<Record<string, unknown>>({});
+  const [saleDataError, setSaleDataError] = useState('');
+  const cartProducts = useMemo(
+    () => products.filter(p => cart.some(item => item.id === p.id)),
+    [cart, products],
+  );
+  const saleNeedsData = Boolean(saleUi?.needs(cartProducts));
+  const validateSaleData = () => {
+    const problem = saleNeedsData ? saleUi?.problem(saleData, cartProducts) ?? null : null;
+    setSaleDataError(problem ?? '');
+    return !problem;
+  };
+  const saleDataPayload = saleNeedsData ? { industryData: saleData } : {};
+
   const resetSale = () => {
     setCart([]);
+    setSaleData({});
+    setSaleDataError('');
     setLoadedQuote(null);
     setCustomerInput('');
     setCustomerError('');
@@ -336,7 +356,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   // ---------- Modo directo: cobro en el POS ----------
 
   const openCheckout = () => {
-    if (cart.length === 0 || processing || !validateTypedCustomer()) return;
+    if (cart.length === 0 || processing || !validateTypedCustomer() || !validateSaleData()) return;
     setShowCheckout(true);
   };
 
@@ -361,6 +381,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         discount: discountPayload,
         cart: cartPayload(cart),
         delivery: payment.delivery,
+        ...saleDataPayload,
       } satisfies DirectSaleRequest);
     } catch (err) {
       if (pricesChanged(err)) {
@@ -393,7 +414,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   // ---------- Modo con pedidos: el vendedor envía el pedido a caja ----------
 
   const sendToCashier = async () => {
-    if (cart.length === 0 || processing || !validateTypedCustomer()) return;
+    if (cart.length === 0 || processing || !validateTypedCustomer() || !validateSaleData()) return;
     try {
       setProcessing(true);
       const res = await api.post<OrderSaved>('/pedidos', {
@@ -402,6 +423,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
         cotizacionId: loadedQuote ? loadedQuote.id : null,
         totalEsperado: cartTotal,
         discount: discountPayload,
+        ...saleDataPayload,
       } satisfies OrderRequest);
       // El comprobante se emite e imprime recién en caja, al cobrar; aquí solo se da el número de pedido.
       const order = res.pedido;
@@ -804,6 +826,13 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
                 inputRef={customerPanelRef}
               />
             </div>
+
+            {saleNeedsData && saleUi && (
+              <div>
+                <saleUi.Fields value={saleData} products={cartProducts} onChange={v => { setSaleData(v); setSaleDataError(''); }} />
+                <FieldError msg={saleDataError} />
+              </div>
+            )}
 
             {canDiscount && cart.length > 0 && !showDiscount && (
               <button

@@ -239,6 +239,8 @@ model Venta {
   cancelReason String?
   // Un pedido sin cobrar vence al cierre del día y libera su stock reservado.
   expiresAt    DateTime?
+  // Datos del paquete de rubro (farmacia: la receta); los valida el paquete.
+  industryData Json     @default("{}")
 
   clienteId Int?
   cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)

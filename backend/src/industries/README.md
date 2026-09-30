@@ -55,6 +55,10 @@ llena desde `onStockMovement`.
 - Salidas: primero lo que vence antes (FEFO) y al final lo que no tiene lote. Una venta no toma lotes
   vencidos (`FARMACIA_STOCK_VENCIDO`); una salida manual o una transferencia sí, empezando por lo vencido.
   Una transferencia lleva los mismos lotes a la sucursal de destino.
+- Ventas (`beforeSale`): si el carrito tiene productos con receta pide el número; con un controlado, también
+  el médico (con su CMP) y el paciente (`FARMACIA_RECETA`). La receta queda en `ventas.industryData`, de
+  donde sale el libro de controlados. Lo vencido no cuenta como disponible: si no alcanza lo vigente, la
+  venta o el pedido se rechaza diciendo cuánto hay vigente y cuánto vencido.
 
 ## Sumar un rubro
 

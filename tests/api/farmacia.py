@@ -40,9 +40,9 @@ base = {"code": "PARA500", "name": "Paracetamol 500 mg", "unit": "Unidad", "pric
 st, r = admin.api("PUT", f"/productos/{PARA}", {**base, "price": 0.6})
 verificar("Editar sin enviar los datos de farmacia no los borra",
           st == 200 and r.get("industryData", {}).get("sanitaryRegistration") == "EE-01234", (st, r))
-st, r = admin.api("PUT", f"/productos/{PARA}", {**base, "industryData": {"sanitaryRegistration": "EE-09999", "requiresPrescription": True}})
-verificar("Editarlos los reemplaza", st == 200 and r.get("industryData") == {"sanitaryRegistration": "EE-09999", "requiresPrescription": True,
-                                                                           "controlled": False}, (st, r))
+st, r = admin.api("PUT", f"/productos/{PARA}", {**base, "industryData": {"sanitaryRegistration": "EE-09999", "laboratory": "Portugal"}})
+verificar("Editarlos los reemplaza", st == 200 and r.get("industryData") == {"sanitaryRegistration": "EE-09999", "laboratory": "Portugal",
+                                                                           "requiresPrescription": False, "controlled": False}, (st, r))
 
 
 print("\n=== Lotes ===")
@@ -94,6 +94,36 @@ st, r = admin.api("POST", "/transferencias", {"fromBranchId": 1, "toBranchId": S
 verificar("Una transferencia lleva sus lotes a la otra sucursal (y lo sin lote queda sin lote)",
           st == 201 and lotes("PARA500") == [] and lotes("PARA500", SUC) == ["D:3"] and stock_en("PARA500", SUC) == (4, 0),
           (st, r, lotes("PARA500"), lotes("PARA500", SUC)))
+
+print("\n=== Receta ===")
+admin.api("POST", "/productos", {"code": "AMOX", "name": "Amoxicilina 500 mg", "unit": "Unidad", "stock": 20, "price": 2,
+                                 "category": "General", "industryData": {"requiresPrescription": True}})
+AMOX = int(sql("select id from productos where code = 'AMOX'"))
+CLONA = int(sql("select id from productos where code = 'CLONA'"))
+st, r = venta(admin, [(AMOX, 1)], 2)
+verificar("Un producto con receta no se vende sin el número → 400", st == 400 and r.get("codigo") == "FARMACIA_RECETA"
+          and "Amoxicilina" in r.get("error", "") and stock("AMOX") == (20, 0), (st, r))
+st, r = venta(admin, [(AMOX, 1)], 2, industryData={"prescriptionNumber": " R-001 "})
+verificar("…con el número se vende y la receta queda en la venta", st == 201
+          and sql(f"select \"industryData\"->>'prescriptionNumber' from ventas where id = {r.get('venta', {}).get('id', 0)}") == "R-001", (st, r))
+st, r = venta(admin, [(CLONA, 1), (AMOX, 1)], 3.2, industryData={"prescriptionNumber": "R-002"})
+verificar("Un controlado pide también médico y paciente → 400", st == 400 and "médico" in r.get("error", "") and "Clonazepam" in r.get("error", ""), (st, r))
+st, r = venta(admin, [(CLONA, 1)], 1.2, industryData={"prescriptionNumber": "R-002", "prescriber": "Dra. Salas CMP 23456", "patient": "Ana Ruiz"})
+verificar("…y con todo se vende", st == 201 and stock("CLONA") == (29, 0), (st, r))
+st, r = admin.api("POST", "/ventas", {"docType": "Nota de Venta", "payMethod": "Efectivo", "cart": [{"id": AMOX, "qty": 1}], "totalEsperado": 2,
+                                      "industryData": {"prescriptionNumber": 123}})
+verificar("Un dato de receta con otro tipo → 400 con su mensaje", st == 400 and "receta" in r.get("error", ""), (st, r))
+
+print("\n=== Vencidos ===")
+admin.api("POST", "/productos", {"code": "JARABE", "name": "Jarabe para la tos", "unit": "Unidad", "stock": 2, "price": 10, "category": "General"})
+JARABE = int(sql("select id from productos where code = 'JARABE'"))
+admin.api("POST", "/kardex", {"productoId": JARABE, "type": "ENTRADA", "qty": 5, "ref": "Devolución de Cliente",
+                              "industryData": {"lotNumber": "J1", "expiresAt": dia(-10)}})
+st, r = venta(admin, [(JARABE, 3)], 30)
+verificar("Si no alcanza lo vigente → 409 que dice cuánto hay vigente y cuánto vencido",
+          st == 409 and r.get("codigo") == "FARMACIA_STOCK_VENCIDO" and "solo hay 2 vigente" in r.get("error", "") and stock("JARABE") == (7, 0), (st, r))
+st, r = venta(admin, [(JARABE, 2)], 20)
+verificar("…y lo vigente sí se vende", st == 201 and stock("JARABE") == (5, 0) and lotes("JARABE") == ["J1:5"], (st, r, lotes("JARABE")))
 
 reiniciar_backend()
 resumen()
