@@ -6,7 +6,7 @@ import { api } from '../api/client.ts';
 import { queryKeys } from '../api/queryClient.ts';
 import type { ScreenId } from './screens.ts';
 import { formatSoles } from '../shared/utils/currency.ts';
-import { capitalize, useVocabulary } from '../shared/industry/vocabulary.ts';
+import { capitalize, useVocabulary } from '../industries/vocabulary.ts';
 
 // Buscador general: se abre con Ctrl+K (o Ctrl+Barra) desde cualquier pantalla y encuentra de una vez
 // productos, clientes y las pantallas del sistema. Es el atajo de quien pasa el día vendiendo.

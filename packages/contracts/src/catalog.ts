@@ -81,6 +81,8 @@ export interface ProductRequest {
   price: number;
   wholesalePrice: number | null;
   saleUnits: SaleUnitInput[];
+  /** Campos del rubro (PharmacyProductData en farmacia); sin ellos, al editar no se tocan. */
+  industryData?: Record<string, unknown>;
 }
 
 /** GET /api/productos/barcode/:code: el producto ya registrado o el nombre encontrado en internet. */

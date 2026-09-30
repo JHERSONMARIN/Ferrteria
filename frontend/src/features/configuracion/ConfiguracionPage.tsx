@@ -16,7 +16,7 @@ import FieldError from '../../shared/ui/FieldError.tsx';
 import { borderClass } from '../../shared/utils/validators.ts';
 import { MODULE_OPTIONS } from '../../shared/constants/modules.ts';
 import { useConfirm } from '../../shared/ui/index.ts';
-import { useVocabulary } from '../../shared/industry/vocabulary.ts';
+import { useVocabulary } from '../../industries/vocabulary.ts';
 
 const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   NOTA_VENTA: 'Nota de venta',

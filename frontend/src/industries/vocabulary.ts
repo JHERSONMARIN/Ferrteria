@@ -1,7 +1,7 @@
 // Palabras del rubro de la empresa ("ferretería", "producto"…). Las da su paquete de rubro en el backend
 // (backend/src/industries) junto con la configuración; las pantallas las usan en vez de escribirlas a mano.
 import type { Vocabulary } from '@ferresys/contracts/settings';
-import { useSettings } from '../../api/queries.ts';
+import { useSettings } from '../api/queries.ts';
 
 // Mientras llega la configuración (o si falla), las de ferretería: el rubro de todas las empresas anteriores.
 const DEFAULT_VOCABULARY: Vocabulary = {

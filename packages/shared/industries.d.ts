@@ -1,5 +1,5 @@
 // Tipos de industries.js para el código en TypeScript. Si cambia industries.js, se actualiza aquí.
-export type Industry = 'ferreteria';
+export type Industry = 'ferreteria' | 'farmacia';
 
 export declare const INDUSTRIES: Record<Industry, { nombre: string }>;
 

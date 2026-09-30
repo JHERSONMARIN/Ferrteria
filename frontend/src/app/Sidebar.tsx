@@ -3,7 +3,7 @@ import { roleLabel } from '../shared/constants/roles.ts';
 import type { AppInfo } from '@ferresys/contracts/app';
 import type { SessionUser } from '@ferresys/contracts/identity';
 import type { ScreenId } from './screens.ts';
-import { capitalize, useVocabulary } from '../shared/industry/vocabulary.ts';
+import { capitalize, useVocabulary } from '../industries/vocabulary.ts';
 
 type Badge = 'cobros' | 'despacho';
 

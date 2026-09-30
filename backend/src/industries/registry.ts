@@ -3,11 +3,12 @@
 import { AppError } from '@ferresys/shared/errors';
 import type { Industry } from '@ferresys/shared/industries';
 import type { Tx } from '../db.ts';
+import { farmacia } from './farmacia/index.ts';
 import { ferreteria } from './ferreteria/index.ts';
 import type { IndustryData, IndustryPackage, SaleContext, StockMovement } from './hooks.ts';
 
 // Un paquete por rubro de packages/shared/industries.js: si falta uno, el typecheck lo avisa aquí.
-export const PACKAGES: Record<Industry, IndustryPackage> = { ferreteria };
+export const PACKAGES: Record<Industry, IndustryPackage> = { ferreteria, farmacia };
 
 // Lo que el núcleo llama en sus pasos. Un enganche que el paquete no define no hace nada.
 export function hooksFor(pkg: IndustryPackage) {

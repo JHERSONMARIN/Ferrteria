@@ -50,7 +50,7 @@ export interface Theme {
 export type LimitName = 'maxUsers' | 'maxBranches' | 'maxCashRegisters';
 
 /** Rubro de la empresa (packages/shared/industries.js). */
-export type Industry = 'ferreteria';
+export type Industry = 'ferreteria' | 'farmacia';
 
 /** Palabras que cambian según el rubro (las da su paquete: backend/src/industries). */
 export interface Vocabulary {

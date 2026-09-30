@@ -44,6 +44,7 @@ CADENAS = [
     ["api/seguridad.py", "ui/seguridad.mjs"],
     ["api/observabilidad.py"],
     ["api/consola.py"],
+    ["api/farmacia.py"],
     ["api/clientes.py"],
     ["api/compras.py"],
     ["api/personal.py"],
