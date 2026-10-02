@@ -1,7 +1,7 @@
 // Categorías: cómo se agrupan los productos, con sus números; alta, edición, eliminación e importación.
 import { useState, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Category, CategoryImportResult, OnExisting } from '@ferresys/contracts/catalog';
+import type { Category, CategoryImportRequest, CategoryImportResult, OnExisting } from '@ferresys/contracts/catalog';
 import { api } from '../../api/client.ts';
 import { queryKeys } from '../../api/queryClient.ts';
 import { useCategories } from '../../api/queries.ts';
@@ -101,7 +101,7 @@ export default function CategoriasPage({ onSelectCategory, onNavigateToProducts 
   };
 
   const handleImport = async (rows: ImportValues[]) => {
-    const res = await api.post<CategoryImportResult>('/categorias/importar', { rows, onExisting }, { timeoutMs: 60000 });
+    const res = await api.post<CategoryImportResult>('/categorias/importar', { rows, onExisting } satisfies CategoryImportRequest, { timeoutMs: 60000 });
     await refresh();
     aviso.exito('Importación completada.');
     const parts = [`${res.created} creada${res.created === 1 ? '' : 's'}`];

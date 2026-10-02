@@ -1,17 +1,26 @@
 // Reglas del catálogo, sin base de datos ni servidor:  npm run test:unit
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { CreateCategoryBody, UpdateCategoryBody, UpdateProductBody, wholesalePriceOf } from '@ferresys/contracts/catalog';
+import { parseInput } from '../../../lib/validation.ts';
 import {
   CategoryError, ProductError, assertUnitCodesDiffer, categoryMetrics, checkImportRows, hasDecimalStock, parseCategoryImportRow,
-  parseCategoryName, parseProductImportRow, parseSaleUnits, parseWholesalePrice,
+  parseProductImportRow,
 } from './catalog.ts';
 
-test('precio mayorista: vacío = sin precio; cero, negativo o texto = inválido', () => {
-  assert.equal(parseWholesalePrice(''), null);
-  assert.equal(parseWholesalePrice(undefined), null);
-  assert.equal(parseWholesalePrice('27.5'), 27.5);
-  assert.equal(parseWholesalePrice(0), false);
-  assert.equal(parseWholesalePrice('x'), false);
+// Lo que hace la ruta al recibir el formulario: los esquemas son los del contrato.
+const productError = (message: string) => new ProductError(message);
+const parseSaleUnits = (saleUnits: unknown, unit: string) =>
+  parseInput(UpdateProductBody, { code: 'P1', name: 'Producto', price: 1, unit, saleUnits }, productError).saleUnits;
+const parseCategoryName = (name: unknown, required: boolean) =>
+  parseInput(required ? CreateCategoryBody : UpdateCategoryBody, { name }, m => new CategoryError(m)).name;
+
+test('precio mayorista: vacío = sin precio; sin la clave no se toca; cero, negativo o texto = inválido', () => {
+  assert.equal(wholesalePriceOf(''), null);
+  assert.equal(wholesalePriceOf(undefined), undefined);
+  assert.equal(wholesalePriceOf('27.5'), 27.5);
+  assert.equal(wholesalePriceOf(0), false);
+  assert.equal(wholesalePriceOf('x'), false);
 });
 
 test('presentaciones: nombre, factor y precio válidos; sin repetir nombre ni código', () => {

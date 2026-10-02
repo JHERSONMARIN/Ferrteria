@@ -1,7 +1,7 @@
 // Productos: el catálogo con su stock, precios y presentaciones; alta, edición, importación y exportación.
 import { useState, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { OnExisting, Product, ProductImportResult } from '@ferresys/contracts/catalog';
+import type { OnExisting, Product, ProductImportRequest, ProductImportResult } from '@ferresys/contracts/catalog';
 import { api } from '../../api/client.ts';
 import { queryKeys } from '../../api/queryClient.ts';
 import { useBranches, useCategories, useProducts } from '../../api/queries.ts';
@@ -145,7 +145,7 @@ export default function ProductosPage({ initialCategory = 'Todas', initialSearch
   };
 
   const handleImport = async (rows: ImportValues[]) => {
-    const res = await api.post<ProductImportResult>('/productos/importar', { rows, onExisting }, { timeoutMs: 120000 });
+    const res = await api.post<ProductImportResult>('/productos/importar', { rows, onExisting } satisfies ProductImportRequest, { timeoutMs: 120000 });
     await refreshCatalog();
     const parts = [`${res.created} creado${res.created === 1 ? '' : 's'}`];
     if (res.updated) parts.push(`${res.updated} actualizado${res.updated === 1 ? '' : 's'}`);

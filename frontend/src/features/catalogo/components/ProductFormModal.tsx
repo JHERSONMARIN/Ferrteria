@@ -1,6 +1,6 @@
 // Formulario de un producto nuevo o existente, con sus presentaciones de venta y la lectura del código de barras.
 import { useState } from 'react';
-import type { BarcodeLookup, Product, ProductRequest } from '@ferresys/contracts/catalog';
+import type { BarcodeLookup, CreateProductRequest, Product, UpdateProductRequest } from '@ferresys/contracts/catalog';
 import { api } from '../../../api/client.ts';
 import FieldError from '../../../shared/ui/FieldError.tsx';
 import { useToast } from '../../../shared/ui/index.ts';
@@ -90,7 +90,7 @@ export default function ProductFormModal({ product, initialCategory, categoryOpt
   const handleSaveProduct = async () => {
     if (!validateProduct()) return;
 
-    const payload: ProductRequest = {
+    const payload = {
       code: code.trim(),
       name: name.trim(),
       unit,
@@ -104,8 +104,8 @@ export default function ProductFormModal({ product, initialCategory, categoryOpt
     };
     try {
       setSaving(true);
-      if (editingProductId) await api.put<Product>(`/productos/${editingProductId}`, payload);
-      else await api.post<Product>('/productos', { ...payload, stock: Number(stock) });
+      if (editingProductId) await api.put<Product>(`/productos/${editingProductId}`, payload satisfies UpdateProductRequest);
+      else await api.post<Product>('/productos', { ...payload, stock: Number(stock) } satisfies CreateProductRequest);
       onSaved(editingProductId ? 'Producto actualizado correctamente.' : 'Producto registrado exitosamente.');
     } catch (err) {
       aviso.error(`Error guardando producto: ${(err as Error).message}`);

@@ -1,6 +1,6 @@
 // Formulario de una categoría nueva o existente: nombre, descripción, ícono y color.
 import { useState, type FormEvent } from 'react';
-import type { Category, CategoryRequest } from '@ferresys/contracts/catalog';
+import type { Category, CreateCategoryRequest, UpdateCategoryRequest } from '@ferresys/contracts/catalog';
 import { api } from '../../../api/client.ts';
 import FieldError from '../../../shared/ui/FieldError.tsx';
 import { borderClass } from '../../../shared/utils/validators.ts';
@@ -33,10 +33,10 @@ export default function CategoryFormModal({ category: editingCategory, onClose, 
       return;
     }
 
-    const payload: CategoryRequest = { name: trimmed, description: categoryDesc.trim(), icon: categoryIcon, color: categoryColor };
+    const payload = { name: trimmed, description: categoryDesc.trim(), icon: categoryIcon, color: categoryColor };
     try {
-      if (editingCategory) await api.put<Category>(`/categorias/${editingCategory.id}`, payload);
-      else await api.post<Category>('/categorias', payload);
+      if (editingCategory) await api.put<Category>(`/categorias/${editingCategory.id}`, payload satisfies UpdateCategoryRequest);
+      else await api.post<Category>('/categorias', payload satisfies CreateCategoryRequest);
       onSaved(editingCategory ? 'Categoría actualizada exitosamente.' : 'Categoría creada exitosamente.');
     } catch (err) {
       setCategoryError((err as Error).message || 'Error al guardar la categoría.');

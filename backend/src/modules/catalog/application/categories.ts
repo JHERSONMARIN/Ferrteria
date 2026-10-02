@@ -1,14 +1,11 @@
 // Casos de uso de categorías. Los productos guardan el nombre de su categoría como texto (además de la
 // relación): al renombrar o reasignar se actualizan los dos, en la misma transacción.
 import type { prisma } from '../../../db.ts';
-import {
-  CategoryError, MAX_CATEGORY_IMPORT_ROWS, categoryMetrics, checkImportRows, parseCategoryImportRow,
-  parseCategoryName,
-} from '../domain/catalog.ts';
+import { CategoryError, categoryMetrics, checkImportRows, parseCategoryImportRow } from '../domain/catalog.ts';
+import type { z } from '@ferresys/contracts/zod';
+import type { CategoryImportBody, CreateCategoryBody, UpdateCategoryBody } from '@ferresys/contracts/catalog';
 
 type Client = typeof prisma;
-
-const optionalText = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 
 // Con sus métricas: productos activos, unidades, valor del inventario y cuántos están bajo el mínimo.
 export async function listCategories(client: Client, includeInactive: boolean) {
@@ -29,19 +26,14 @@ export async function listCategories(client: Client, includeInactive: boolean) {
   }));
 }
 
-export async function createCategory(client: Client, input: Record<string, unknown>) {
+export async function createCategory(client: Client, input: z.infer<typeof CreateCategoryBody>) {
   return client.categoria.create({
-    data: {
-      name: parseCategoryName(input.name, true)!,
-      description: optionalText(input.description),
-      icon: optionalText(input.icon) ?? 'fa-tag',
-      color: optionalText(input.color) ?? 'orange',
-    },
+    data: { name: input.name!, description: input.description, icon: input.icon ?? 'fa-tag', color: input.color ?? 'orange' },
   });
 }
 
-export async function updateCategory(client: Client, id: number, input: Record<string, unknown>) {
-  const name = parseCategoryName(input.name, false);
+export async function updateCategory(client: Client, id: number, input: z.infer<typeof UpdateCategoryBody>) {
+  const name = input.name;
   const current = await client.categoria.findUnique({ where: { id } });
   if (!current) throw new CategoryError('Categoría no encontrada.', 404);
 
@@ -50,10 +42,10 @@ export async function updateCategory(client: Client, id: number, input: Record<s
       where: { id },
       data: {
         name,
-        description: input.description !== undefined ? optionalText(input.description) : undefined,
-        icon: optionalText(input.icon) ?? undefined,
-        color: optionalText(input.color) ?? undefined,
-        active: typeof input.active === 'boolean' ? input.active : undefined,
+        description: input.description,
+        icon: input.icon ?? undefined,
+        color: input.color ?? undefined,
+        active: input.active,
       },
     });
     if (name && name !== current.name) {
@@ -88,11 +80,8 @@ export async function deleteCategory(client: Client, id: number, targetId: numbe
 }
 
 // Todo o nada: con una fila inválida no se guarda ninguna y se devuelven los errores por fila.
-export async function importCategories(client: Client, input: { rows: unknown; onExisting: unknown }) {
-  const rows = input.rows;
-  const onExisting = input.onExisting === 'update' ? 'update' : 'skip';
-  if (!Array.isArray(rows) || rows.length === 0) throw new CategoryError('No hay filas para importar.');
-  if (rows.length > MAX_CATEGORY_IMPORT_ROWS) throw new CategoryError(`Se pueden importar hasta ${MAX_CATEGORY_IMPORT_ROWS} filas por vez.`);
+export async function importCategories(client: Client, input: z.infer<typeof CategoryImportBody>) {
+  const { rows, onExisting } = input;
 
   const { valid, errors } = checkImportRows(rows, parseCategoryImportRow, r => r.name, (_r, first) => `La categoría se repite en la fila ${first}.`);
   if (errors.length > 0) throw new CategoryError('Hay filas con problemas: corríjalas antes de importar.', 400, null, { rows: errors });

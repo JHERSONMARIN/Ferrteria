@@ -7,9 +7,10 @@ import { quantityProblem } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { industryDataOf, parseProductData } from '../../../industries/index.ts';
 import {
-  DEFAULT_MIN_STOCK, MAX_PRODUCT_IMPORT_ROWS, ProductError, assertUnitCodesDiffer, checkImportRows, hasDecimalStock,
-  parseProductImportRow, parseSaleUnits, parseWholesalePrice, type SaleUnitInput,
+  DEFAULT_MIN_STOCK, ProductError, assertUnitCodesDiffer, checkImportRows, hasDecimalStock, parseProductImportRow,
 } from '../domain/catalog.ts';
+import type { z } from '@ferresys/contracts/zod';
+import type { CreateProductBody, ProductImportBody, SaleUnitData, UpdateProductBody } from '@ferresys/contracts/catalog';
 
 type Client = typeof prisma;
 type Db = Pick<typeof prisma, 'producto' | 'productUnit' | 'categoria'>;
@@ -56,7 +57,7 @@ export async function listCategoryNames(client: Client) {
 }
 
 // El código de una presentación no puede ser el de otro producto (el escáner no sabría cuál es).
-async function assertUnitCodesFree(db: Db, units: SaleUnitInput[] | undefined, productId: number | null = null) {
+async function assertUnitCodesFree(db: Db, units: SaleUnitData[] | undefined, productId: number | null = null) {
   const codes = (units ?? []).map(u => u.code).filter((c): c is string => Boolean(c));
   if (codes.length === 0) return;
   const clash = await db.producto.findFirst({
@@ -76,16 +77,15 @@ async function assertProductCodeFree(db: Db, code: string, productId: number | n
 }
 
 // Categoría por nombre: si no existe se crea (el formulario deja escribir una nueva).
-async function categoryIdFor(db: Db, categoriaId: unknown, name: string): Promise<number> {
-  const given = categoriaId ? parseInt(String(categoriaId), 10) : NaN;
-  if (given) return given;
+async function categoryIdFor(db: Db, categoriaId: number | null, name: string): Promise<number> {
+  if (categoriaId) return categoriaId;
   const existing = await db.categoria.findUnique({ where: { name } });
   return (existing ?? await db.categoria.create({ data: { name } })).id;
 }
 
 // Deja activas exactamente las presentaciones indicadas. Las quitadas se desactivan (las ventas pasadas
 // las siguen referenciando) y una con el nombre de otra desactivada la reactiva.
-async function syncSaleUnits(tx: Tx, productId: number, units: SaleUnitInput[] | undefined, productCode: string) {
+async function syncSaleUnits(tx: Tx, productId: number, units: SaleUnitData[] | undefined, productCode: string) {
   if (units === undefined) return;
   assertUnitCodesDiffer(units, productCode);
   const existing = await tx.productUnit.findMany({ where: { productoId: productId } });
@@ -109,30 +109,11 @@ async function syncSaleUnits(tx: Tx, productId: number, units: SaleUnitInput[] |
   });
 }
 
-const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
-
 // El stock inicial entra a la sucursal del usuario (o a la que indique el administrador), con su kardex.
-export async function createProduct(client: Client, input: Record<string, unknown>, user: SessionUser) {
+export async function createProduct(client: Client, input: z.infer<typeof CreateProductBody>, user: SessionUser) {
   const branchId: number = await resolveBranchId(client, user, input.branchId);
-  const code = text(input.code);
-  const name = text(input.name);
-  if (!code || !name || Number.isNaN(Number(input.stock)) || Number.isNaN(Number(input.price))) {
-    throw new ProductError('Completa todos los campos obligatorios.');
-  }
-  const allowsFractions = input.allowsFractions === true;
-  const wholesale = parseWholesalePrice(input.wholesalePrice);
-  if (wholesale === false) throw new ProductError('El precio mayorista debe ser mayor a 0.');
-  const stock = Number(input.stock);
-  const price = parseFloat(String(input.price));
-  const minStock = input.minStock === undefined || input.minStock === '' ? DEFAULT_MIN_STOCK : Number(input.minStock);
-  if (stock !== 0) {
-    const problem = quantityProblem(stock, allowsFractions);
-    if (problem) throw new ProductError(`El stock inicial ${problem}.`);
-  }
-  if (!Number.isFinite(minStock) || minStock < 0) throw new ProductError('El stock mínimo no es válido.');
-  const unit = text(input.unit) || 'Unidad';
-  const category = text(input.category) || 'General';
-  const saleUnits = parseSaleUnits(input.saleUnits, unit);
+  const { code, name, unit, category, allowsFractions, stock, price, saleUnits } = input;
+  const minStock = input.minStock ?? DEFAULT_MIN_STOCK;
   // Al crear se valida siempre: el paquete completa sus valores por defecto aunque no vengan datos.
   const industryData = parseProductData(input.industryData ?? {}) ?? {};
   await assertUnitCodesFree(client, saleUnits);
@@ -141,7 +122,7 @@ export async function createProduct(client: Client, input: Record<string, unknow
 
   return client.$transaction(async (tx) => {
     const product = await tx.producto.create({
-      data: { code, name, unit, allowsFractions, wholesalePrice: wholesale, stock, minStock, price, category, categoriaId, industryData },
+      data: { code, name, unit, allowsFractions, wholesalePrice: input.wholesalePrice, stock, minStock, price, category, categoriaId, industryData },
     });
     await tx.branchStock.create({ data: { branchId, productoId: product.id, stock } });
     await syncSaleUnits(tx, product.id, saleUnits, product.code);
@@ -155,19 +136,9 @@ export async function createProduct(client: Client, input: Record<string, unknow
 }
 
 // Edita los datos del producto; el stock no se toca aquí (se ajusta con un movimiento de kardex).
-export async function updateProduct(client: Client, id: number, input: Record<string, unknown>, user: SessionUser) {
-  const code = text(input.code);
-  const name = text(input.name);
-  if (!code || !name) throw new ProductError('El código y el nombre son obligatorios.');
-  const price = parseFloat(String(input.price));
-  if (input.price === undefined || Number.isNaN(price) || price <= 0) throw new ProductError('El precio debe ser un número mayor a 0.');
-
-  const unit = text(input.unit) || 'Unidad';
-  const category = text(input.category) || 'General';
+export async function updateProduct(client: Client, id: number, input: z.infer<typeof UpdateProductBody>, user: SessionUser) {
+  const { code, name, unit, category, price, minStock, saleUnits } = input;
   const categoriaId = await categoryIdFor(client, input.categoriaId, category);
-  const wholesale = parseWholesalePrice(input.wholesalePrice);
-  if (wholesale === false) throw new ProductError('El precio mayorista debe ser mayor a 0.');
-  const saleUnits = parseSaleUnits(input.saleUnits, unit);
   const industryData = parseProductData(input.industryData);
   await assertUnitCodesFree(client, saleUnits, id);
   await assertProductCodeFree(client, code, id);
@@ -181,14 +152,13 @@ export async function updateProduct(client: Client, id: number, input: Record<st
     throw new ProductError('El stock actual tiene decimales: ajústelo en Kardex antes de venderlo solo por unidades.');
   }
 
-  const minStock = input.minStock !== undefined && input.minStock !== '' && Number(input.minStock) >= 0 ? Number(input.minStock) : undefined;
   return client.$transaction(async (tx) => {
     const product = await tx.producto.update({
       where: { id },
       data: {
         code, name, unit, price, category, categoriaId, minStock, industryData,
-        allowsFractions: typeof input.allowsFractions === 'boolean' ? input.allowsFractions : undefined,
-        wholesalePrice: input.wholesalePrice === undefined ? undefined : wholesale,
+        allowsFractions: input.allowsFractions,
+        wholesalePrice: input.wholesalePrice,
       },
       select: {
         id: true, code: true, name: true, unit: true, allowsFractions: true, wholesalePrice: true,
@@ -220,11 +190,8 @@ export async function updateProduct(client: Client, id: number, input: Record<st
 
 // Todo o nada: si una fila tiene problemas no se guarda ninguna y se devuelven los errores por fila.
 // A los productos que ya existen nunca se les cambia el stock (eso se hace con un movimiento).
-export async function importProducts(client: Client, input: { rows: unknown; onExisting: unknown; branchId?: unknown }, user: SessionUser) {
-  const rows = input.rows;
-  const onExisting = input.onExisting === 'update' ? 'update' : 'skip';
-  if (!Array.isArray(rows) || rows.length === 0) throw new ProductError('No hay filas para importar.');
-  if (rows.length > MAX_PRODUCT_IMPORT_ROWS) throw new ProductError(`Se pueden importar hasta ${MAX_PRODUCT_IMPORT_ROWS} filas por vez.`);
+export async function importProducts(client: Client, input: z.infer<typeof ProductImportBody>, user: SessionUser) {
+  const { rows, onExisting } = input;
   const branchId: number = await resolveBranchId(client, user, input.branchId);
 
   const { valid, errors } = checkImportRows(rows, parseProductImportRow, r => r.code,
