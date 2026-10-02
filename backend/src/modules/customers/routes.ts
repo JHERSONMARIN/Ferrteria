@@ -9,7 +9,10 @@ import {
 } from './customers.ts';
 import { lookupDocument } from './documentLookup.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type { CreditAccount, CreditPaymentSaved, Customer } from '@ferresys/contracts/customers';
+import {
+  CreateCustomerBody, CreditLimitBody, CreditPaymentBody, PriceListBody, UpdateCustomerBody,
+  type CreditAccount, type CreditPaymentSaved, type Customer,
+} from '@ferresys/contracts/customers';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -29,12 +32,6 @@ const handle = (failure: string, fn: Handler, duplicate?: string) => async (req:
 const customerError = (message: string) => new CustomerError(message);
 const Params = z.object({ id: id('Cliente no válido.') });
 const customerId = (req: Request) => parseInput(Params, req.params, customerError).id;
-const body = (req: Request) => (req.body ?? {}) as Record<string, unknown>;
-const PriceListBody = z.object({ priceList: z.enum(['RETAIL', 'WHOLESALE'], { error: 'Lista de precios no válida.' }) });
-const PaymentBody = z.object({
-  clienteId: id('Cliente y monto válido requeridos.'),
-  amount: z.coerce.number({ error: 'Cliente y monto válido requeridos.' }).positive({ error: 'Cliente y monto válido requeridos.' }),
-});
 
 // ---------- /api/clientes ----------
 
@@ -50,17 +47,17 @@ customerRoutes.get('/consulta-doc/:doc', handle('Error al consultar documento.',
 }));
 
 customerRoutes.post('/', handle('Error al registrar cliente.', async (req, res) => {
-  res.status(201).json(await createCustomer(prisma, body(req)));
+  res.status(201).json(await createCustomer(prisma, parseInput(CreateCustomerBody, req.body, customerError)));
 }, 'Un cliente con este documento ya está registrado.'));
 
 // PUT /api/clientes/:id  { type, doc, name, phone, email, address }
 customerRoutes.put('/:id', handle('No se pudo modificar el cliente.', async (req, res) => {
-  res.json(await updateCustomer(prisma, customerId(req), body(req), req.user));
+  res.json(await updateCustomer(prisma, customerId(req), parseInput(UpdateCustomerBody, req.body, customerError), req.user));
 }, 'Otro cliente ya tiene ese documento.'));
 
 // PUT /api/clientes/:id/max-credit  { maxCredit }
 customerRoutes.put('/:id/max-credit', handle('Error al actualizar límite de crédito.', async (req, res) => {
-  res.json({ success: true, client: await setCreditLimit(prisma, customerId(req), body(req).maxCredit, req.user) });
+  res.json({ success: true, client: await setCreditLimit(prisma, customerId(req), parseInput(CreditLimitBody, req.body, customerError).maxCredit, req.user) });
 }));
 
 // PUT /api/clientes/:id/price-list  { priceList: 'RETAIL' | 'WHOLESALE' }
@@ -80,6 +77,6 @@ creditRoutes.get('/', handle('Error al obtener estado de créditos.', async (req
 
 // POST /api/creditos/abono  { clienteId, amount }
 creditRoutes.post('/abono', handle('Error al registrar abono.', async (req, res) => {
-  const { clienteId, amount } = parseInput(PaymentBody, req.body, customerError);
+  const { clienteId, amount } = parseInput(CreditPaymentBody, req.body, customerError);
   res.json(await registerPayment(prisma, clienteId, amount) satisfies Sendable<CreditPaymentSaved>);
 }));

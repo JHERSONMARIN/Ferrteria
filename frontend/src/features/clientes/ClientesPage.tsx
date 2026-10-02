@@ -1,7 +1,7 @@
 // Clientes: el directorio con sus datos, su lista de precios y su límite de crédito.
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Customer } from '@ferresys/contracts/customers';
+import type { Customer, PriceListRequest } from '@ferresys/contracts/customers';
 import { api } from '../../api/client.ts';
 import { queryKeys } from '../../api/queryClient.ts';
 import { useCustomers } from '../../api/queries.ts';
@@ -59,7 +59,7 @@ export default function ClientesPage({ initialSearch = '' }: { initialSearch?: s
     });
     if (!seguro) return;
     try {
-      await api.put(`/clientes/${client.id}/price-list`, { priceList: next });
+      await api.put(`/clientes/${client.id}/price-list`, { priceList: next } satisfies PriceListRequest);
       await refresh();
     } catch (err) {
       aviso.error(`Error al cambiar la lista de precios: ${(err as Error).message}`);

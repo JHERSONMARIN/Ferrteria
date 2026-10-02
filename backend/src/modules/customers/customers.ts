@@ -4,6 +4,8 @@ import { AppError } from '@ferresys/shared/errors';
 import { changedFields, recordAudit } from '../audit/index.ts';
 import { requireFeature } from '../licensing/index.ts';
 import type { SessionUser } from '../../types/express.d.ts';
+import type { z } from '@ferresys/contracts/zod';
+import type { CreateCustomerBody, UpdateCustomerBody } from '@ferresys/contracts/customers';
 
 type Client = typeof prisma;
 
@@ -20,17 +22,6 @@ export const creditLimit = (...limits: (number | null | undefined)[]) => limits.
 export const availableCredit = (limit: number, debt: number) => Math.max(0, limit - debt);
 export const receiptNumber = (id: number) => `REC-${String(id).padStart(6, '0')}`;
 
-export type CustomerType = 'NATURAL' | 'EMPRESA';
-export const customerTypeOf = (type: unknown): CustomerType => (type === 'Empresa' || type === 'EMPRESA' ? 'EMPRESA' : 'NATURAL');
-
-// DNI de 8 dígitos para personas, RUC de 11 para empresas; nombre de al menos 3 letras.
-export function assertIdentity(type: CustomerType, doc: string, name: string): void {
-  if (type === 'EMPRESA' && !/^\d{11}$/.test(doc)) throw new CustomerError('El RUC debe tener 11 dígitos.');
-  if (type === 'NATURAL' && !/^\d{8}$/.test(doc)) throw new CustomerError('El DNI debe tener 8 dígitos.');
-  if (name.length < 3) throw new CustomerError('El nombre debe tener al menos 3 caracteres.');
-}
-
-const optional = (value: unknown, max: number) => (value ? String(value).trim().slice(0, max) : null);
 const num = (value: unknown) => Number(value);
 
 // ---------- Clientes ----------
@@ -50,41 +41,18 @@ export async function listCustomers(client: Client) {
   });
 }
 
-export async function createCustomer(client: Client, input: Record<string, unknown>) {
-  const doc = typeof input.doc === 'string' ? input.doc.trim() : '';
-  const name = typeof input.name === 'string' ? input.name.trim() : '';
-  if (!doc || !name) throw new CustomerError('El documento y nombre son requeridos.');
-  return client.cliente.create({
-    data: {
-      type: input.type === 'Empresa' ? 'EMPRESA' : 'NATURAL',
-      doc,
-      name,
-      phone: optional(input.phone, 30),
-      email: optional(input.email, 120),
-      address: optional(input.address, 250),
-      maxCredit: parseFloat(String(input.maxCredit)) || DEFAULT_CREDIT_LIMIT,
-      priceList: input.priceList === 'WHOLESALE' ? 'WHOLESALE' : 'RETAIL',
-    },
-  });
+export async function createCustomer(client: Client, input: z.infer<typeof CreateCustomerBody>) {
+  return client.cliente.create({ data: { ...input, maxCredit: input.maxCredit ?? DEFAULT_CREDIT_LIMIT } });
 }
 
 // Datos del cliente. El crédito y la lista de precios se cambian por sus propias rutas (quedan auditados aparte).
-export async function updateCustomer(client: Client, id: number, input: Record<string, unknown>, user: SessionUser) {
-  const type = customerTypeOf(input.type);
-  const doc = String(input.doc ?? '').trim();
-  const name = String(input.name ?? '').trim();
-  assertIdentity(type, doc, name);
-
+export async function updateCustomer(client: Client, id: number, data: z.infer<typeof UpdateCustomerBody>, user: SessionUser) {
   const current = await client.cliente.findUnique({
     where: { id },
     select: { type: true, doc: true, name: true, phone: true, email: true, address: true },
   });
   if (!current) throw new CustomerError('Cliente no encontrado.', 404);
 
-  const data = {
-    type, doc, name: name.slice(0, 120),
-    phone: optional(input.phone, 30), email: optional(input.email, 120), address: optional(input.address, 250),
-  };
   const changes = changedFields(current, data, Object.keys(data));
   if (!changes) return { success: true };
 
@@ -103,9 +71,7 @@ export async function updateCustomer(client: Client, id: number, input: Record<s
   return { success: true, client: updated };
 }
 
-export async function setCreditLimit(client: Client, id: number, value: unknown, user: SessionUser) {
-  const limit = parseFloat(String(value));
-  if (Number.isNaN(limit) || limit < 0) throw new CustomerError('Monto de crédito máximo no válido.');
+export async function setCreditLimit(client: Client, id: number, limit: number, user: SessionUser) {
   const current = await client.cliente.findUnique({ where: { id }, select: { name: true, maxCredit: true } });
   if (!current) throw new CustomerError('Cliente no encontrado.', 404);
   const before = current.maxCredit === null ? null : num(current.maxCredit);

@@ -1,6 +1,8 @@
 // Registrar un cliente o editar sus datos (el crédito y la lista de precios se cambian aparte).
 import { useState } from 'react';
-import type { Customer, CustomerRequest, PriceList } from '@ferresys/contracts/customers';
+import type {
+  CreateCustomerRequest, Customer, CustomerTypeLabel, PriceList, UpdateCustomerRequest,
+} from '@ferresys/contracts/customers';
 import { api } from '../../../api/client.ts';
 import FieldError from '../../../shared/ui/FieldError.tsx';
 import { borderClass } from '../../../shared/utils/validators.ts';
@@ -17,7 +19,7 @@ interface Props {
 
 export default function CustomerFormModal({ editing, onClose, onSaved }: Props) {
   const aviso = useToast();
-  const [cliType, setCliType] = useState<CustomerRequest['type']>(editing?.type === 'EMPRESA' ? 'Empresa' : 'Natural');
+  const [cliType, setCliType] = useState<CustomerTypeLabel>(editing?.type === 'EMPRESA' ? 'Empresa' : 'Natural');
   const [cliDoc, setCliDoc] = useState(editing?.doc || '');
   const [cliName, setCliName] = useState(editing?.name || '');
   const [cliPhone, setCliPhone] = useState(editing?.phone || '');
@@ -66,7 +68,7 @@ export default function CustomerFormModal({ editing, onClose, onSaved }: Props) 
   const handleSaveClient = async () => {
     if (!validateClient()) return;
 
-    const datos: CustomerRequest = {
+    const datos = {
       type: cliType,
       doc: cliDoc.trim(),
       name: cliName.trim(),
@@ -76,8 +78,8 @@ export default function CustomerFormModal({ editing, onClose, onSaved }: Props) 
     };
     try {
       setSaving(true);
-      if (editing) await api.put(`/clientes/${editing.id}`, datos);
-      else await api.post('/clientes', { ...datos, maxCredit: parseFloat(maxCredit) || 1000.0, priceList } satisfies CustomerRequest);
+      if (editing) await api.put(`/clientes/${editing.id}`, datos satisfies UpdateCustomerRequest);
+      else await api.post('/clientes', { ...datos, maxCredit: parseFloat(maxCredit) || 1000.0, priceList } satisfies CreateCustomerRequest);
       onSaved(editing ? 'Datos del cliente actualizados.' : 'Cliente guardado con éxito.');
     } catch (err) {
       aviso.error(`Error al guardar cliente: ${(err as Error).message}`);
@@ -107,7 +109,7 @@ export default function CustomerFormModal({ editing, onClose, onSaved }: Props) 
             <label className="text-xs font-bold text-muted mb-1 block">Tipo Cliente</label>
             <select
               value={cliType}
-              onChange={e => { setCliType(e.target.value as CustomerRequest['type']); clearError('doc'); }}
+              onChange={e => { setCliType(e.target.value as CustomerTypeLabel); clearError('doc'); }}
               className="w-full border border-line p-2 rounded outline-none focus:border-brand bg-surface text-sm"
             >
               <option value="Natural">Persona Natural</option>

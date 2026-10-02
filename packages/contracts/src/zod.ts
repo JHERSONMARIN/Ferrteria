@@ -21,3 +21,8 @@ export const optionalText = (maxLength: number, label: string) =>
   z.union([z.string(), z.number()], { error: `${label} no es un texto válido.` }).nullish()
     .transform(value => (value === null || value === undefined ? null : String(value).trim() || null))
     .refine(value => value === null || value.length <= maxLength, { error: `${label} no puede superar ${maxLength} caracteres.` });
+
+// Texto libre que se recorta al largo máximo en vez de rechazarse (teléfono, dirección de un cliente).
+export const clippedText = (maxLength: number) =>
+  z.union([z.string(), z.number()]).nullish()
+    .transform(value => (value === null || value === undefined ? null : String(value).trim().slice(0, maxLength) || null));

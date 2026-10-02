@@ -1,6 +1,6 @@
 // Cambiar el límite de crédito (fiado) de un cliente.
 import { useState } from 'react';
-import type { Customer } from '@ferresys/contracts/customers';
+import type { CreditLimitRequest, Customer } from '@ferresys/contracts/customers';
 import { api } from '../../../api/client.ts';
 import { Modal, Button, Field, Input } from '../../../shared/ui/index.ts';
 
@@ -27,7 +27,7 @@ export default function CreditLimitModal({ creditTarget, onClose, onSaved }: Pro
     }
     try {
       setSaving(true);
-      await api.put(`/clientes/${creditTarget.id}/max-credit`, { maxCredit: parsed });
+      await api.put(`/clientes/${creditTarget.id}/max-credit`, { maxCredit: parsed } satisfies CreditLimitRequest);
       onSaved();
     } catch (err) {
       setCreditError((err as Error).message);
