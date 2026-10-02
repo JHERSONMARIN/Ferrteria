@@ -3,11 +3,12 @@ import type { prisma, Tx } from '../../../db.ts';
 import { getSettings } from '../../settings/index.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { requireOpenSession } from '../../cash/index.ts';
-import { assertBranchDelivers, parseDeliveryRequest, scheduleDeliveryForSale, type DeliveryRequest } from '../../deliveries/index.ts';
+import { assertBranchDelivers, scheduleDeliveryForSale, type DeliveryRequest } from '../../deliveries/index.ts';
 import { reserveStock, takeAvailableStock } from '../../inventory/index.ts';
 import { industryHooks, parseSaleData, type IndustryData } from '../../../industries/index.ts';
+import type { DirectSaleInput } from '@ferresys/contracts/sales';
 import {
-  SaleError, assertExpectedTotal, normalizeCart, parseDiscountRequest, publicLines, toDocType, toPayMethod, unitColumns,
+  SaleError, assertExpectedTotal, publicLines, unitColumns,
   type CartItem, type DiscountRequest, type DocType, type PayMethod,
 } from '../domain/sale.ts';
 import { nextDocumentNumber } from '../infrastructure/documentSeries.ts';
@@ -16,21 +17,18 @@ import { applyDiscount, auditDiscount, markQuoteConverted, paymentFor, priceLine
 
 type Client = typeof prisma;
 
-export const toId = (value: unknown): number | null =>
-  value === undefined || value === null || value === '' ? null : parseInt(String(value), 10) || null;
-
 interface SaleData {
   items: CartItem[];
   docType: DocType;
   payMethod: PayMethod;
   mixCash: unknown;
   mixDigital: unknown;
-  payCode: unknown;
+  payCode: string | null;
   clienteId: number | null;
-  sellerId: number | null;
+  sellerId: number;
   cashierId: number;
   quoteId: number | null;
-  expectedTotal: unknown;
+  expectedTotal: number | null;
   delivery: DeliveryRequest | null;
   discountRequest: DiscountRequest | null;
   user: SessionUser;
@@ -61,7 +59,7 @@ async function executeSale(tx: Tx, data: SaleData) {
       payMethod: data.payMethod,
       mixCash: data.payMethod === 'PAGO_MIXTO' ? payment.cash : 0,
       mixDigital: data.payMethod === 'PAGO_MIXTO' ? payment.digital : 0,
-      payCode: data.payCode ? String(data.payCode).trim() : null,
+      payCode: data.payCode,
       total,
       discount,
       discountById: discount > 0 ? data.user.id : null,
@@ -112,36 +110,31 @@ async function executeSale(tx: Tx, data: SaleData) {
   return { ...sale, subtotal, items: publicLines(lines), delivery: entrega };
 }
 
-// user: quien tiene la sesión; es quien aplica el descuento (el vendedor puede ser otro).
-export async function processSale(client: Client, payload: Record<string, unknown>, user: SessionUser) {
+// user: quien tiene la sesión; cobra y aplica el descuento. El vendedor puede ser otro (sin vendedorId, el mismo).
+export async function processSale(client: Client, input: DirectSaleInput, user: SessionUser) {
   const settings = await getSettings(client);
   // El modo es de la sucursal de quien vende.
   if (user.branch?.saleFlowMode !== 'DIRECT') {
     throw new SaleError('Su sucursal trabaja con pedidos: registre la venta como pedido y cóbrela en caja.', 409, 'MODO_PEDIDOS');
   }
 
-  const items = normalizeCart(payload.cart);
-  const sellerId = toId(payload.vendedorId);
-  const cashierId = toId(payload.usuarioCajaId) || sellerId;
-  if (!cashierId) throw new SaleError('Debe indicarse el usuario de caja.');
-
   const data: SaleData = {
-    items,
-    docType: toDocType(payload.docType),
-    payMethod: toPayMethod(payload.payMethod),
-    mixCash: payload.mixCash,
-    mixDigital: payload.mixDigital,
-    payCode: payload.payCode,
-    clienteId: toId(payload.clienteId),
-    sellerId,
-    cashierId,
-    quoteId: toId(payload.cotizacionId),
-    expectedTotal: payload.totalEsperado,
-    delivery: parseDeliveryRequest(payload.delivery),
-    discountRequest: parseDiscountRequest(payload.discount),
+    items: input.cart,
+    docType: input.docType,
+    payMethod: input.payMethod,
+    mixCash: input.mixCash,
+    mixDigital: input.mixDigital,
+    payCode: input.payCode,
+    clienteId: input.clienteId,
+    sellerId: input.vendedorId ?? user.id,
+    cashierId: user.id,
+    quoteId: input.cotizacionId,
+    expectedTotal: input.totalEsperado,
+    delivery: input.delivery,
+    discountRequest: input.discount,
     user,
     maxDiscountPercent: Number(settings.maxDiscountPercent),
-    industryData: parseSaleData(payload.industryData),
+    industryData: parseSaleData(input.industryData),
   };
   if (data.delivery) assertBranchDelivers(user.branch);
 

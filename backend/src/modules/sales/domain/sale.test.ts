@@ -3,11 +3,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SaleError, assertCanCancel, assertCreditAvailable, assertExpectedTotal, computeDiscount, endOfBusinessDay, isQuoteValid,
-  normalizeCart, parseDiscountRequest, priceLine, splitPayment, toDocType, toPayMethod, unitPriceFor,
+  priceLine, splitPayment, toDocType, toPayMethod, unitPriceFor,
   type SellableProduct,
 } from './sale.ts';
 import { canDispatch, effectiveDispatchRole } from './dispatch.ts';
+import { CartBody, DiscountBody } from '@ferresys/contracts/sales';
+import { z } from '@ferresys/contracts/zod';
+import { parseInput } from '../../../lib/validation.ts';
 import { formatDocumentNumber, issuedNumber, nextFreeSeriesCode, nextQuoteNumber } from './documentNumber.ts';
+
+// Lo que hace la ruta: el carrito y el descuento se validan con los esquemas del contrato.
+const saleError = (message: string) => new SaleError(message);
+const normalizeCart = (cart: unknown) => parseInput(z.object({ cart: CartBody }), { cart }, saleError).cart;
+const parseDiscountRequest = (discount: unknown) => parseInput(z.object({ discount: DiscountBody }), { discount }, saleError).discount;
 
 const cable: SellableProduct = {
   id: 1, name: 'Cable 14 AWG', code: 'CAB', price: 2.5, wholesalePrice: 2, active: true, allowsFractions: true, unit: 'Metro',

@@ -1,7 +1,8 @@
 // Ventas, pedidos y cotizaciones: reglas puras (carrito, precios, descuentos, pagos y estados).
 // Nunca se usa el precio que manda el navegador: el servidor calcula con sus propios precios.
 import { AppError } from '@ferresys/shared/errors';
-import { MAX_QUANTITY_DECIMALS, quantityProblem, roundMoney, roundQuantity } from '../../../utils/quantities.ts';
+import { quantityProblem, roundMoney, roundQuantity } from '../../../utils/quantities.ts';
+import type { CartItem } from '@ferresys/contracts/sales';
 
 export class SaleError extends AppError {
   static override area = 'VENTA';
@@ -14,58 +15,18 @@ export type PayMethod = 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN' | 'TRANSFERENCIA' |
 export type PriceList = 'RETAIL' | 'WHOLESALE';
 export type SaleFlowMode = 'DIRECT' | 'SEPARATE_CASHIER' | 'STAGED';
 
-const DOC_TYPES: Record<string, DocType> = { Factura: 'FACTURA', Boleta: 'BOLETA' };
-const PAY_METHODS: Record<string, PayMethod> = {
-  Efectivo: 'EFECTIVO',
-  Tarjeta: 'TARJETA',
-  'Yape/Plin': 'YAPE_PLIN',
-  Transferencia: 'TRANSFERENCIA',
-  'Pago Mixto': 'PAGO_MIXTO',
-  Fiado: 'FIADO',
-};
-
-// El POS manda los nombres que ve el usuario; lo desconocido es nota de venta y efectivo.
-export const toDocType = (docType: unknown): DocType => DOC_TYPES[String(docType)] ?? 'NOTA_VENTA';
-export const toPayMethod = (payMethod: unknown): PayMethod => PAY_METHODS[String(payMethod)] ?? 'EFECTIVO';
+// El POS manda los nombres que ve el usuario: los traduce el contrato (DirectSaleBody, PayOrderBody…).
+export { toDocType, toPayMethod } from '@ferresys/contracts/sales';
 export const docTypeLabel = (docType: string) =>
   docType === 'FACTURA' ? 'Factura' : docType === 'BOLETA' ? 'Boleta' : 'Nota de Venta';
 
 // ---------- Carrito ----------
 
-export interface CartItem {
-  id: number;
-  unitId: number | null;
-  qty: number;
-}
-
-// Clave de una línea: el mismo producto en otra presentación es otra línea.
-export const lineKey = (productId: number, unitId: number | null | undefined) => `${productId}:${unitId ?? 0}`;
+// El carrito llega ya revisado y sin repetidos (CartBody del contrato).
+export { lineKey, type CartItem } from '@ferresys/contracts/sales';
 
 // Unidades que salen del stock por una línea (el stock siempre está en la unidad base).
 export const baseQuantity = (qty: number, factor = 1) => roundQuantity(qty * factor);
-
-// Suma productos repetidos (en la misma presentación) y rechaza ids o cantidades inválidas. Si el producto
-// admite fracciones se valida al cargarlo. Se ordena por id: las ventas simultáneas bloquean filas en el
-// mismo orden y no se traban.
-export function normalizeCart(cart: unknown): CartItem[] {
-  if (!Array.isArray(cart) || cart.length === 0) throw new SaleError('El carrito no puede estar vacío.');
-  const lines = new Map<string, CartItem>();
-  for (const item of cart as Record<string, unknown>[]) {
-    const id = Number(item?.id);
-    const qty = Number(item?.qty);
-    const rawUnit = item?.unitId;
-    const unitId = rawUnit === undefined || rawUnit === null || rawUnit === '' ? null : Number(rawUnit);
-    const label = item?.name || `el producto ${id}`;
-    if (!Number.isInteger(id) || id <= 0) throw new SaleError('El carrito contiene un producto inválido.');
-    if (unitId !== null && (!Number.isInteger(unitId) || unitId <= 0)) throw new SaleError(`La presentación de ${label} no es válida.`);
-    if (!Number.isFinite(qty) || qty <= 0 || roundQuantity(qty) !== qty) {
-      throw new SaleError(`Cantidad inválida para ${label}: debe ser mayor a 0 y con hasta ${MAX_QUANTITY_DECIMALS} decimales.`);
-    }
-    const key = lineKey(id, unitId);
-    lines.set(key, { id, unitId, qty: roundQuantity((lines.get(key)?.qty ?? 0) + qty) });
-  }
-  return [...lines.values()].sort((a, b) => a.id - b.id || (a.unitId ?? 0) - (b.unitId ?? 0));
-}
 
 // ---------- Productos y precios ----------
 
@@ -157,20 +118,10 @@ export function assertExpectedTotal(expectedTotal: unknown, lines: readonly Pric
 
 // ---------- Descuentos ----------
 
+// Descuento ya validado por el contrato (DiscountBody): { type, value }, o null.
 export interface DiscountRequest {
   type: 'PERCENT' | 'AMOUNT';
   value: number;
-}
-
-// Descuento que pide el POS: { type, value }. Sin descuento (o de 0) → null.
-export function parseDiscountRequest(raw: unknown): DiscountRequest | null {
-  if (raw === undefined || raw === null) return null;
-  const request = raw as { type?: unknown; value?: unknown };
-  if (request.type !== 'PERCENT' && request.type !== 'AMOUNT') throw new SaleError('Tipo de descuento no válido.');
-  const value = Number(request.value);
-  if (!Number.isFinite(value) || value < 0) throw new SaleError('El descuento debe ser un número positivo.');
-  if (request.type === 'PERCENT' && value > 100) throw new SaleError('El descuento no puede superar el 100 %.');
-  return value === 0 ? null : { type: request.type, value };
 }
 
 // Sobre la suma de las líneas. El administrador no tiene tope; el resto del personal descuenta hasta el %

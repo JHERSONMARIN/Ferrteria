@@ -7,18 +7,19 @@ import { getSettings } from '../../settings/index.ts';
 import { roundMoney } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { requireOpenSession } from '../../cash/index.ts';
-import { assertBranchDelivers, assertCanDeliver, parseDeliveryRequest, scheduleDeliveryForSale } from '../../deliveries/index.ts';
+import { assertBranchDelivers, assertCanDeliver, scheduleDeliveryForSale } from '../../deliveries/index.ts';
 import { consumeReservedStock, releaseReservedStock, reserveStock } from '../../inventory/index.ts';
 import { industryHooks, parseSaleData } from '../../../industries/index.ts';
 import { canDispatch } from '../domain/dispatch.ts';
 import {
-  EXPIRED_REASON, SaleError, assertCanCancel, assertExpectedTotal, assertSameBranch, endOfBusinessDay, normalizeCart,
-  parseDiscountRequest, publicLines, toDocType, toPayMethod, unitColumns,
+  EXPIRED_REASON, SaleError, assertCanCancel, assertExpectedTotal, assertSameBranch, endOfBusinessDay,
+  publicLines, unitColumns,
 } from '../domain/sale.ts';
 import { nextDocumentNumber } from '../infrastructure/documentSeries.ts';
 import * as repo from '../infrastructure/saleRepository.ts';
 import type { Db, OrderRow } from '../infrastructure/saleRepository.ts';
-import { toId } from './directSale.ts';
+import type { z } from '@ferresys/contracts/zod';
+import type { OrderBody, PayOrderBody } from '@ferresys/contracts/sales';
 import { applyDiscount, auditDiscount, paymentFor, priceLines, saleLinesFor } from './pricing.ts';
 
 type Client = typeof prisma;
@@ -84,15 +85,12 @@ async function dispatchLines(tx: Tx, order: OrderRow, numDoc: string | null, use
 }
 
 // El vendedor envía el pedido a caja. La lista de precios y el descuento se aplican aquí; en caja solo se cobra.
-export async function createOrder(client: Client, payload: Record<string, unknown>, user: SessionUser) {
+export async function createOrder(client: Client, payload: z.infer<typeof OrderBody>, user: SessionUser) {
   const settings = await getSettings(client);
   if (user.branch?.saleFlowMode === 'DIRECT') {
     throw new SaleError('Su sucursal trabaja en modo directo: cobre la venta desde el Punto de Venta.', 409, 'MODO_DIRECTO');
   }
-  const items = normalizeCart(payload.cart);
-  const quoteId = toId(payload.cotizacionId);
-  const clienteId = toId(payload.clienteId);
-  const discountRequest = parseDiscountRequest(payload.discount);
+  const { cart: items, cotizacionId: quoteId, clienteId, discount: discountRequest } = payload;
   const industryData = parseSaleData(payload.industryData);
 
   return client.$transaction(async (tx) => {
@@ -129,8 +127,8 @@ export async function createOrder(client: Client, payload: Record<string, unknow
   });
 }
 
-export async function payOrder(client: Client, orderId: number, payload: Record<string, unknown>, cashier: SessionUser) {
-  const delivery = parseDeliveryRequest(payload.delivery);
+export async function payOrder(client: Client, orderId: number, payload: z.infer<typeof PayOrderBody>, cashier: SessionUser) {
+  const { delivery, docType, payMethod } = payload;
 
   return client.$transaction(async (tx) => {
     const order = await loadOrder(tx, orderId);
@@ -141,9 +139,7 @@ export async function payOrder(client: Client, orderId: number, payload: Record<
       throw new SaleError('El pedido venció. Pida al vendedor que lo registre nuevamente.', 409);
     }
 
-    const docType = toDocType(payload.docType);
-    const payMethod = toPayMethod(payload.payMethod);
-    const clienteId = toId(payload.clienteId) ?? order.clienteId;
+    const clienteId = payload.clienteId ?? order.clienteId;
     const lines = repo.linesOf(order);
     const total = Number(order.total);
 
@@ -159,7 +155,7 @@ export async function payOrder(client: Client, orderId: number, payload: Record<
       payMethod,
       mixCash: payMethod === 'PAGO_MIXTO' ? payment.cash : 0,
       mixDigital: payMethod === 'PAGO_MIXTO' ? payment.digital : 0,
-      payCode: payload.payCode ? String(payload.payCode).trim() : null,
+      payCode: payload.payCode,
       clienteId,
       cajaId: sessionId,
       paidById: cashier.id,

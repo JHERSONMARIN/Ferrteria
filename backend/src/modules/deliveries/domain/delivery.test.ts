@@ -1,10 +1,16 @@
 // Reglas de envíos, sin base de datos ni servidor:  npm run test:unit
 import test from 'node:test';
+import { SaleDeliveryBody } from '@ferresys/contracts/deliveries';
+import { z } from '@ferresys/contracts/zod';
+import { parseInput } from '../../../lib/validation.ts';
 import assert from 'node:assert/strict';
 import {
   DeliveryError, assertBranchDelivers, assertCourierChange, canDeliver, cancellationNote, deliveryRef, isWaitingDispatch,
-  parseDeliveryRequest,
 } from './delivery.ts';
+
+// Lo que hace la venta al recibir el cobro: el envío se valida con el esquema del contrato.
+const parseDeliveryRequest = (delivery: unknown) =>
+  parseInput(z.object({ delivery: SaleDeliveryBody }), { delivery }, m => new DeliveryError(m)).delivery;
 
 test('sin tipo DELIVERY no hay envío: el cliente se lleva los productos', () => {
   assert.equal(parseDeliveryRequest(undefined), null);

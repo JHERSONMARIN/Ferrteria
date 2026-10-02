@@ -4,7 +4,7 @@ import { z } from '@ferresys/contracts/zod';
 import { AppError, errorBody } from '@ferresys/shared/errors';
 import { prisma } from '../../../db.ts';
 import { allowModules } from '../../identity/index.ts';
-import { id, optionalId, parseInput } from '../../../lib/validation.ts';
+import { id, parseInput } from '../../../lib/validation.ts';
 import { SaleError } from '../domain/sale.ts';
 import { processSale } from '../application/directSale.ts';
 import { listSales } from '../application/history.ts';
@@ -13,8 +13,9 @@ import {
 } from '../application/orders.ts';
 import { cancelQuote, convertQuote, createQuote, listQuotes } from '../application/quotes.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type {
-  DirectSaleSaved, DispatchedOrder, Order, OrderSaved, Quote, QuoteCancelled, QuoteSaved,
+import {
+  CancelOrderBody, ConvertQuoteBody, DirectSaleBody, DispatchBody, OrderBody, PayOrderBody, QuoteBody,
+  type DirectSaleSaved, type DispatchedOrder, type Order, type OrderSaved, type Quote, type QuoteCancelled, type QuoteSaved,
 } from '@ferresys/contracts/sales';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
@@ -35,7 +36,6 @@ const handle = (context: string, fn: Handler, duplicateMessage = 'No se pudo gen
     }
   };
 
-const body = (req: Request) => (req.body ?? {}) as Record<string, unknown>;
 const saleError = (message: string) => new SaleError(message);
 
 // ---------- /api/ventas ----------
@@ -49,11 +49,7 @@ salesRoutes.get('/', handle('listar las ventas', async (req, res) => {
 
 // POST /api/ventas: venta directa. La caja es siempre la del usuario de la sesión; el vendedor puede elegirse en el POS.
 salesRoutes.post('/', handle('registrar la venta', async (req, res) => {
-  const venta = await processSale(prisma, {
-    ...body(req),
-    usuarioCajaId: req.user.id,
-    vendedorId: body(req).vendedorId || req.user.id,
-  }, req.user);
+  const venta = await processSale(prisma, parseInput(DirectSaleBody, req.body, saleError), req.user);
   res.status(201).json({ success: true, venta } satisfies Sendable<DirectSaleSaved>);
 }));
 
@@ -64,8 +60,6 @@ const orderId = (req: Request) => parseInput(OrderParams, req.params, saleError)
 const QueueQuery = z.object({
   status: z.enum(['PENDING_PAYMENT', 'PAID'], { error: 'Estado no válido.' }).default('PENDING_PAYMENT'),
 });
-const DispatchBody = z.object({ repartidorId: optionalId('Repartidor no válido.') });
-const CancelBody = z.object({ reason: z.string().optional() });
 
 export const orderRoutes = express.Router();
 
@@ -86,12 +80,12 @@ orderRoutes.get('/:id', allowModules({ default: ['caja', 'despacho', 'pos'] }), 
 
 // POST /api/pedidos  (el vendedor envía el pedido a caja)
 orderRoutes.post('/', allowModules({ default: ['pos'] }), handle('crear el pedido', async (req, res) => {
-  res.status(201).json({ success: true, pedido: await createOrder(prisma, body(req), req.user) } satisfies Sendable<OrderSaved>);
+  res.status(201).json({ success: true, pedido: await createOrder(prisma, parseInput(OrderBody, req.body, saleError), req.user) } satisfies Sendable<OrderSaved>);
 }));
 
 // POST /api/pedidos/:id/cobrar
 orderRoutes.post('/:id/cobrar', allowModules({ default: ['caja'] }), handle('cobrar el pedido', async (req, res) => {
-  res.json({ success: true, pedido: await payOrder(prisma, orderId(req), body(req), req.user) } satisfies Sendable<OrderSaved>);
+  res.json({ success: true, pedido: await payOrder(prisma, orderId(req), parseInput(PayOrderBody, req.body, saleError), req.user) } satisfies Sendable<OrderSaved>);
 }));
 
 // POST /api/pedidos/:id/despachar  { repartidorId? }
@@ -103,8 +97,8 @@ orderRoutes.post('/:id/despachar', allowModules({ default: ['despacho', 'pos', '
 
 // POST /api/pedidos/:id/anular  { reason? }
 orderRoutes.post('/:id/anular', allowModules({ default: ['caja', 'pos'] }), handle('anular el pedido', async (req, res) => {
-  const { reason } = parseInput(CancelBody, req.body, saleError);
-  res.json({ success: true, pedido: await cancelOrder(prisma, orderId(req), req.user, reason) } satisfies Sendable<OrderSaved>);
+  const { reason } = parseInput(CancelOrderBody, req.body, saleError);
+  res.json({ success: true, pedido: await cancelOrder(prisma, orderId(req), req.user, reason ?? undefined) } satisfies Sendable<OrderSaved>);
 }));
 
 // ---------- /api/cotizaciones ----------
@@ -122,12 +116,12 @@ quoteRoutes.get('/', handle('listar las cotizaciones', async (req, res) => {
 
 // POST /api/cotizaciones  { cart, clienteId?, validDays? }
 quoteRoutes.post('/', handle('generar la cotización', async (req, res) => {
-  res.status(201).json({ success: true, cotizacion: await createQuote(prisma, body(req), req.user) } satisfies Sendable<QuoteSaved>);
+  res.status(201).json({ success: true, cotizacion: await createQuote(prisma, parseInput(QuoteBody, req.body, saleError), req.user) } satisfies Sendable<QuoteSaved>);
 }, QUOTE_NUMBER_TAKEN));
 
 // POST /api/cotizaciones/:id/convertir: cobrarla como venta directa.
 quoteRoutes.post('/:id/convertir', handle('convertir la cotización', async (req, res) => {
-  res.json({ success: true, venta: await convertQuote(prisma, quoteId(req), body(req), req.user) } satisfies Sendable<DirectSaleSaved>);
+  res.json({ success: true, venta: await convertQuote(prisma, quoteId(req), parseInput(ConvertQuoteBody, req.body, saleError), req.user) } satisfies Sendable<DirectSaleSaved>);
 }));
 
 // DELETE /api/cotizaciones/:id: anularla (queda registrada, en estado CANCELADO).

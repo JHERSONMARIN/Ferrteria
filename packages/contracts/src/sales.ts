@@ -4,6 +4,11 @@ import type { CustomerType } from './customers.ts';
 import type { DeliveryStatus } from './deliveries.ts';
 import type { SaleFlowMode, DispatchRole } from './identity.ts';
 import type { DocumentType } from './settings.ts';
+import { SaleDeliveryBody, type DeliveryRequest } from './deliveries.ts';
+
+export type { DeliveryRequest };
+import { MAX_QUANTITY_DECIMALS, roundQuantity } from './quantities.ts';
+import { optionalId, z } from './zod.ts';
 
 export type PayMethod = 'EFECTIVO' | 'TARJETA' | 'YAPE_PLIN' | 'TRANSFERENCIA' | 'PAGO_MIXTO' | 'FIADO';
 export type SaleStatus = 'PENDING_PAYMENT' | 'PAID' | 'DISPATCHED' | 'CANCELLED';
@@ -15,84 +20,146 @@ export type PayMethodLabel = 'Efectivo' | 'Tarjeta' | 'Yape/Plin' | 'Transferenc
 
 // ---------- Lo que envía la pantalla ----------
 
-/** Una línea del carrito: un producto en una presentación (unitId null = unidad base). */
-export interface CartLine {
+const DOC_TYPES: Record<string, 'FACTURA' | 'BOLETA'> = { Factura: 'FACTURA', Boleta: 'BOLETA' };
+const PAY_METHODS: Record<string, PayMethod> = {
+  Efectivo: 'EFECTIVO',
+  Tarjeta: 'TARJETA',
+  'Yape/Plin': 'YAPE_PLIN',
+  Transferencia: 'TRANSFERENCIA',
+  'Pago Mixto': 'PAGO_MIXTO',
+  Fiado: 'FIADO',
+};
+
+// El POS manda los nombres que ve el usuario; lo desconocido es nota de venta y efectivo.
+export const toDocType = (docType: unknown): DocumentType => DOC_TYPES[String(docType)] ?? 'NOTA_VENTA';
+export const toPayMethod = (payMethod: unknown): PayMethod => PAY_METHODS[String(payMethod)] ?? 'EFECTIVO';
+
+const numberish = z.union([z.number(), z.string()]);
+const issue = (ctx: z.RefinementCtx, message: string) => ctx.addIssue({ code: 'custom', message });
+// Identificador opcional que la pantalla manda como número, texto o vacío: lo inválido = sin valor.
+const looseId = numberish.nullish().transform(value => (value === '' || value === null || value === undefined ? null : parseInt(String(value), 10) || null));
+
+/** Una línea del carrito ya revisada: producto, presentación (null = unidad base) y cantidad. */
+export interface CartItem {
   id: number;
   unitId: number | null;
   qty: number;
+}
+
+// Clave de una línea: el mismo producto en otra presentación es otra línea.
+export const lineKey = (productId: number, unitId: number | null | undefined) => `${productId}:${unitId ?? 0}`;
+
+// Suma productos repetidos (en la misma presentación) y los ordena por id: las ventas simultáneas bloquean
+// filas en el mismo orden y no se traban.
+export function mergeCart(items: readonly CartItem[]): CartItem[] {
+  const lines = new Map<string, CartItem>();
+  for (const item of items) {
+    const key = lineKey(item.id, item.unitId);
+    lines.set(key, { ...item, qty: roundQuantity((lines.get(key)?.qty ?? 0) + item.qty) });
+  }
+  return [...lines.values()].sort((a, b) => a.id - b.id || (a.unitId ?? 0) - (b.unitId ?? 0));
+}
+
+const EMPTY_CART = 'El carrito no puede estar vacío.';
+const CartLineBody = z.object({
+  id: numberish.nullish(),
+  unitId: numberish.nullish(),
+  qty: numberish.nullish(),
   /** Solo para los mensajes de error. */
-  name?: string;
-}
+  name: z.string().optional(),
+}, { error: 'El carrito contiene un producto inválido.' });
+/** Una línea del carrito: un producto en una presentación (unitId null = unidad base). */
+export type CartLine = z.input<typeof CartLineBody>;
 
-export interface DiscountRequest {
-  type: 'PERCENT' | 'AMOUNT';
-  value: number;
-}
+// El carrito: ids y cantidades válidos (si el producto admite fracciones se revisa al cargarlo).
+export const CartBody = z.array(CartLineBody, { error: EMPTY_CART }).min(1, { error: EMPTY_CART }).transform((raw, ctx) => {
+  const items: CartItem[] = [];
+  for (const line of raw) {
+    const id = Number(line.id);
+    const qty = Number(line.qty);
+    const unitId = line.unitId === undefined || line.unitId === null || line.unitId === '' ? null : Number(line.unitId);
+    const label = line.name || `el producto ${id}`;
+    if (!Number.isInteger(id) || id <= 0) { issue(ctx, 'El carrito contiene un producto inválido.'); return z.NEVER; }
+    if (unitId !== null && (!Number.isInteger(unitId) || unitId <= 0)) { issue(ctx, `La presentación de ${label} no es válida.`); return z.NEVER; }
+    if (!Number.isFinite(qty) || qty <= 0 || roundQuantity(qty) !== qty) {
+      issue(ctx, `Cantidad inválida para ${label}: debe ser mayor a 0 y con hasta ${MAX_QUANTITY_DECIMALS} decimales.`);
+      return z.NEVER;
+    }
+    items.push({ id, unitId, qty });
+  }
+  return mergeCart(items);
+});
 
-/** Envío a domicilio que se programa al cobrar. */
-export interface DeliveryRequest {
-  type: 'DELIVERY';
-  address: string;
-  contactName: string | null;
-  contactPhone: string | null;
-  notes: string | null;
-}
+/** Descuento sobre el total: en % o en S/. Sin descuento, o de 0, = null. */
+export const DiscountBody = z.object({
+  type: z.enum(['PERCENT', 'AMOUNT'], { error: 'Tipo de descuento no válido.' }),
+  value: z.union([z.number(), z.string()], { error: 'El descuento debe ser un número positivo.' }).nullish().transform(Number)
+    .refine(value => Number.isFinite(value) && value >= 0, { error: 'El descuento debe ser un número positivo.' }),
+}, { error: 'Tipo de descuento no válido.' })
+  .refine(d => d.type !== 'PERCENT' || d.value <= 100, { error: 'El descuento no puede superar el 100 %.' })
+  .nullish()
+  .transform(d => (!d || d.value === 0 ? null : d));
+export type DiscountRequest = NonNullable<z.input<typeof DiscountBody>>;
 
-/** Cómo se paga (venta directa y cobro de un pedido). */
-export interface PaymentRequest {
-  docType: DocTypeLabel;
-  payMethod: PayMethodLabel;
-  /** Pago mixto: la parte en efectivo y la digital. */
-  mixCash: number;
-  mixDigital: number;
+/** Cómo se paga (venta directa, cobro de un pedido y cotización convertida). */
+const paymentFields = {
+  docType: z.string().nullish().transform(toDocType),
+  payMethod: z.string().nullish().transform(toPayMethod),
+  /** Pago mixto: la parte en efectivo y la digital (se revisan contra el total en el servidor). */
+  mixCash: numberish.nullish(),
+  mixDigital: numberish.nullish(),
   /** N° de operación de Yape/Plin. */
-  payCode: string;
-  clienteId: number | null;
-  delivery: DeliveryRequest | null;
-}
+  payCode: z.union([z.string(), z.number()]).nullish().transform(value => (value ? String(value).trim() : null)),
+};
 
-/** POST /api/ventas: venta directa (modo directo). */
-export interface DirectSaleRequest extends PaymentRequest {
-  vendedorId: number | null;
-  cotizacionId: number | null;
+const saleFields = {
+  clienteId: looseId,
+  cotizacionId: looseId,
   /** Total que vio el usuario: si los precios cambiaron, el servidor rechaza con PRECIOS_CAMBIARON. */
-  totalEsperado: number;
-  discount: DiscountRequest | null;
-  cart: CartLine[];
-  /** Datos del rubro de la venta (farmacia: la receta, PharmacySaleData). */
-  industryData?: Record<string, unknown>;
-}
+  totalEsperado: numberish.nullish().transform(value => (value === null || value === undefined ? null : Number(value))),
+  discount: DiscountBody,
+  cart: CartBody,
+  /** Datos del rubro de la venta (farmacia: la receta, PharmacySaleData); los valida su paquete. */
+  industryData: z.unknown().optional(),
+};
+
+/** POST /api/ventas: venta directa (modo directo). Sin vendedorId, vende quien cobra. */
+export const DirectSaleBody = z.object({
+  ...paymentFields,
+  ...saleFields,
+  vendedorId: looseId,
+  delivery: SaleDeliveryBody,
+});
+export type DirectSaleRequest = Omit<z.input<typeof DirectSaleBody>, 'delivery'> & { delivery?: DeliveryRequest | null };
+export type DirectSaleInput = z.output<typeof DirectSaleBody>;
 
 /** POST /api/pedidos: el vendedor envía el pedido a caja. */
-export interface OrderRequest {
-  cart: CartLine[];
-  clienteId: number | null;
-  cotizacionId: number | null;
-  totalEsperado: number;
-  discount: DiscountRequest | null;
-  /** Datos del rubro del pedido (farmacia: la receta, PharmacySaleData). */
-  industryData?: Record<string, unknown>;
-}
+export const OrderBody = z.object(saleFields);
+export type OrderRequest = z.input<typeof OrderBody>;
 
-/** POST /api/pedidos/:id/cobrar */
-export type PayOrderRequest = PaymentRequest;
+/** POST /api/pedidos/:id/cobrar. Sin clienteId, el del pedido. */
+export const PayOrderBody = z.object({ ...paymentFields, clienteId: looseId, delivery: SaleDeliveryBody });
+export type PayOrderRequest = Omit<z.input<typeof PayOrderBody>, 'delivery'> & { delivery?: DeliveryRequest | null };
 
-/** POST /api/pedidos/:id/despachar */
-export interface DispatchRequest {
-  repartidorId?: number | null;
-}
+/** POST /api/pedidos/:id/despachar (quién lo lleva, si sale con envío). */
+export const DispatchBody = z.object({ repartidorId: optionalId('Repartidor no válido.') });
+export type DispatchRequest = z.input<typeof DispatchBody>;
 
 /** POST /api/pedidos/:id/anular */
-export interface CancelOrderRequest {
-  reason?: string;
-}
+export const CancelOrderBody = z.object({ reason: z.string().nullish() });
+export type CancelOrderRequest = z.input<typeof CancelOrderBody>;
 
-/** POST /api/cotizaciones */
-export interface QuoteRequest {
-  cart: CartLine[];
-  clienteId: number | null;
-  validDays: number;
-}
+/** POST /api/cotizaciones. Sin días de vigencia (o inválidos), 7. */
+export const QuoteBody = z.object({
+  cart: CartBody,
+  clienteId: looseId,
+  validDays: numberish.nullish().transform(value => parseInt(String(value), 10) || 7),
+});
+export type QuoteRequest = z.input<typeof QuoteBody>;
+
+/** POST /api/cotizaciones/:id/convertir: se cobra como venta directa con los productos de la cotización. */
+export const ConvertQuoteBody = z.object({ ...paymentFields, vendedorId: looseId });
+export type ConvertQuoteRequest = z.input<typeof ConvertQuoteBody>;
 
 /** Datos del error PRECIOS_CAMBIARON: el precio real de cada línea. */
 export interface PricesChanged {

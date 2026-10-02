@@ -6,9 +6,11 @@ import { roundQuantity } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import {
   ACTIVE_STATUSES, DeliveryError, FINISHED_STATUSES, assertBranchDelivers, assertCourierChange, canDeliver,
-  cancellationNote, deliveryRef, isWaitingDispatch, parseDeliveryRequest, type DeliveryRequest, type DeliveryStatus,
+  cancellationNote, deliveryRef, isWaitingDispatch, type DeliveryRequest, type DeliveryStatus,
 } from '../domain/delivery.ts';
 import * as repo from '../infrastructure/deliveryRepository.ts';
+import type { z } from '@ferresys/contracts/zod';
+import type { ScheduleDeliveryBody } from '@ferresys/contracts/deliveries';
 import type { Db, DeliveryRow } from '../infrastructure/deliveryRepository.ts';
 
 type Client = typeof prisma;
@@ -146,8 +148,8 @@ export function scheduleDeliveryForSale(tx: Tx, data: {
   });
 }
 
-async function paidSaleOfBranch(db: Db, numDoc: unknown, user: SessionUser) {
-  const sale = await repo.findPaidSale(db, String(numDoc ?? ''));
+async function paidSaleOfBranch(db: Db, numDoc: string, user: SessionUser) {
+  const sale = await repo.findPaidSale(db, numDoc);
   if (!sale || !['PAID', 'DISPATCHED'].includes(sale.status)) {
     throw new DeliveryError('No se encontró una venta cobrada con ese comprobante.', 404);
   }
@@ -156,8 +158,8 @@ async function paidSaleOfBranch(db: Db, numDoc: unknown, user: SessionUser) {
 }
 
 // Envío programado después de la venta (el cliente lo pidió tras pagar).
-export async function scheduleDeliveryForExistingSale(client: Client, numDoc: unknown, input: Record<string, unknown>, user: SessionUser) {
-  const delivery = parseDeliveryRequest({ ...input, type: 'DELIVERY' })!;
+export async function scheduleDeliveryForExistingSale(client: Client, input: z.infer<typeof ScheduleDeliveryBody>, user: SessionUser) {
+  const { numDoc, ...delivery } = input;
   return client.$transaction(async (tx) => {
     const sale = await paidSaleOfBranch(tx, numDoc, user);
     assertBranchDelivers(sale.branch);
@@ -174,7 +176,7 @@ export async function scheduleDeliveryForExistingSale(client: Client, numDoc: un
 }
 
 // Vista previa de una venta para programar su envío.
-export async function findSaleForDelivery(db: Db, numDoc: unknown, user: SessionUser) {
+export async function findSaleForDelivery(db: Db, numDoc: string, user: SessionUser) {
   const sale = await paidSaleOfBranch(db, numDoc, user);
   return {
     // Se buscó por su número: siempre lo tiene.

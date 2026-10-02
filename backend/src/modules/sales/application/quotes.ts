@@ -3,10 +3,12 @@ import type { prisma } from '../../../db.ts';
 import { recordAudit } from '../../audit/index.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import { nextQuoteNumber } from '../domain/documentNumber.ts';
-import { SaleError, normalizeCart, sumLines, unitColumns, unitFields, unitPriceFor } from '../domain/sale.ts';
+import { SaleError, sumLines, unitColumns, unitFields, unitPriceFor } from '../domain/sale.ts';
 import { roundMoney } from '../../../utils/quantities.ts';
 import * as repo from '../infrastructure/saleRepository.ts';
-import { processSale, toId } from './directSale.ts';
+import { processSale } from './directSale.ts';
+import type { z } from '@ferresys/contracts/zod';
+import { mergeCart, type ConvertQuoteBody, type QuoteBody } from '@ferresys/contracts/sales';
 import { loadCartProducts } from './pricing.ts';
 
 type Client = typeof prisma;
@@ -43,9 +45,8 @@ export async function listQuotes(client: Client) {
 }
 
 // Precios de la lista del cliente al momento de cotizar; el número sigue al de la última cotización.
-export async function createQuote(client: Client, payload: Record<string, unknown>, user: SessionUser) {
-  const items = normalizeCart(payload.cart);
-  const clienteId = toId(payload.clienteId);
+export async function createQuote(client: Client, payload: z.infer<typeof QuoteBody>, user: SessionUser) {
+  const { cart: items, clienteId } = payload;
   const products = await loadCartProducts(client, items);
   const priceList = await repo.priceListOf(client, clienteId);
 
@@ -67,7 +68,7 @@ export async function createQuote(client: Client, payload: Record<string, unknow
     data: {
       numDoc: nextQuoteNumber(last?.numDoc),
       total: sumLines(details),
-      validDays: parseInt(String(payload.validDays), 10) || 7,
+      validDays: payload.validDays,
       clienteId,
       vendedorId: user.id,
       detalles: { create: details },
@@ -77,23 +78,22 @@ export async function createQuote(client: Client, payload: Record<string, unknow
 }
 
 // Cobra la cotización como venta directa con sus productos y, si sigue vigente, sus precios.
-export async function convertQuote(client: Client, quoteId: number, payload: Record<string, unknown>, user: SessionUser) {
+export async function convertQuote(client: Client, quoteId: number, payload: z.infer<typeof ConvertQuoteBody>, user: SessionUser) {
   const quote = await client.cotizacion.findUnique({
     where: { id: quoteId },
     include: { detalles: { select: { productoId: true, quantity: true, unitId: true } } },
   });
   if (!quote) throw new SaleError('Cotización no encontrada.', 404);
   return processSale(client, {
-    docType: payload.docType,
-    payMethod: payload.payMethod,
-    mixCash: payload.mixCash,
-    mixDigital: payload.mixDigital,
-    payCode: payload.payCode,
-    usuarioCajaId: user.id,
-    vendedorId: payload.vendedorId || quote.vendedorId,
+    ...payload,
+    vendedorId: payload.vendedorId ?? quote.vendedorId,
     clienteId: quote.clienteId,
     cotizacionId: quote.id,
-    cart: quote.detalles.map(d => ({ id: d.productoId, qty: Number(d.quantity), unitId: d.unitId })),
+    cart: mergeCart(quote.detalles.map(d => ({ id: d.productoId, qty: Number(d.quantity), unitId: d.unitId }))),
+    totalEsperado: null,
+    discount: null,
+    delivery: null,
+    industryData: undefined,
   }, user);
 }
 
