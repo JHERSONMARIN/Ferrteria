@@ -3,12 +3,14 @@ import express, { type Request, type Response } from 'express';
 import { z } from '@ferresys/contracts/zod';
 import { AppError, errorBody } from '@ferresys/shared/errors';
 import { prisma } from '../../../db.ts';
-import { id, optionalId, parseInput } from '../../../lib/validation.ts';
+import { optionalId, parseInput } from '../../../lib/validation.ts';
 import { StockError, TransferError } from '../domain/inventory.ts';
 import { listMovements, recordManualMovement } from '../application/kardex.ts';
 import { createTransfer, listTransfers } from '../application/transfers.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type { KardexResponse, ManualMovementSaved, Transfer } from '@ferresys/contracts/inventory';
+import {
+  ManualMovementBody, TransferBody, type KardexResponse, type ManualMovementSaved, type Transfer,
+} from '@ferresys/contracts/inventory';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -35,17 +37,6 @@ const MovementQuery = z.object({
   endDate: z.string().optional(),
 });
 
-const INVALID_MOVEMENT = 'Parámetros inválidos para registrar el movimiento.';
-const MovementBody = z.object({
-  productoId: id(INVALID_MOVEMENT),
-  type: z.enum(['ENTRADA', 'SALIDA'], { error: INVALID_MOVEMENT }),
-  qty: z.coerce.number({ error: INVALID_MOVEMENT }).positive({ error: INVALID_MOVEMENT }),
-  ref: z.string().optional(),
-  branchId: optionalId('Sucursal no válida.'),
-  // Datos del rubro de un ingreso (farmacia: lote y vencimiento); los valida su paquete.
-  industryData: z.unknown().optional(),
-});
-
 export const kardexRoutes = express.Router();
 
 // GET /api/kardex?productCode=&type=ENTRADA|SALIDA&period=today|week|month|all|custom&startDate=&endDate=&branchId=
@@ -55,20 +46,13 @@ kardexRoutes.get('/', handle('obtener los movimientos de kardex', async (req, re
 
 // POST /api/kardex { productoId, type, qty, ref, branchId? }: ajuste manual (entrada, merma, conteo).
 kardexRoutes.post('/', handle('registrar el movimiento', async (req, res) => {
-  const input = parseInput(MovementBody, req.body, m => new StockError(m, 400));
+  const input = parseInput(ManualMovementBody, req.body, m => new StockError(m, 400));
   res.status(201).json(await recordManualMovement(prisma, input, req.user) satisfies Sendable<ManualMovementSaved>);
 }));
 
 // ---------- Transferencias ----------
 
 const TransferQuery = z.object({ branchId: optionalId('Sucursal no válida.') });
-const TransferBody = z.object({
-  fromBranchId: optionalId('Sucursal de origen no válida.'),
-  toBranchId: id('Elija la sucursal de destino.'),
-  // Los productos los valida el dominio, con sus mensajes.
-  items: z.unknown().optional(),
-  notes: z.unknown().optional(),
-});
 
 export const transferRoutes = express.Router();
 

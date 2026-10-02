@@ -1,23 +1,28 @@
 // Reglas de inventario, sin base de datos ni servidor:  npm run test:unit
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  TransferError, movementTotals, normalizeTransferItems, periodRange, transferNotes, transferNumber,
-} from './inventory.ts';
+import { TransferBody } from '@ferresys/contracts/inventory';
+import { parseInput } from '../../../lib/validation.ts';
+import { TransferError, movementTotals, normalizeTransferItems, periodRange, transferNumber } from './inventory.ts';
+
+// Lo que hace la ruta: valida la forma con el contrato.
+const transfer = (body: Record<string, unknown>) => parseInput(TransferBody, { toBranchId: 2, items: [{ id: 1, qty: 1 }], ...body }, m => new TransferError(m));
+const parseItems = (items: unknown) => normalizeTransferItems(transfer({ items }).items);
+const transferNotes = (notes: unknown) => transfer({ notes }).notes;
 
 test('transferencia: productos repetidos se suman y quedan ordenados por id', () => {
   assert.deepEqual(
-    normalizeTransferItems([{ id: 7, qty: 10 }, { id: 2, qty: 1 }, { id: 7, qty: 2.5 }]),
+    parseItems([{ id: 7, qty: 10 }, { id: 2, qty: 1 }, { id: 7, qty: 2.5 }]),
     [{ id: 2, qty: 1 }, { id: 7, qty: 12.5 }],
   );
 });
 
 test('transferencia: vacía, producto inválido o cantidad inválida se rechazan', () => {
-  assert.throws(() => normalizeTransferItems([]), /al menos un producto/);
-  assert.throws(() => normalizeTransferItems(null), TransferError);
-  assert.throws(() => normalizeTransferItems([{ id: 'x', qty: 1 }]), /producto inválido/);
-  assert.throws(() => normalizeTransferItems([{ id: 1, qty: 0 }]), /Cantidad inválida/);
-  assert.throws(() => normalizeTransferItems([{ id: 1, qty: 1.0001 }]), /hasta 3 decimales/);
+  assert.throws(() => parseItems([]), /al menos un producto/);
+  assert.throws(() => parseItems(null), TransferError);
+  assert.throws(() => parseItems([{ id: 'x', qty: 1 }]), /producto inválido/);
+  assert.throws(() => parseItems([{ id: 1, qty: 0 }]), /Cantidad inválida/);
+  assert.throws(() => parseItems([{ id: 1, qty: 1.0001 }]), /hasta 3 decimales/);
 });
 
 test('número de transferencia con seis dígitos', () => {

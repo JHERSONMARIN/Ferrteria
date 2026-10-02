@@ -7,7 +7,9 @@ import { industryHooks } from '../../../industries/index.ts';
 import { resolveBranchId } from '../../branches/index.ts';
 import { quantityProblem } from '../../../utils/quantities.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
-import { TransferError, normalizeTransferItems, transferNotes, transferNumber } from '../domain/inventory.ts';
+import { TransferError, normalizeTransferItems, transferNumber } from '../domain/inventory.ts';
+import type { z } from '@ferresys/contracts/zod';
+import type { TransferBody } from '@ferresys/contracts/inventory';
 import { addStock, takeAvailableStock } from '../infrastructure/stockOperations.ts';
 
 type Client = typeof prisma;
@@ -41,19 +43,14 @@ function presentTransfer(t: TransferRow) {
   };
 }
 
-export interface TransferInput {
-  fromBranchId?: number;
-  toBranchId: number;
-  items?: unknown;
-  notes?: unknown;
-}
+export type TransferInput = z.infer<typeof TransferBody>;
 
 // Solo se saca de la propia sucursal; el administrador, de cualquiera.
 export async function createTransfer(client: Client, input: TransferInput, user: SessionUser) {
   const fromBranchId: number = await resolveBranchId(client, user, input.fromBranchId);
   const toBranchId = input.toBranchId;
   if (toBranchId === fromBranchId) throw new TransferError('El origen y el destino deben ser sucursales distintas.');
-  const notes = transferNotes(input.notes);
+  const { notes } = input;
   const items = normalizeTransferItems(input.items);
 
   return client.$transaction(async (tx) => {

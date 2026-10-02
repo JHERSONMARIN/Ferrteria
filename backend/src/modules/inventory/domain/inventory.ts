@@ -1,7 +1,7 @@
 // Inventario: stock por sucursal, movimientos de kardex y transferencias. Reglas puras.
 // Disponible = stock - reservado (lo reservado son pedidos sin despachar).
 import { AppError } from '@ferresys/shared/errors';
-import { MAX_QUANTITY_DECIMALS, roundQuantity } from '../../../utils/quantities.ts';
+import { roundQuantity } from '../../../utils/quantities.ts';
 
 export class StockError extends AppError {
   static override area = 'STOCK';
@@ -18,8 +18,6 @@ export class TransferError extends AppError {
 
 export type MovementType = 'ENTRADA' | 'SALIDA';
 
-export const MAX_TRANSFER_NOTES = 200;
-
 export const transferNumber = (id: number) => `TRF-${String(id).padStart(6, '0')}`;
 
 export const insufficientStockMessage = (productName: string, available: number) =>
@@ -31,23 +29,12 @@ export interface TransferItem {
 }
 
 // Suma los productos repetidos y los ordena por id: las transferencias simultáneas bloquean filas en el
-// mismo orden y así no se traban entre sí.
-export function normalizeTransferItems(items: unknown): TransferItem[] {
-  if (!Array.isArray(items) || items.length === 0) throw new TransferError('Agregue al menos un producto a transferir.');
+// mismo orden y así no se traban entre sí. La forma de cada línea la valida TransferBody.
+export function normalizeTransferItems(items: readonly TransferItem[]): TransferItem[] {
   const quantities = new Map<number, number>();
-  for (const item of items as { id?: unknown; qty?: unknown }[]) {
-    const id = Number(item?.id);
-    const qty = Number(item?.qty);
-    if (!Number.isInteger(id) || id <= 0) throw new TransferError('La transferencia contiene un producto inválido.');
-    if (!Number.isFinite(qty) || qty <= 0 || roundQuantity(qty) !== qty) {
-      throw new TransferError(`Cantidad inválida: debe ser mayor a 0 y con hasta ${MAX_QUANTITY_DECIMALS} decimales.`);
-    }
-    quantities.set(id, roundQuantity((quantities.get(id) ?? 0) + qty));
-  }
+  for (const item of items) quantities.set(item.id, roundQuantity((quantities.get(item.id) ?? 0) + item.qty));
   return [...quantities].map(([id, qty]) => ({ id, qty })).sort((a, b) => a.id - b.id);
 }
-
-export const transferNotes = (value: unknown) => String(value ?? '').trim().slice(0, MAX_TRANSFER_NOTES) || null;
 
 export type KardexPeriod = 'today' | 'week' | 'month' | 'all' | 'custom';
 
