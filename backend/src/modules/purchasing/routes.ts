@@ -1,12 +1,11 @@
 // Rutas HTTP de proveedores (/api/proveedores) y compras (/api/compras).
 import express, { type Request, type Response } from 'express';
-import { z } from '@ferresys/contracts/zod';
 import { AppError, errorBody } from '@ferresys/shared/errors';
 import { prisma } from '../../db.ts';
-import { id, optionalId, parseInput } from '../../lib/validation.ts';
+import { parseInput } from '../../lib/validation.ts';
 import { PurchaseError, createSupplier, listPurchases, listSuppliers, registerPurchase } from './purchasing.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type { Purchase, PurchaseSaved, Supplier } from '@ferresys/contracts/purchasing';
+import { PurchaseBody, SupplierBody, type Purchase, type PurchaseSaved, type Supplier } from '@ferresys/contracts/purchasing';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -22,20 +21,7 @@ const handle = (failure: string, fn: Handler, duplicate?: string) => async (req:
   }
 };
 
-const REQUIRED = 'Proveedor, número de documento y al menos un producto requeridos.';
-const PurchaseBody = z.object({
-  proveedorId: id(REQUIRED),
-  numDoc: z.string({ error: REQUIRED }).trim().min(1, { error: REQUIRED }),
-  items: z.array(z.object({
-    id: id('La compra contiene un producto inválido.'),
-    qty: z.coerce.number({ error: 'Cantidad inválida.' }),
-    cost: z.coerce.number({ error: 'Costo inválido.' }),
-    name: z.string().optional(),
-    // Datos del rubro de la línea (farmacia: lote y vencimiento); los valida su paquete.
-    industryData: z.unknown().optional(),
-  }), { error: REQUIRED }).min(1, { error: REQUIRED }),
-  branchId: optionalId('Sucursal no válida.'),
-});
+const purchaseError = (message: string) => new PurchaseError(message);
 
 export const supplierRoutes = express.Router();
 
@@ -44,7 +30,7 @@ supplierRoutes.get('/', handle('Error al listar proveedores.', async (req, res) 
 }));
 
 supplierRoutes.post('/', handle('Error al registrar proveedor.', async (req, res) => {
-  res.status(201).json(await createSupplier(prisma, (req.body ?? {}) as Record<string, unknown>) satisfies Sendable<Supplier>);
+  res.status(201).json(await createSupplier(prisma, parseInput(SupplierBody, req.body, purchaseError)) satisfies Sendable<Supplier>);
 }, 'El proveedor con este RUC ya existe.'));
 
 export const purchaseRoutes = express.Router();
@@ -55,6 +41,6 @@ purchaseRoutes.get('/', handle('Error al listar compras.', async (req, res) => {
 
 // POST /api/compras { proveedorId, numDoc, items: [{ id, qty, cost }], branchId? }: suma stock y kardex.
 purchaseRoutes.post('/', handle('Error al registrar compra.', async (req, res) => {
-  const input = parseInput(PurchaseBody, req.body, m => new PurchaseError(m));
+  const input = parseInput(PurchaseBody, req.body, purchaseError);
   res.status(201).json({ success: true, compra: await registerPurchase(prisma, input, req.user) } satisfies Sendable<PurchaseSaved>);
 }));

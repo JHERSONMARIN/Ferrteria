@@ -7,6 +7,8 @@ import { quantityProblem, roundMoney } from '../../utils/quantities.ts';
 import type { SessionUser } from '../../types/express.d.ts';
 import { addStock } from '../inventory/index.ts';
 import { industryHooks, parseStockEntryData, type IndustryData } from '../../industries/index.ts';
+import type { z } from '@ferresys/contracts/zod';
+import type { PurchaseBody, SupplierBody } from '@ferresys/contracts/purchasing';
 
 type Client = typeof prisma;
 
@@ -14,18 +16,11 @@ export class PurchaseError extends AppError {
   static override area = 'COMPRA';
 }
 
-const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
-
 // ---------- Proveedores ----------
 
 export const listSuppliers = (client: Client) => client.proveedor.findMany({ orderBy: { id: 'desc' } });
 
-export async function createSupplier(client: Client, input: Record<string, unknown>) {
-  const ruc = text(input.ruc);
-  const name = text(input.name);
-  if (!ruc || !name) throw new PurchaseError('RUC y Nombre de Proveedor requeridos.');
-  return client.proveedor.create({ data: { ruc, name, phone: text(input.phone) || null, address: text(input.address) || null } });
-}
+export const createSupplier = (client: Client, input: z.infer<typeof SupplierBody>) => client.proveedor.create({ data: input });
 
 // ---------- Compras ----------
 
@@ -49,18 +44,13 @@ export async function listPurchases(client: Client) {
   }));
 }
 
-export interface PurchaseInput {
-  proveedorId: number;
-  numDoc: string;
-  items: { id: number; qty: number; cost: number; name?: string; industryData?: unknown }[];
-  branchId?: number;
-}
+export type PurchaseInput = z.infer<typeof PurchaseBody>;
 
 // La mercadería entra a la sucursal del usuario (o a la que indique el administrador). Cada línea se valida
 // contra su producto: enteros, o hasta 3 decimales si se vende fraccionado.
 export async function registerPurchase(client: Client, input: PurchaseInput, user: SessionUser) {
   const branchId: number = await resolveBranchId(client, user, input.branchId);
-  const numDoc = input.numDoc.trim();
+  const numDoc = input.numDoc;
 
   return client.$transaction(async (tx) => {
     const supplier = await tx.proveedor.findUnique({ where: { id: input.proveedorId }, select: { id: true } });

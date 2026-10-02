@@ -1,5 +1,6 @@
 // Proveedores y compras (módulo purchasing del backend).
 import type { IsoDate } from './common.ts';
+import { id, optionalId, z } from './zod.ts';
 
 /** GET /api/proveedores */
 export interface Supplier {
@@ -11,12 +12,16 @@ export interface Supplier {
   createdAt: IsoDate;
 }
 
-export interface SupplierRequest {
-  ruc: string;
-  name: string;
-  phone: string;
-  address: string;
-}
+const supplierText = z.string().optional().transform(value => value?.trim() ?? '');
+
+/** POST /api/proveedores */
+export const SupplierBody = z.object({
+  ruc: supplierText.refine(ruc => ruc.length > 0, { error: 'RUC y Nombre de Proveedor requeridos.' }),
+  name: supplierText.refine(name => name.length > 0, { error: 'RUC y Nombre de Proveedor requeridos.' }),
+  phone: supplierText.transform(phone => phone || null),
+  address: supplierText.transform(address => address || null),
+});
+export type SupplierRequest = z.input<typeof SupplierBody>;
 
 /** GET /api/compras */
 export interface Purchase {
@@ -30,13 +35,28 @@ export interface Purchase {
   detalles: { quantity: number; unitPrice: number; subtotal: number; producto: { name: string; code: string } }[];
 }
 
-/** POST /api/compras: cada línea con su costo unitario. */
-export interface PurchaseRequest {
-  proveedorId: number;
-  numDoc: string;
-  /** industryData: datos del rubro de la línea (farmacia: lotNumber y expiresAt). */
-  items: { id: number; qty: number; cost: number; name?: string; code?: string; industryData?: Record<string, unknown> }[];
-}
+const REQUIRED = 'Proveedor, número de documento y al menos un producto requeridos.';
+
+/**
+ * POST /api/compras: cada línea con su costo unitario. La mercadería entra a la sucursal del usuario, o a
+ * `branchId` si lo indica el administrador. Que la cantidad sea entera o fraccionable depende del producto:
+ * lo revisa el servidor.
+ */
+export const PurchaseBody = z.object({
+  proveedorId: id(REQUIRED),
+  numDoc: z.string({ error: REQUIRED }).trim().min(1, { error: REQUIRED }),
+  items: z.array(z.object({
+    id: id('La compra contiene un producto inválido.'),
+    qty: z.coerce.number({ error: 'Cantidad inválida.' }),
+    cost: z.coerce.number({ error: 'Costo inválido.' }),
+    /** Solo para los mensajes de error. */
+    name: z.string().optional(),
+    /** Datos del rubro de la línea (farmacia: lotNumber y expiresAt); los valida su paquete. */
+    industryData: z.unknown().optional(),
+  }), { error: REQUIRED }).min(1, { error: REQUIRED }),
+  branchId: optionalId('Sucursal no válida.'),
+});
+export type PurchaseRequest = z.input<typeof PurchaseBody>;
 
 export interface PurchaseSaved {
   success: true;
