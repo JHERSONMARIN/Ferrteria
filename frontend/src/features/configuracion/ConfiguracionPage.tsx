@@ -1,253 +1,24 @@
 // Configuración: plan, identidad, datos de la empresa, comprobantes, descuentos, sucursales, cajas y
 // modo de trabajo. El formulario se guarda con su botón; sucursales, cajas y modo, al momento.
-import { useState, useEffect, useMemo, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, type InputHTMLAttributes } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Branch, UpdateBranchRequest } from '@ferresys/contracts/branches';
-import type { DispatchRole, SaleFlowMode, SessionUser } from '@ferresys/contracts/identity';
-import type { BusinessSettings, DocumentType, LicenseStatus, SettingsResponse, SettingsRequest, SettingsSaved } from '@ferresys/contracts/settings';
+import type { SessionUser } from '@ferresys/contracts/identity';
+import type { BusinessSettings, LicenseStatus, SettingsResponse, SettingsRequest, SettingsSaved } from '@ferresys/contracts/settings';
 import { api } from '../../api/client.ts';
 import { queryKeys } from '../../api/queryClient.ts';
-import { useBranches, useSettings } from '../../api/queries.ts';
+import { useSettings } from '../../api/queries.ts';
+import { borderClass } from '../../shared/utils/validators.ts';
+import { useVocabulary } from '../../industries/vocabulary.ts';
 import CashRegistersSettings from './components/CashRegistersSettings.tsx';
 import BranchesSettings from './components/BranchesSettings.tsx';
-import { DISPATCH_ROLE_OPTIONS, effectiveDispatchRole } from '../../shared/constants/dispatch.ts';
-import { FEATURE_LABELS, FEATURE_ORDER } from '../../shared/constants/features.ts';
-import FieldError from '../../shared/ui/FieldError.tsx';
-import { borderClass } from '../../shared/utils/validators.ts';
-import { MODULE_OPTIONS } from '../../shared/constants/modules.ts';
-import { useConfirm } from '../../shared/ui/index.ts';
-import { useVocabulary } from '../../industries/vocabulary.ts';
+import Card, { Field } from './components/SettingsCard.tsx';
+import PlanSummary from './components/PlanSummary.tsx';
+import LogoField from './components/LogoField.tsx';
+import DocumentSeriesList from './components/DocumentSeriesList.tsx';
+import SaleFlowSettings from './components/SaleFlowSettings.tsx';
+import { EDITABLE_FIELDS, toForm, validateForm, type Errors, type SettingsForm, type TextField } from './settingsForm.ts';
 
-const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
-  NOTA_VENTA: 'Nota de venta',
-  BOLETA: 'Boleta',
-  FACTURA: 'Factura',
-};
-
-interface SettingsForm {
-  legalName: string;
-  tradeName: string;
-  taxId: string;
-  address: string;
-  phone: string;
-  email: string;
-  currencySymbol: string;
-  taxRate: string;
-  ticketFooter: string;
-  logo: string | null;
-  maxDiscountPercent: string;
-}
-
-type TextField = Exclude<keyof SettingsForm, 'logo'>;
-type Errors = Partial<Record<keyof SettingsForm, string>>;
 type Message = { type: 'success' | 'error'; text: string };
-
-interface SaleFlowOption {
-  id: SaleFlowMode;
-  title: string;
-  icon: string;
-  description: string;
-  steps: string[];
-  requires: string[];
-}
-
-const EDITABLE_FIELDS: (keyof SettingsForm)[] = [
-  'legalName', 'tradeName', 'taxId', 'address', 'phone', 'email',
-  'currencySymbol', 'taxRate', 'ticketFooter', 'logo', 'maxDiscountPercent',
-];
-
-const SALE_FLOW_OPTIONS: SaleFlowOption[] = [
-  {
-    id: 'DIRECT',
-    title: 'Directo',
-    icon: 'fa-user',
-    description: 'Una persona atiende, cobra y entrega. Ideal para locales pequeños.',
-    steps: ['Venta y cobro en el Punto de Venta'],
-    requires: [],
-  },
-  {
-    id: 'SEPARATE_CASHIER',
-    title: 'Vendedor y caja',
-    icon: 'fa-users',
-    description: 'El vendedor arma el pedido; el cliente paga en caja y ahí recibe sus productos.',
-    steps: ['Vendedor: pedido', 'Caja: cobro y entrega'],
-    requires: ['caja'],
-  },
-  {
-    id: 'STAGED',
-    title: 'Por etapas',
-    icon: 'fa-people-arrows',
-    description: 'Vendedor, caja y almacén separados: el cliente recoge en despacho después de pagar.',
-    steps: ['Vendedor: pedido', 'Caja: cobro', 'Almacén: despacho'],
-    requires: ['caja', 'despacho'],
-  },
-];
-
-const toForm = (settings: BusinessSettings): SettingsForm => ({
-  legalName: settings.legalName || '',
-  tradeName: settings.tradeName || '',
-  taxId: settings.taxId || '',
-  address: settings.address || '',
-  phone: settings.phone || '',
-  email: settings.email || '',
-  currencySymbol: settings.currencySymbol || 'S/',
-  taxRate: String(settings.taxRate ?? 18),
-  ticketFooter: settings.ticketFooter || '',
-  logo: settings.logo || null,
-  maxDiscountPercent: String(settings.maxDiscountPercent ?? 0),
-});
-
-function validateForm(form: SettingsForm): Errors {
-  const errors: Errors = {};
-  if (form.legalName.trim().length < 2) errors.legalName = 'La razón social es obligatoria.';
-  if (form.taxId.trim() && !/^\d{11}$/.test(form.taxId.trim())) errors.taxId = 'El RUC debe tener 11 dígitos.';
-  if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = 'Correo no válido.';
-  const rate = Number(form.taxRate);
-  if (form.taxRate === '' || !Number.isFinite(rate) || rate < 0 || rate > 100) errors.taxRate = 'Debe estar entre 0 y 100.';
-  if (!form.currencySymbol.trim()) errors.currencySymbol = 'Obligatorio.';
-  const maxDiscount = Number(form.maxDiscountPercent);
-  if (form.maxDiscountPercent === '' || !Number.isFinite(maxDiscount) || maxDiscount < 0 || maxDiscount > 100) {
-    errors.maxDiscountPercent = 'Debe estar entre 0 y 100.';
-  }
-  return errors;
-}
-
-function Field({ label, error, hint, children }: { label: string; error?: string; hint?: string; children?: ReactNode }) {
-  return (
-    <div>
-      <label className="text-xs font-bold text-ink-soft mb-1 block">{label}</label>
-      {children}
-      {error ? <FieldError msg={error} /> : hint && <p className="text-[11px] text-muted mt-1">{hint}</p>}
-    </div>
-  );
-}
-
-// Resumen del plan: lo que la empresa tiene y lo que podría sumar. Es el único lugar donde se nombra
-// lo no contratado; en el resto de las pantallas simplemente no aparece.
-interface MiPlanProps {
-  license: LicenseStatus | null;
-  licensedModules: readonly string[] | null;
-  licensedFeatures: readonly string[] | null;
-}
-
-function MiPlan({ license, licensedModules, licensedFeatures }: MiPlanProps) {
-  const incluidos = (licensedModules ?? MODULE_OPTIONS.map(m => m.value));
-  const funcionesIncluidas = licensedFeatures ?? FEATURE_ORDER;
-  const moduloLabel = (value: string) => MODULE_OPTIONS.find(m => m.value === value)?.label ?? value;
-  const faltantes = [
-    ...MODULE_OPTIONS.filter(m => !incluidos.includes(m.value)).map(m => m.label),
-    ...FEATURE_ORDER.filter(f => !funcionesIncluidas.includes(f)).map(f => FEATURE_LABELS[f]),
-  ];
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="bg-panel text-white text-xs font-bold px-2.5 py-1 rounded-lg">
-          Plan {license?.plan ? license.plan.toUpperCase() : 'sin restricciones'}
-        </span>
-        {license?.expiresAt && (
-          <span className={`text-xs ${license.expired ? 'text-danger font-bold' : 'text-muted'}`}>
-            {license.expired ? `Venció el ${license.expiresAt}` : `Vigente hasta el ${license.expiresAt}`}
-          </span>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <p className="text-xs font-bold text-ink-soft mb-1">Incluye</p>
-          <ul className="text-xs text-ink-soft flex flex-col gap-0.5">
-            {incluidos.map(value => (
-              <li key={value}>
-                <i className="fa-solid fa-check text-success mr-1.5"></i>
-                {moduloLabel(value)}
-              </li>
-            ))}
-            {funcionesIncluidas.map(f => (
-              <li key={f}><i className="fa-solid fa-check text-success mr-1.5"></i>{FEATURE_LABELS[f]}</li>
-            ))}
-          </ul>
-        </div>
-
-        {faltantes.length > 0 && (
-          <div>
-            <p className="text-xs font-bold text-ink-soft mb-1">Puede sumar a su plan</p>
-            <ul className="text-xs text-muted flex flex-col gap-0.5">
-              {faltantes.map(label => <li key={label}><i className="fa-solid fa-plus text-muted mr-1.5"></i>{label}</li>)}
-            </ul>
-            <p className="text-[11px] text-muted mt-1.5">Consulte con VALETEC para ampliar su plan.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Card({ icon, title, description, children }: { icon: string; title: string; description?: string; children?: ReactNode }) {
-  return (
-    <section className="bg-surface rounded-2xl border border-line/80">
-      <div className="px-6 pt-5 pb-4 flex items-start gap-3">
-        <span className="w-9 h-9 rounded-xl bg-surface-muted text-muted flex items-center justify-center shrink-0">
-          <i className={`fa-solid ${icon} text-sm`}></i>
-        </span>
-        <div className="min-w-0">
-          <h3 className="font-semibold text-ink">{title}</h3>
-          {description && <p className="text-xs text-muted mt-0.5 leading-relaxed">{description}</p>}
-        </div>
-      </div>
-      <div className="px-6 pb-6">{children}</div>
-    </section>
-  );
-}
-
-// Logo de la empresa: se guarda con el resto de la configuración y se ve en el inicio y en el menú.
-function LogoField({ logo, onChange }: { logo: string | null; onChange: (logo: string | null) => void }) {
-  const [mensaje, setMensaje] = useState('');
-
-  const elegir = (file: File | undefined) => {
-    if (!file) return;
-    if (!/^image\/(png|jpeg|jpg|webp|svg\+xml)$/.test(file.type)) {
-      setMensaje('Use una imagen PNG, JPG, WEBP o SVG.');
-      return;
-    }
-    if (file.size > 280 * 1024) {
-      setMensaje('La imagen no puede superar 280 KB.');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => { setMensaje(''); onChange(typeof reader.result === 'string' ? reader.result : null); };
-    reader.readAsDataURL(file);
-  };
-
-  return (
-    <div className="flex flex-wrap items-center gap-4">
-      <div className="w-24 h-24 rounded-xl border border-dashed border-line bg-surface-muted flex items-center justify-center overflow-hidden shrink-0">
-        {logo
-          ? <img src={logo} alt="Logo de la empresa" className="max-w-full max-h-full object-contain" />
-          : <i className="fa-solid fa-image text-2xl text-muted"></i>}
-      </div>
-      <div className="flex-1 min-w-[12rem]">
-        <div className="flex flex-wrap gap-2">
-          <label className="px-3 py-2 rounded-lg border border-line text-sm font-semibold text-ink-soft bg-surface hover:bg-surface-muted cursor-pointer">
-            <i className="fa-solid fa-upload mr-1.5 text-muted"></i>
-            {logo ? 'Cambiar logo' : 'Subir logo'}
-            <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden"
-              onChange={e => elegir(e.target.files?.[0])} />
-          </label>
-          {logo && (
-            <button type="button" onClick={() => { setMensaje(''); onChange(null); }}
-              className="px-3 py-2 rounded-lg text-sm font-semibold text-muted hover:text-danger">
-              Quitar
-            </button>
-          )}
-        </div>
-        <p className="text-[11px] text-muted mt-1.5">
-          PNG, JPG, WEBP o SVG, hasta 280 KB. Se muestra en el inicio de sesión y en el menú lateral.
-        </p>
-        {mensaje && <p className="text-[11px] text-danger mt-1">{mensaje}</p>}
-      </div>
-    </div>
-  );
-}
 
 interface Props {
   currentUser: SessionUser;
@@ -257,7 +28,6 @@ interface Props {
 }
 
 export default function ConfiguracionPage({ currentUser, hasFeature = () => true, licensedFeatures = null, license = null }: Props) {
-  const confirmar = useConfirm();
   const queryClient = useQueryClient();
   const settingsQuery = useSettings();
   const vocabulary = useVocabulary();
@@ -269,11 +39,6 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
   const [errors, setErrors] = useState<Errors>({});
   const [saveMessage, setSaveMessage] = useState<Message | null>(null);
   const [saving, setSaving] = useState(false);
-  // Modo de trabajo: es de cada sucursal y se guarda al momento, aparte del formulario.
-  const branches = useBranches().data ?? [];
-  const [modeBranchId, setModeBranchId] = useState<number | null>(currentUser.branchId ?? null);
-  const [modeMessage, setModeMessage] = useState<Message | null>(null);
-  const [savingMode, setSavingMode] = useState(false);
 
   // El formulario parte de lo guardado cuando llega.
   useEffect(() => {
@@ -283,13 +48,6 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
   // Lo guardado se comparte con el resto del sistema (nombre, logo y colores del menú, descuento del POS).
   const storeSettings = (saved: BusinessSettings) =>
     queryClient.setQueryData<SettingsResponse>(queryKeys.settings, old => (old ? { ...old, settings: saved } : old));
-
-  // El modo, los envíos y quién despacha cambian las pantallas de quien trabaja en esa sucursal:
-  // se refrescan las sucursales y la sesión (sin volver a entrar).
-  const refreshBranches = () => Promise.all([
-    queryClient.invalidateQueries({ queryKey: queryKeys.branches }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.me }),
-  ]);
 
   const hasChanges = useMemo(() => {
     if (!form || !savedSettings) return false;
@@ -304,60 +62,6 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
   };
 
   const isLicensed = (moduleId: string) => !licensedModules || licensedModules.includes(moduleId);
-
-  const modeBranch: Branch | null = branches.find(b => b.id === modeBranchId) ?? branches[0] ?? null;
-  // Envíos a domicilio: hacen falta la función del plan y el módulo Entregas contratado.
-  const deliveriesAvailable = hasFeature('deliveries') && isLicensed('deliveries');
-
-  // Guarda un cambio de la sucursal elegida y muestra el resultado junto al modo de trabajo.
-  const saveBranchMode = async (change: () => Promise<unknown>, successText: string) => {
-    try {
-      setSavingMode(true);
-      setModeMessage(null);
-      await change();
-      await refreshBranches();
-      setModeMessage({ type: 'success', text: successText });
-    } catch (err) {
-      setModeMessage({ type: 'error', text: (err as Error).message });
-    } finally {
-      setSavingMode(false);
-    }
-  };
-
-  const chooseDispatchRole = async (roleId: DispatchRole) => {
-    if (!modeBranch || roleId === effectiveDispatchRole(modeBranch)) return;
-    const title = DISPATCH_ROLE_OPTIONS.find(o => o.id === roleId)?.title ?? roleId;
-    await saveBranchMode(() => api.put(`/sucursales/${modeBranch.id}`, { dispatchRole: roleId } satisfies UpdateBranchRequest), `Ahora despacha: ${title.toLowerCase()}.`);
-  };
-
-  const toggleDeliveries = async () => {
-    if (!modeBranch) return;
-    const enable = !modeBranch.deliveriesEnabled;
-    await saveBranchMode(
-      () => api.put(`/sucursales/${modeBranch.id}`, { deliveriesEnabled: enable } satisfies UpdateBranchRequest),
-      enable ? 'Envíos a domicilio activados.' : 'Envíos a domicilio desactivados: la opción ya no aparece al cobrar.',
-    );
-  };
-
-  // Al elegir un modo se activan (y guardan) los módulos que necesita, y se guarda el modo de la sucursal.
-  const selectSaleFlow = async (option: SaleFlowOption) => {
-    if (!modeBranch || !savedSettings || option.id === modeBranch.saleFlowMode || option.requires.some(m => !isLicensed(m))) return;
-    const label = branches.length > 1 ? `${modeBranch.name}` : 'la empresa';
-    const seguro = await confirmar({
-      title: 'Cambiar el modo de trabajo',
-      description: `${label === 'la empresa' ? 'La empresa' : label} pasará a trabajar en modo "${option.title}".`,
-      confirmText: 'Cambiar',
-    });
-    if (!seguro) return;
-    await saveBranchMode(async () => {
-      const missing = option.requires.filter(m => !savedSettings.enabledModules.includes(m));
-      if (missing.length > 0) {
-        const res = await api.put<SettingsSaved>('/settings', { ...savedSettings, enabledModules: [...savedSettings.enabledModules, ...missing] } satisfies SettingsRequest);
-        storeSettings(res.settings);
-      }
-      await api.put(`/sucursales/${modeBranch.id}`, { saleFlowMode: option.id } satisfies UpdateBranchRequest);
-    }, `Modo "${option.title}" guardado. Asigne en Personal los módulos a cada empleado.`);
-  };
 
   const handleSave = async () => {
     if (!form) return;
@@ -414,11 +118,7 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
     <div className="tab-content active h-full overflow-auto">
       <div className="max-w-4xl mx-auto p-4 pb-28 flex flex-col gap-5">
         <Card icon="fa-id-card" title="Mi plan" description="Qué incluye el sistema contratado con VALETEC.">
-          <MiPlan
-            license={license}
-            licensedModules={licensedModules}
-            licensedFeatures={licensedFeatures}
-          />
+          <PlanSummary license={license} licensedModules={licensedModules} licensedFeatures={licensedFeatures} />
         </Card>
 
         <Card icon="fa-palette" title="Identidad" description="El nombre y el logo con los que sus empleados ven el sistema.">
@@ -480,28 +180,7 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
           </div>
 
           <div className="mt-5">
-            <p className="text-xs font-bold text-ink-soft mb-2">Series de comprobantes</p>
-            {documentSeries.length === 0 ? (
-              <p className="text-xs text-muted">Las series se crean automáticamente al iniciar el servidor.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {documentSeries.map(s => (
-                  <div key={s.id} className="border border-line rounded-lg px-3 py-2 bg-surface-muted">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-muted">{DOCUMENT_TYPE_LABELS[s.documentType] ?? s.documentType}</span>
-                      {!s.isActive && <span className="text-[10px] font-bold text-muted">INACTIVA</span>}
-                    </div>
-                    <p className="font-mono font-bold text-ink">{s.series}</p>
-                    {new Set(documentSeries.map(x => x.branchId)).size > 1 && s.branch && (
-                      <p className="text-[11px] text-muted"><i className="fa-solid fa-store mr-1"></i>{s.branch.name}</p>
-                    )}
-                    <p className="text-[11px] text-muted">
-                      Último emitido: <span className="font-mono">{String(s.lastNumber).padStart(6, '0')}</span>
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
+            <DocumentSeriesList documentSeries={documentSeries} />
           </div>
         </Card>
 
@@ -535,123 +214,13 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
           title="Modo de trabajo"
           description="Define cómo se reparte una venta entre las personas del negocio. Cada sucursal tiene el suyo. Se guarda al momento."
         >
-          {branches.length > 1 && (
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="text-xs font-bold text-ink-soft">Sucursal:</span>
-              {branches.map(b => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => { setModeBranchId(b.id); setModeMessage(null); }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${modeBranch?.id === b.id ? 'bg-panel text-white border-white/10' : 'bg-surface text-ink-soft border-line hover:bg-surface-muted'}`}
-                >
-                  {b.name}
-                  <span className="ml-1.5 font-normal opacity-75">· {SALE_FLOW_OPTIONS.find(o => o.id === b.saleFlowMode)?.title}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {SALE_FLOW_OPTIONS.filter(option => option.id === 'DIRECT' || hasFeature('split_flow')).map(option => {
-              const selected = modeBranch?.saleFlowMode === option.id;
-              const missing = option.requires.filter(m => !isLicensed(m));
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => selectSaleFlow(option)}
-                  disabled={missing.length > 0 || savingMode || (option.id !== 'DIRECT' && !hasFeature('split_flow'))}
-                  className={`text-left rounded-xl border p-4 transition-colors flex flex-col gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    selected ? 'border-brand bg-brand-soft ring-1 ring-brand' : 'border-line hover:bg-surface-muted'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <i className={`fa-solid ${option.icon} ${selected ? 'text-brand' : 'text-muted'}`}></i>
-                    <span className="font-bold text-ink">{option.title}</span>
-                    {selected && <i className="fa-solid fa-circle-check text-brand ml-auto"></i>}
-                  </div>
-                  <p className="text-xs text-muted">{option.description}</p>
-                  <ol className="text-[11px] text-ink-soft flex flex-col gap-0.5 mt-1">
-                    {option.steps.map((step, i) => (
-                      <li key={step}><span className="font-bold text-brand">{i + 1}.</span> {step}</li>
-                    ))}
-                  </ol>
-                  {missing.length > 0 ? (
-                    <span className="text-[10px] text-muted">
-                      <i className="fa-solid fa-lock mr-1"></i>Requiere un módulo no incluido en su plan
-                    </span>
-                  ) : option.id !== 'DIRECT' && !hasFeature('split_flow') && (
-                    <span className="text-[10px] text-muted">
-                      <i className="fa-solid fa-lock mr-1"></i>No incluido en su plan
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          {modeBranch && deliveriesAvailable && (
-            <label className={`mt-4 flex items-start gap-3 rounded-xl border p-4 ${savedSettings.enabledModules.includes('deliveries') ? 'border-line cursor-pointer hover:bg-surface-muted' : 'border-line opacity-60'}`}>
-              <input
-                type="checkbox"
-                checked={modeBranch.deliveriesEnabled}
-                onChange={toggleDeliveries}
-                disabled={savingMode || !savedSettings.enabledModules.includes('deliveries')}
-                className="mt-0.5 accent-orange-600"
-              />
-              <span>
-                <span className="font-bold text-ink text-sm">
-                  <i className="fa-solid fa-truck-fast mr-1.5 text-muted"></i>
-                  Envíos a domicilio{branches.length > 1 ? ` en ${modeBranch.name}` : ''}
-                </span>
-                <span className="block text-xs text-muted mt-0.5">
-                  {savedSettings.enabledModules.includes('deliveries')
-                    ? 'Al cobrar se ofrece "Envío a domicilio" y el repartidor lo ve en Entregas. Funciona con cualquier modo de trabajo.'
-                    : 'Su plan no incluye Entregas: consúltelo con VALETEC.'}
-                </span>
-              </span>
-            </label>
-          )}
-          {modeBranch && (modeBranch.saleFlowMode === 'STAGED' || (deliveriesAvailable && modeBranch.deliveriesEnabled)) && (
-            <div className="mt-4 rounded-xl border border-line p-4">
-              <p className="font-bold text-ink text-sm">
-                <i className="fa-solid fa-dolly mr-1.5 text-muted"></i>
-                ¿Quién despacha{branches.length > 1 ? ` en ${modeBranch.name}` : ''}?
-              </p>
-              <p className="text-xs text-muted mt-0.5 mb-3">
-                Atiende "Por despachar": {modeBranch.saleFlowMode === 'STAGED' ? 'todo lo cobrado' : 'las ventas con envío a domicilio'}.
-                Ve los productos a preparar y marca cuándo los entrega{modeBranch.saleFlowMode === 'STAGED' ? '' : ' al repartidor'}.
-                El administrador también puede despachar.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {DISPATCH_ROLE_OPTIONS.map(option => {
-                  const selected = effectiveDispatchRole(modeBranch) === option.id;
-                  const locked = option.id === 'WAREHOUSE' && !savedSettings.enabledModules.includes('despacho');
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => chooseDispatchRole(option.id)}
-                      disabled={savingMode || locked}
-                      className={`text-left rounded-lg border px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed ${selected ? 'border-brand bg-brand-soft ring-1 ring-brand' : 'border-line hover:bg-surface-muted'}`}
-                    >
-                      <span className="font-bold text-sm text-ink flex items-center gap-1.5">
-                        {option.title}
-                        {selected && <i className="fa-solid fa-circle-check text-brand ml-auto"></i>}
-                      </span>
-                      <span className="block text-[11px] text-muted">
-                        {locked ? 'Active primero el módulo Despacho.' : option.description}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          {modeMessage && (
-            <p className={`mt-3 text-xs rounded-lg px-3 py-2 border ${modeMessage.type === 'error' ? 'text-danger bg-danger-soft border-danger/30' : 'text-success bg-success-soft border-success/30'}`}>
-              {modeMessage.text}
-            </p>
-          )}
+          <SaleFlowSettings
+            initialBranchId={currentUser.branchId ?? null}
+            savedSettings={savedSettings}
+            hasFeature={hasFeature}
+            isLicensed={isLicensed}
+            onSettingsSaved={storeSettings}
+          />
         </Card>
 
       </div>
