@@ -1,6 +1,6 @@
 // Rutas HTTP de ventas: /api/ventas (venta directa), /api/pedidos y /api/cotizaciones.
 import express, { type Request, type Response } from 'express';
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import { AppError, errorBody } from '@ferresys/shared/errors';
 import { prisma } from '../../../db.ts';
 import { allowModules } from '../../identity/index.ts';

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Branch } from '@ferresys/contracts/branches';
+import type { Branch, CreateBranchRequest, UpdateBranchRequest } from '@ferresys/contracts/branches';
 import { api } from '../../../api/client.ts';
 import { queryKeys } from '../../../api/queryClient.ts';
 
@@ -45,20 +45,20 @@ export default function BranchesSettings({ onChanged }: { onChanged?: () => void
     e.preventDefault();
     const name = form.name.trim();
     if (!name) return;
-    if (await run(() => api.post('/sucursales', { name, address: form.address }), `${name} creada.`)) {
+    if (await run(() => api.post('/sucursales', { name, address: form.address } satisfies CreateBranchRequest), `${name} creada.`)) {
       setForm({ name: '', address: '' });
     }
   };
 
   const save = async () => {
     if (!editing) return;
-    if (await run(() => api.put(`/sucursales/${editing.id}`, { name: editing.name, address: editing.address }), 'Sucursal actualizada.')) {
+    if (await run(() => api.put(`/sucursales/${editing.id}`, { name: editing.name, address: editing.address } satisfies UpdateBranchRequest), 'Sucursal actualizada.')) {
       setEditing(null);
     }
   };
 
   const toggle = (b: Branch) => run(
-    () => api.put(`/sucursales/${b.id}`, { active: !b.active }),
+    () => api.put(`/sucursales/${b.id}`, { active: !b.active } satisfies UpdateBranchRequest),
     b.active ? `${b.name} desactivada.` : `${b.name} activada.`
   );
 

@@ -1,6 +1,6 @@
 // Rutas HTTP de sesión (/api/auth) y de personal (/api/personal).
 import express, { type Request, type Response } from 'express';
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import { AppError, errorBody } from '@ferresys/shared/errors';
 import { hashPassword, validateNewPassword, verifyPassword } from '@ferresys/shared/passwords';
 import { createSessionToken } from '@ferresys/shared/sessionTokens';

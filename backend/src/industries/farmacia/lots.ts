@@ -1,5 +1,5 @@
 // Reglas de los lotes de farmacia, sin base de datos: qué datos trae una entrada y de qué lotes sale una salida.
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import { AppError } from '@ferresys/shared/errors';
 import { roundQuantity } from '../../utils/quantities.ts';
 

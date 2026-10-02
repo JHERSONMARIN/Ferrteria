@@ -8,8 +8,9 @@ RUN apk add --no-cache openssl
 
 # Piezas comunes con la consola: el package.json las enlaza con "file:../packages/shared".
 COPY packages/shared /app/packages/shared
-# Contratos con las pantallas (solo tipos, para el chequeo de tipos): "file:../packages/contracts".
+# Contratos con las pantallas (tipos y esquemas de validación, con su Zod): "file:../packages/contracts".
 COPY packages/contracts /app/packages/contracts
+RUN npm ci --prefix /app/packages/contracts
 
 COPY backend/package*.json ./
 COPY backend/prisma ./prisma/

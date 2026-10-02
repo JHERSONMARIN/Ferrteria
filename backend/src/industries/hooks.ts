@@ -4,7 +4,7 @@
 // precios, cantidades ni estados: si un rubro necesita eso, la regla es del núcleo y se configura allí.
 import type { Tx } from '../db.ts';
 import type { Router } from 'express';
-import type { z } from 'zod';
+import type { z } from '@ferresys/contracts/zod';
 import type { allowModules } from '../modules/identity/index.ts';
 import type { Vocabulary } from '@ferresys/contracts/settings';
 import type { SessionUser } from '../types/express.d.ts';

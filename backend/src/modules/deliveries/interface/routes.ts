@@ -1,6 +1,6 @@
 // Rutas HTTP de envíos (/api/entregas).
 import express, { type Request, type Response } from 'express';
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import { errorBody } from '@ferresys/shared/errors';
 import { prisma } from '../../../db.ts';
 import { id, optionalId, parseInput } from '../../../lib/validation.ts';

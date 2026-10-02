@@ -1,6 +1,6 @@
 // Rutas HTTP de clientes (/api/clientes) y créditos (/api/creditos).
 import express, { type Request, type Response } from 'express';
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import { AppError, errorBody } from '@ferresys/shared/errors';
 import { prisma } from '../../db.ts';
 import { id, parseInput } from '../../lib/validation.ts';

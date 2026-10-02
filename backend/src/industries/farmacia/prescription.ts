@@ -1,5 +1,5 @@
 // Receta de una venta de farmacia, sin base de datos: qué pide cada producto y si la venta lo trae.
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import type { PharmacySaleData } from '@ferresys/contracts/industries';
 
 const optionalText = (label: string, max: number) =>

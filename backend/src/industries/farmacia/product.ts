@@ -1,5 +1,5 @@
 // Datos de farmacia en un producto: registro sanitario, principio activo, laboratorio y si pide receta.
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import type { PharmacyProductData } from '@ferresys/contracts/industries';
 
 const optionalText = (label: string, max: number) =>

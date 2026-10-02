@@ -2,7 +2,7 @@
 // modo de trabajo. El formulario se guarda con su botón; sucursales, cajas y modo, al momento.
 import { useState, useEffect, useMemo, type InputHTMLAttributes, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Branch } from '@ferresys/contracts/branches';
+import type { Branch, UpdateBranchRequest } from '@ferresys/contracts/branches';
 import type { DispatchRole, SaleFlowMode, SessionUser } from '@ferresys/contracts/identity';
 import type { BusinessSettings, DocumentType, LicenseStatus, SettingsResponse, SettingsSaved, SettingsUpdate } from '@ferresys/contracts/settings';
 import { api } from '../../api/client.ts';
@@ -327,14 +327,14 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
   const chooseDispatchRole = async (roleId: DispatchRole) => {
     if (!modeBranch || roleId === effectiveDispatchRole(modeBranch)) return;
     const title = DISPATCH_ROLE_OPTIONS.find(o => o.id === roleId)?.title ?? roleId;
-    await saveBranchMode(() => api.put(`/sucursales/${modeBranch.id}`, { dispatchRole: roleId }), `Ahora despacha: ${title.toLowerCase()}.`);
+    await saveBranchMode(() => api.put(`/sucursales/${modeBranch.id}`, { dispatchRole: roleId } satisfies UpdateBranchRequest), `Ahora despacha: ${title.toLowerCase()}.`);
   };
 
   const toggleDeliveries = async () => {
     if (!modeBranch) return;
     const enable = !modeBranch.deliveriesEnabled;
     await saveBranchMode(
-      () => api.put(`/sucursales/${modeBranch.id}`, { deliveriesEnabled: enable }),
+      () => api.put(`/sucursales/${modeBranch.id}`, { deliveriesEnabled: enable } satisfies UpdateBranchRequest),
       enable ? 'Envíos a domicilio activados.' : 'Envíos a domicilio desactivados: la opción ya no aparece al cobrar.',
     );
   };
@@ -355,7 +355,7 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
         const res = await api.put<SettingsSaved>('/settings', { ...savedSettings, enabledModules: [...savedSettings.enabledModules, ...missing] } satisfies SettingsUpdate);
         storeSettings(res.settings);
       }
-      await api.put(`/sucursales/${modeBranch.id}`, { saleFlowMode: option.id });
+      await api.put(`/sucursales/${modeBranch.id}`, { saleFlowMode: option.id } satisfies UpdateBranchRequest);
     }, `Modo "${option.title}" guardado. Asigne en Personal los módulos a cada empleado.`);
   };
 

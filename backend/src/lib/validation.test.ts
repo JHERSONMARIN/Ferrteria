@@ -1,7 +1,7 @@
 // Comportamiento del ayudante de validación (Zod 4):  npm run test:unit
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import { AppError } from '@ferresys/shared/errors';
 import { id, optionalId, parseInput } from './validation.ts';
 

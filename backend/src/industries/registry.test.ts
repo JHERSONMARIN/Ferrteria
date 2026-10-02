@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Tx } from '../db.ts';
 import type { SaleContext, StockMovement } from './hooks.ts';
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import { IndustryDataError, PACKAGES, hooksFor, parseIndustryData } from './registry.ts';
 
 const tx = {} as Tx;

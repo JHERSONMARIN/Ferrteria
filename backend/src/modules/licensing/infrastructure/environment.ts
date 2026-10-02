@@ -1,6 +1,6 @@
 // La licencia llega en las variables de entorno de la instancia: las escribe deploy/set-plan.sh o la
 // consola de VALETEC en el .env de la empresa. Se lee una vez al arrancar; cambiarla requiere reiniciar.
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import { parseFeatures, parseIndustry, parseLimit, parseModules, type License } from '../domain/license.ts';
 
 const LicenseEnvironment = z.object({

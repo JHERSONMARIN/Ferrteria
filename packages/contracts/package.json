@@ -2,11 +2,15 @@
   "name": "@ferresys/contracts",
   "version": "1.0.0",
   "private": true,
-  "description": "Forma de los datos que viajan entre las pantallas y el servidor. Solo tipos: no agrega nada al programa que se ejecuta.",
+  "description": "Forma de los datos que viajan entre las pantallas y el servidor: tipos de las respuestas y esquemas Zod de las peticiones.",
   "type": "module",
   "exports": {
     "./*": {
-      "types": "./src/*.ts"
+      "types": "./src/*.ts",
+      "default": "./src/*.ts"
     }
+  },
+  "dependencies": {
+    "zod": "4.6.5"
   }
 }

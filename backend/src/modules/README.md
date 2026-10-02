@@ -52,12 +52,15 @@ capas el día que le aparece su primera regla de negocio propia.
 - Los imports entre archivos `.ts` llevan la extensión: `import { x } from './license.ts'`.
 - Sin `enum` ni `namespace` (no se pueden borrar sin compilar): se usan uniones de textos y objetos.
 - La entrada de datos (cuerpos de peticiones, variables de entorno) se valida con Zod, y el tipo se
-  obtiene del mismo esquema (`z.infer`).
+  obtiene del mismo esquema (`z.infer`). `z` se importa de `@ferresys/contracts/zod` (una sola copia de Zod).
 
 ## Contratos con las pantallas
 
-Lo que responde cada ruta está escrito en `packages/contracts` (solo tipos), y el frontend usa esos mismos
-tipos. Una respuesta se ata a su contrato con `satisfies`:
+Lo que responde cada ruta está escrito en `packages/contracts`, y el frontend usa esos mismos tipos. Lo que
+**recibe** también: los esquemas Zod de los cuerpos (`CreateBranchBody`, `DirectSaleBody`…) están en el
+contrato del módulo; la ruta los aplica con `parseInput` y la capa `application/` recibe datos ya tipados.
+Las reglas que necesitan la base (que el producto exista, que haya caja abierta) siguen en `application/`.
+Una respuesta se ata a su contrato con `satisfies`:
 
 ```ts
 res.json({ user: req.user } satisfies Sendable<MeResponse>);

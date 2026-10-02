@@ -1,6 +1,6 @@
 // Pantallas propias de farmacia: vencimientos (por sucursal) y libro de controlados (por período).
 import express, { type Request, type Response } from 'express';
-import { z } from 'zod';
+import { z } from '@ferresys/contracts/zod';
 import { AppError, errorBody } from '@ferresys/shared/errors';
 import type { ControlledBookEntry, ExpiryReport } from '@ferresys/contracts/industries';
 import type { Sendable } from '@ferresys/contracts/common';

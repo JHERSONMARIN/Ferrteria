@@ -4,20 +4,21 @@
 import type { Prisma } from '@prisma/client';
 import type { prisma } from '../../db.ts';
 import { AppError } from '@ferresys/shared/errors';
-import { SALE_FLOW_MODES } from '../../config/modules.js';
 import { recordAudit } from '../audit/index.ts';
 import { requireFeature, requireWithinLimit } from '../licensing/index.ts';
-import { DISPATCH_ROLES } from '../sales/index.ts';
 import { getSettings } from '../settings/index.ts';
+import type { z } from '@ferresys/contracts/zod';
+import type { CreateBranchBody, UpdateBranchBody } from '@ferresys/contracts/branches';
+import type { SaleFlowMode } from '@ferresys/contracts/identity';
 
 type Client = typeof prisma;
+type CreateBranchInput = z.infer<typeof CreateBranchBody>;
+type UpdateBranchInput = z.infer<typeof UpdateBranchBody>;
 
 export class BranchError extends AppError {
   static override area = 'SUCURSAL';
 }
 
-const MAX_NAME_LENGTH = 60;
-const MAX_ADDRESS_LENGTH = 200;
 const MODE_LABELS: Record<string, string> = { DIRECT: 'Directo', SEPARATE_CASHIER: 'Vendedor y caja', STAGED: 'Por etapas' };
 const ROLE_LABELS: Record<string, string> = { SELLER: 'vendedor', CASHIER: 'cajero', WAREHOUSE: 'almacén' };
 
@@ -48,28 +49,9 @@ export async function listBranches(client: Client, includeInactive = false) {
   return branches.map(({ _count, ...b }) => ({ ...b, userCount: _count.users, cashRegisterCount: _count.cashRegisters }));
 }
 
-function parseBranchInput(input: Record<string, unknown>, partial = false) {
-  const data: { name?: string; address?: string | null } = {};
-  if (!partial || input.name !== undefined) {
-    const name = String(input.name ?? '').trim();
-    if (name.length < 2 || name.length > MAX_NAME_LENGTH) {
-      throw new BranchError(`El nombre de la sucursal debe tener entre 2 y ${MAX_NAME_LENGTH} caracteres.`);
-    }
-    data.name = name;
-  }
-  if (input.address !== undefined) {
-    const address = String(input.address ?? '').trim();
-    if (address.length > MAX_ADDRESS_LENGTH) throw new BranchError(`La dirección no puede superar ${MAX_ADDRESS_LENGTH} caracteres.`);
-    data.address = address || null;
-  }
-  return data;
-}
-
 // Un modo con pedidos necesita Caja (ahí se cobra) y "por etapas", además, Despacho. Trabajar con pedidos
 // es parte del plan Profesional.
-async function parseSaleFlowMode(client: Client, value: unknown) {
-  if (!SALE_FLOW_MODES.includes(value as string)) throw new BranchError('Modo de trabajo no válido.');
-  const mode = value as 'DIRECT' | 'SEPARATE_CASHIER' | 'STAGED';
+async function checkSaleFlowMode(client: Client, mode: SaleFlowMode) {
   if (mode !== 'DIRECT') requireFeature('split_flow');
   const { enabledModules } = await getSettings(client);
   if (mode !== 'DIRECT' && !enabledModules.includes('caja')) {
@@ -81,19 +63,15 @@ async function parseSaleFlowMode(client: Client, value: unknown) {
   return mode;
 }
 
-function parseDeliveriesEnabled(value: unknown): boolean {
-  if (typeof value !== 'boolean') throw new BranchError('Valor no válido para los envíos a domicilio.');
-  return value;
-}
-
 // Varias sucursales son parte del plan Empresa.
-export async function createBranch(client: Client, input: Record<string, unknown>) {
+export async function createBranch(client: Client, input: CreateBranchInput) {
   requireFeature('branches');
   requireWithinLimit('maxBranches', await client.branch.count({ where: { active: true } }), 'sucursal(es)');
   const data = {
-    ...parseBranchInput(input) as { name: string; address?: string | null },
-    ...(input.saleFlowMode !== undefined && { saleFlowMode: await parseSaleFlowMode(client, input.saleFlowMode) }),
-    ...(input.deliveriesEnabled !== undefined && { deliveriesEnabled: parseDeliveriesEnabled(input.deliveriesEnabled) }),
+    name: input.name,
+    address: input.address,
+    ...(input.saleFlowMode !== undefined && { saleFlowMode: await checkSaleFlowMode(client, input.saleFlowMode) }),
+    ...(input.deliveriesEnabled !== undefined && { deliveriesEnabled: input.deliveriesEnabled }),
   };
   try {
     return await client.branch.create({ data });
@@ -106,24 +84,21 @@ export async function createBranch(client: Client, input: Record<string, unknown
 const OPEN_ORDER = { status: { in: ['PENDING_PAYMENT', 'PAID'] } } satisfies Prisma.VentaWhereInput;
 
 // Una sucursal no se borra (tiene ventas y movimientos); se desactiva cuando ya no opera.
-export async function updateBranch(client: Client, id: number, input: Record<string, unknown>, user: { id: number; name: string } | null = null) {
+export async function updateBranch(client: Client, id: number, input: UpdateBranchInput, user: { id: number; name: string } | null = null) {
   const branch = await client.branch.findUnique({ where: { id } });
   if (!branch) throw new BranchError('La sucursal no existe.', 404);
-  const data: Parameters<typeof client.branch.update>[0]['data'] & Record<string, unknown> = parseBranchInput(input, true);
+  const data: Prisma.BranchUpdateInput = { name: input.name, address: input.address };
 
-  if (input.deliveriesEnabled !== undefined) data.deliveriesEnabled = parseDeliveriesEnabled(input.deliveriesEnabled);
+  if (input.deliveriesEnabled !== undefined) data.deliveriesEnabled = input.deliveriesEnabled;
   if (input.dispatchRole !== undefined) {
-    if (input.dispatchRole !== null && !(DISPATCH_ROLES as readonly unknown[]).includes(input.dispatchRole)) {
-      throw new BranchError('Responsable de despacho no válido.');
-    }
     if (input.dispatchRole === 'WAREHOUSE' && !(await getSettings(client)).enabledModules.includes('despacho')) {
       throw new BranchError('Para que despache almacén active primero el módulo Despacho.');
     }
-    data.dispatchRole = input.dispatchRole as 'SELLER' | 'CASHIER' | 'WAREHOUSE' | null;
+    data.dispatchRole = input.dispatchRole;
   }
 
   if (input.saleFlowMode !== undefined && input.saleFlowMode !== branch.saleFlowMode) {
-    data.saleFlowMode = await parseSaleFlowMode(client, input.saleFlowMode);
+    data.saleFlowMode = await checkSaleFlowMode(client, input.saleFlowMode);
     // Cambiar de modo con pedidos en curso los dejaría sin pantalla donde cobrarlos o despacharlos.
     const openOrders = await client.venta.count({ where: { branchId: id, ...OPEN_ORDER } });
     if (openOrders > 0) {
@@ -132,7 +107,6 @@ export async function updateBranch(client: Client, id: number, input: Record<str
   }
 
   if (input.active !== undefined) {
-    if (typeof input.active !== 'boolean') throw new BranchError('Estado no válido.');
     if (!input.active && branch.active) {
       const [others, users, stock, openOrders] = await Promise.all([
         client.branch.count({ where: { active: true, id: { not: id } } }),
