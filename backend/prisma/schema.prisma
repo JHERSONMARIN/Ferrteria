@@ -138,6 +138,8 @@ model Producto {
   categoriaId Int?
   categoria   Categoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
   active      Boolean  @default(true)
+  // Campos del paquete de rubro (backend/src/industries): los valida el paquete, el núcleo solo los guarda.
+  industryData Json    @default("{}")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -148,6 +150,8 @@ model Producto {
   detallesCotizacion DetalleCotizacion[]
   branchStocks       BranchStock[]
   transferItems      StockTransferItem[]
+  // Paquete de farmacia: sus lotes con vencimiento.
+  pharmacyLots       PharmacyLot[]
   // Otras formas de vender el mismo producto (paquete, ciento, kilo…); el stock sigue en `unit`.
   saleUnits          ProductUnit[]
 
@@ -235,6 +239,8 @@ model Venta {
   cancelReason String?
   // Un pedido sin cobrar vence al cierre del día y libera su stock reservado.
   expiresAt    DateTime?
+  // Datos del paquete de rubro (farmacia: la receta); los valida el paquete.
+  industryData Json     @default("{}")
 
   clienteId Int?
   cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
@@ -625,6 +631,7 @@ model Branch {
   transfersOut  StockTransfer[] @relation("TransferOrigin")
   transfersIn   StockTransfer[] @relation("TransferDestination")
   documentSeries DocumentSeries[]
+  pharmacyLots  PharmacyLot[]
 
   @@map("branches")
 }
@@ -679,4 +686,25 @@ model StockTransferItem {
   producto   Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
 
   @@map("stock_transfer_items")
+}
+
+// ---------- Paquete de farmacia (backend/src/industries/farmacia) ----------
+
+// Lotes identificados (número y vencimiento) del stock de una sucursal. Lo que no tiene lote no se guarda:
+// es el stock de la sucursal menos la suma de sus lotes. En las demás empresas la tabla queda vacía.
+model PharmacyLot {
+  id         Int      @id @default(autoincrement())
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  branchId   Int
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  lotNumber  String
+  expiresAt  DateTime @db.Date
+  quantity   Decimal  @default(0) @db.Decimal(12, 3)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([productoId, branchId, lotNumber, expiresAt])
+  @@index([branchId, expiresAt])
+  @@map("farmacia_lotes")
 }

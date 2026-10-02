@@ -1,0 +1,13 @@
+{
+  "name": "ferresys-tests",
+  "private": true,
+  "type": "module",
+  "description": "Pruebas de punta a punta de FerreSys (ver tests/README.md)",
+  "scripts": {
+    "test": "python3 run.py",
+    "test:api": "python3 run.py --sin-ui"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

@@ -1,5 +1,5 @@
 import { prisma } from '../src/db.js';
-import { hashPassword, isPasswordHashed } from '../src/services/passwords.js';
+import { hashPassword, isPasswordHashed } from '@ferresys/shared/passwords';
 
 // Convierte a hash las contraseñas que aún estén en texto plano (instalaciones anteriores y
 // usuarios del seed de demo). Es idempotente: las ya convertidas no se tocan.

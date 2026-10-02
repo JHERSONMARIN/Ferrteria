@@ -12,4 +12,4 @@ fi
 node scripts/bootstrap.js
 node scripts/hash-legacy-passwords.js
 
-exec node server.js
+exec node server.ts

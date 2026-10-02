@@ -1,0 +1,114 @@
+// Ticket de 80 mm: queda oculto en la pantalla y es lo único que sale al imprimir.
+import type { BusinessSettings } from '@ferresys/contracts/settings';
+import type { TicketData } from '../utils/tickets.ts';
+
+type Business = Pick<BusinessSettings, 'tradeName' | 'legalName' | 'taxId' | 'currencySymbol' | 'taxRate' | 'address' | 'phone' | 'ticketFooter'>;
+
+interface Props {
+  data: TicketData | null;
+  business: Partial<Business> | null;
+}
+
+export default function TicketPrint({ data, business }: Props) {
+  if (!data) return <div id="ticket-impresion" className="hidden print:block font-mono text-black"></div>;
+
+  const businessTitle = business?.tradeName || business?.legalName || '';
+  const businessRuc = business?.taxId || '';
+  const currency = business?.currencySymbol || 'S/';
+  const taxRate = business?.taxRate ?? 18;
+
+  const {
+    docTitle = 'NOTA DE VENTA',
+    numDoc = 'T001-000001',
+    dateStr = new Date().toLocaleString(),
+    issueDate = new Date().toISOString().slice(0, 10),
+    customerName = 'Público General',
+    customerDoc = '00000000',
+    docLabelTitle = 'DNI',
+    sellerName = 'General',
+    payMethod = 'Efectivo',
+    items = [],
+    total = 0,
+    discount = 0,
+    isFiscal = false,
+  } = data;
+
+  const subtotal = total / (1 + taxRate / 100);
+  const igv = total - subtotal;
+
+  // QR de la representación impresa (SUNAT): RUC|tipo|serie|número|IGV|total|fecha|tipo doc.|n° doc.
+  // Sirve para que el cliente o SUNAT consulten el comprobante escaneándolo; la fecha va en AAAA-MM-DD.
+  const parts = numDoc.split('-');
+  const serie = parts[0] || 'B001';
+  const numero = parts[1] || '000001';
+  const tipoDocCod = docTitle.includes('FACTURA') ? '01' : '03';
+  const tipoDocClienteCod = docLabelTitle === 'RUC' ? '6' : '1';
+
+  const qrData = `${businessRuc}|${tipoDocCod}|${serie}|${numero}|${igv.toFixed(2)}|${total.toFixed(2)}|${issueDate}|${tipoDocClienteCod}|${customerDoc}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(qrData)}`;
+
+  return (
+    <div id="ticket-impresion" className="hidden print:block font-mono text-black">
+      <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+        <h2 style={{ fontWeight: 'bold', fontSize: '16px' }}>{businessTitle}</h2>
+        {business?.tradeName && business?.legalName && <p>{business.legalName}</p>}
+        {businessRuc && <p>RUC: {businessRuc}</p>}
+        {business?.address && <p>{business.address}</p>}
+        {business?.phone && <p>Tel.: {business.phone}</p>}
+        <div style={{ borderTop: '1px dashed #000', borderBottom: '1px dashed #000', margin: '10px 0', padding: '5px 0' }}>
+          <h3 style={{ fontWeight: 'bold', fontSize: '14px' }}>{docTitle}</h3>
+          <h3 style={{ fontWeight: 'bold', fontSize: '14px' }}>{numDoc}</h3>
+        </div>
+      </div>
+      <div style={{ marginBottom: '10px' }}>
+        <p><strong>Fecha:</strong> {dateStr}</p>
+        <p><strong>Cliente:</strong> {customerName}</p>
+        <p><strong>{docLabelTitle}:</strong> {customerDoc}</p>
+        <p><strong>Vendedor:</strong> {sellerName}</p>
+        <p><strong>Condición:</strong> {payMethod}</p>
+      </div>
+      <table style={{ width: '100%', textAlign: 'left', borderTop: '1px dashed #000', borderBottom: '1px dashed #000', marginBottom: '10px' }}>
+        <thead>
+          <tr><th>Cant</th><th>Desc</th><th style={{ textAlign: 'right' }}>P.U.</th><th style={{ textAlign: 'right' }}>Total</th></tr>
+        </thead>
+        <tbody>
+          {items.map((item, idx) => (
+            <tr key={idx}>
+              <td style={{ padding: '2px 0' }}>{item.qty}</td>
+              <td style={{ padding: '2px 0' }}>
+                {item.name ? item.name.substring(0, 15) : ''}
+                {item.unitName && <><br />({item.unitName})</>}
+              </td>
+              <td style={{ padding: '2px 0', textAlign: 'right' }}>{Number(item.price).toFixed(2)}</td>
+              <td style={{ padding: '2px 0', textAlign: 'right' }}>{(item.qty * item.price).toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ textAlign: 'right', marginBottom: '15px' }}>
+        {discount > 0 && (
+          <>
+            <p>SUBTOTAL: {currency} {(Number(total) + Number(discount)).toFixed(2)}</p>
+            <p>DESCUENTO: -{currency} {Number(discount).toFixed(2)}</p>
+          </>
+        )}
+        {isFiscal && (
+          <>
+            <p>OP. GRAVADAS: {currency} {subtotal.toFixed(2)}</p>
+            <p>IGV ({taxRate}%): {currency} {igv.toFixed(2)}</p>
+          </>
+        )}
+        <h3 style={{ fontWeight: 'bold', fontSize: '16px', marginTop: '5px' }}>TOTAL: {currency} {Number(total).toFixed(2)}</h3>
+      </div>
+      <div style={{ textAlign: 'center', fontSize: '10px' }}>
+        {isFiscal && (
+          <div style={{ marginBottom: '8px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <img src={qrUrl} alt="SUNAT QR" style={{ width: '100px', height: '100px', margin: '0 auto 4px auto' }} />
+            <p>Representación impresa de la {docTitle}</p>
+          </div>
+        )}
+        <p style={{ whiteSpace: 'pre-line' }}>{business?.ticketFooter || '¡Gracias por su preferencia!'}</p>
+      </div>
+    </div>
+  );
+}

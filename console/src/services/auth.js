@@ -2,8 +2,8 @@
 // sesión en cookie firmada, pero con su propia base y su propio secreto.
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../db.js';
-import { hashPassword, verifyPassword, validateNewPassword, PasswordPolicyError } from './passwords.js';
-import { createSessionToken, readSessionToken, passwordFingerprint, SESSION_MAX_AGE_SECONDS } from './sessionTokens.js';
+import { hashPassword, verifyPassword, validateNewPassword, PasswordPolicyError } from '@ferresys/shared/passwords';
+import { createSessionToken, readSessionToken, passwordFingerprint, SESSION_MAX_AGE_SECONDS } from '@ferresys/shared/sessionTokens';
 
 export const SESSION_COOKIE = 'ferresys_console';
 const DUMMY_HASH = 'scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';

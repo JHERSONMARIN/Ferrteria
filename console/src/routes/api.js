@@ -5,7 +5,11 @@ import {
   CommandError, createCompany, setPlan, setTheme, setModules, resetAdminPassword, removeCompany,
   startCompany, stopCompany, updateCompany, listHistory,
 } from '../services/commands.js';
-import { login, userFromToken, changePassword, sessionCookie, clearedCookie, readCookie, SESSION_COOKIE, PasswordPolicyError } from '../services/auth.js';
+import { login, userFromToken, changePassword, sessionCookie, clearedCookie, readCookie, SESSION_COOKIE } from '../services/auth.js';
+import { AppError, errorBody } from '@ferresys/shared/errors';
+import { INDUSTRIES } from '@ferresys/shared/industries';
+import { secondsBlocked, registerFailure, registerSuccess } from '@ferresys/shared/loginThrottle';
+import { setRequestUser } from '@ferresys/shared/logger';
 
 const router = express.Router();
 
@@ -13,17 +17,32 @@ const handle = (context, fn) => async (req, res, next) => {
   try {
     await fn(req, res, next);
   } catch (error) {
-    if (error instanceof CommandError) return res.status(error.status).json({ error: error.message, salida: error.output });
-    if (error instanceof PasswordPolicyError) return res.status(400).json({ error: error.message });
+    // Errores de negocio (comandos, contraseñas): con su código y, si hubo, la salida del script.
+    if (error instanceof AppError) {
+      return res.status(error.status).json({ ...errorBody(error), ...(error.output && { salida: error.output }) });
+    }
     console.error(`[consola] ${context}:`, error);
     res.status(500).json({ error: `No se pudo ${context}.` });
   }
 };
 
 // ---------- Sesión ----------
+// Mismo límite de intentos que en las empresas: la consola controla todas, es el blanco más valioso.
 router.post('/auth/login', handle('iniciar sesión', async (req, res) => {
-  const result = await login(req.body?.user, req.body?.pass);
-  if (!result) return res.status(401).json({ error: 'Credenciales incorrectas o usuario inactivo.' });
+  const username = String(req.body?.user ?? '').trim();
+  const blockedFor = secondsBlocked(username, req.ip);
+  if (blockedFor > 0) {
+    return res.status(429).json({
+      error: `Demasiados intentos fallidos. Intente nuevamente en ${Math.ceil(blockedFor / 60)} minuto(s).`,
+      codigo: 'DEMASIADOS_INTENTOS',
+    });
+  }
+  const result = await login(username, req.body?.pass);
+  if (!result) {
+    registerFailure(username, req.ip);
+    return res.status(401).json({ error: 'Credenciales incorrectas o usuario inactivo.' });
+  }
+  registerSuccess(username, req.ip);
   res.setHeader('Set-Cookie', sessionCookie(result.token));
   res.json({ success: true, user: result.user });
 }));
@@ -38,6 +57,7 @@ router.use(handle('validar la sesión', async (req, res, next) => {
   const user = await userFromToken(readCookie(req, SESSION_COOKIE));
   if (!user) return res.status(401).json({ error: 'Sesión no iniciada o vencida.', codigo: 'SESION_INVALIDA' });
   req.user = user;
+  setRequestUser(user);
   // Con clave temporal solo se permite cambiarla.
   if (user.mustChangePassword && !req.path.startsWith('/auth/')) {
     return res.status(403).json({ error: 'Debe cambiar su contraseña.', codigo: 'CAMBIO_CLAVE_REQUERIDO' });
@@ -56,9 +76,10 @@ router.post('/auth/change-password', handle('cambiar la contraseña', async (req
 }));
 
 // ---------- Planes ----------
+// Con los rubros: se eligen junto con el plan al crear la empresa.
 router.get('/planes', handle('listar los planes', async (req, res) => {
   const { planes, adicionales } = readPlans();
-  res.json({ planes, adicionales });
+  res.json({ planes, adicionales, rubros: INDUSTRIES });
 }));
 
 // ---------- Módulos ----------

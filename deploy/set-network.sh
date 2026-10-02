@@ -40,7 +40,7 @@ empresas() { ls -1 "$DEPLOY_DIR/companies" 2>/dev/null || true; }
 
 # Puertos que usa FerreSys: el de la consola y el de cada empresa.
 puertos() {
-  leer_var "$PLATFORM_ENV" CONSOLE_PORT | grep . || echo 4000
+  leer_var "$PLATFORM_ENV" CONSOLE_PORT | grep . || echo 23000
   for slug in $(empresas); do leer_var "$DEPLOY_DIR/companies/$slug/.env" WEB_PORT; done
 }
 
@@ -109,7 +109,7 @@ AVISO
 if [ "$MODO" = "estado" ]; then
   CONSOLA_BIND="$(leer_var "$PLATFORM_ENV" CONSOLE_BIND)"
   CONSOLA_PUERTO="$(leer_var "$PLATFORM_ENV" CONSOLE_PORT)"
-  echo "Consola de VALETEC: ${CONSOLA_BIND:-127.0.0.1}:${CONSOLA_PUERTO:-4000}"
+  echo "Consola de VALETEC: ${CONSOLA_BIND:-127.0.0.1}:${CONSOLA_PUERTO:-23000}"
   for slug in $(empresas); do
     ENV_EMPRESA="$DEPLOY_DIR/companies/$slug/.env"
     echo "  $slug: $(leer_var "$ENV_EMPRESA" WEB_BIND | grep . || echo 127.0.0.1):$(leer_var "$ENV_EMPRESA" WEB_PORT)"
@@ -157,7 +157,7 @@ CONSOLA_PUERTO="$(leer_var "$PLATFORM_ENV" CONSOLE_PORT)"
 echo "✅ Visible en la red. Sus compañeros entran con la IP de este equipo:"
 for ip in $(ips); do
   echo
-  echo "   Consola de VALETEC:  http://$ip:${CONSOLA_PUERTO:-4000}"
+  echo "   Consola de VALETEC:  http://$ip:${CONSOLA_PUERTO:-23000}"
   for slug in $(empresas); do
     PUERTO="$(leer_var "$DEPLOY_DIR/companies/$slug/.env" WEB_PORT)"
     [ -n "$PUERTO" ] && echo "   $slug:  http://$ip:$PUERTO"

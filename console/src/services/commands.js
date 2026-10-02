@@ -4,7 +4,9 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { prisma } from '../db.js';
-import { DEPLOY_DIR, readPlans, readThemes, readModules, companySlugs, readCompanyEnv } from './companies.js';
+import { AppError } from '@ferresys/shared/errors';
+import { DEFAULT_INDUSTRY, INDUSTRIES, isIndustry } from '@ferresys/shared/industries';
+import { DEPLOY_DIR, readPlans, readThemes, readModules, companySlugs, readCompanyEnv, currentCommit } from './companies.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -23,10 +25,12 @@ const SCRIPT_ENV = {
 const TIMEOUT_MS = 15 * 60 * 1000;
 const MAX_OUTPUT = 20000;
 
-export class CommandError extends Error {
+// output: salida del script, para que VALETEC vea qué falló en el servidor.
+export class CommandError extends AppError {
+  static area = 'COMANDO';
+
   constructor(message, status = 400, output = null) {
-    super(message);
-    this.status = status;
+    super(message, status);
     this.output = output;
   }
 }
@@ -69,7 +73,7 @@ async function run({ script, args, action, slug, summary, user }) {
 
 // ---------- Acciones ----------
 
-export async function createCompany({ slug, name, port, plan, contact, phone, email, notes }, user) {
+export async function createCompany({ slug, name, port, plan, industry = DEFAULT_INDUSTRY, contact, phone, email, notes }, user) {
   assertSlug(slug);
   if (companySlugs().includes(slug)) throw new CommandError(`La empresa '${slug}' ya existe.`, 409);
   const legalName = String(name ?? '').trim();
@@ -78,11 +82,13 @@ export async function createCompany({ slug, name, port, plan, contact, phone, em
   if (!Number.isInteger(webPort) || webPort < 1024 || webPort > 65535) throw new CommandError('Puerto inválido (1024 a 65535).');
   const plans = readPlans().planes;
   if (plan && !plans[plan]) throw new CommandError(`Plan desconocido: ${plan}.`);
+  if (!isIndustry(industry)) throw new CommandError(`Rubro desconocido: ${industry}.`);
 
   const output = await run({
     script: 'create-company.sh',
-    args: plan ? [slug, legalName, String(webPort), plan] : [slug, legalName, String(webPort)],
-    action: 'COMPANY_CREATED', slug, summary: `Empresa ${slug} creada (${legalName})${plan ? `, plan ${plan}` : ''}`, user,
+    args: [slug, legalName, String(webPort), ...(plan ? [plan] : []), '--rubro', industry],
+    action: 'COMPANY_CREATED', slug,
+    summary: `Empresa ${slug} creada (${legalName}, ${INDUSTRIES[industry].nombre})${plan ? `, plan ${plan}` : ''}`, user,
   });
 
   await prisma.managedCompany.upsert({
@@ -175,7 +181,9 @@ async function compose({ slug, args, action, summary, user }) {
     ...args,
   ];
   try {
-    const { stdout, stderr } = await execFileAsync('docker', composeArgs, { timeout: TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024, env: SCRIPT_ENV });
+    // Al reconstruir, la imagen queda marcada con el commit del código (deploy/version.sh).
+    const env = args.includes('--build') ? { ...SCRIPT_ENV, FERRESYS_COMMIT: await currentCommit() } : SCRIPT_ENV;
+    const { stdout, stderr } = await execFileAsync('docker', composeArgs, { timeout: TIMEOUT_MS, maxBuffer: 10 * 1024 * 1024, env });
     const output = `${stdout}${stderr}`.slice(-MAX_OUTPUT);
     await record({ action, slug, summary, details: { args, output }, ok: true, user });
     return output;

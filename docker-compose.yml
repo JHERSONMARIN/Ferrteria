@@ -18,8 +18,9 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      # Desde la raíz del repositorio: la imagen incluye packages/shared.
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: ferresys-backend
     restart: always
     environment:
@@ -36,8 +37,8 @@ services:
 
   web:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: ferresys-web
     restart: always
     environment:

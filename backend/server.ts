@@ -1,0 +1,169 @@
+// Primero: reemplaza console por el registro estructurado antes de que otros módulos escriban.
+import './src/logging.ts';
+import { requestLogger } from '@ferresys/shared/logger';
+import { errorEnvelope, finalErrorHandler } from '@ferresys/shared/errors';
+import express from 'express';
+import dotenv from 'dotenv';
+import { creditRoutes as creditosRoutes, customerRoutes as clientesRoutes } from './src/modules/customers/index.ts';
+import { deliveryRoutes as entregasRoutes } from './src/modules/deliveries/index.ts';
+import { reportRoutes as dashboardRoutes } from './src/modules/reports/index.ts';
+import { cashRoutes as cajaRoutes } from './src/modules/cash/index.ts';
+import { purchaseRoutes as comprasRoutes, supplierRoutes as proveedoresRoutes } from './src/modules/purchasing/index.ts';
+import { categoryRoutes as categoriesRoutes, productRoutes as productosRoutes } from './src/modules/catalog/index.ts';
+import { settingsRoutes } from './src/modules/settings/index.ts';
+import { auditRoutes as auditoriaRoutes } from './src/modules/audit/index.ts';
+import { prisma } from './src/db.js';
+import { ensureBranchStockRows, kardexRoutes, transferRoutes as transferenciasRoutes } from './src/modules/inventory/index.ts';
+import { INDUSTRY, licenseStatus, readOnlyWhenExpired } from './src/modules/licensing/index.ts';
+import { branchRoutes as sucursalesRoutes } from './src/modules/branches/index.ts';
+import {
+  expireOrders, initializeDocumentSeries, orderRoutes as pedidosRoutes, quoteRoutes as cotizacionesRoutes,
+  salesRoutes as ventasRoutes,
+} from './src/modules/sales/index.ts';
+import {
+  allowModules, authenticate, authRoutes, requirePasswordChanged, staffRoutes as personalRoutes,
+} from './src/modules/identity/index.ts';
+import { APP_VERSION, APP_COMMIT, APP_BUILT_AT, versionLabel } from './src/config/version.ts';
+import type { Sendable } from '@ferresys/contracts/common';
+import type { AppInfo } from '@ferresys/contracts/app';
+import { industryRoutes } from './src/industries/http.ts';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Las peticiones llegan a través del proxy del frontend (y en producción también del proxy HTTPS).
+// Solo se confía en esa cantidad de saltos para obtener la IP real del cliente: con más,
+// cualquiera podría falsear su IP en X-Forwarded-For.
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
+
+// Cada petición: identificador (cabecera X-Request-Id) y una línea de registro con su resultado.
+app.use(requestLogger);
+// Toda respuesta de error sale como { error, codigo, requestId } (ver packages/shared/errors.js).
+app.use(errorEnvelope);
+
+// Sin CORS: el navegador siempre llega por el mismo dominio a través del proxy del frontend,
+// así que ningún otro sitio web puede llamar a la API con la sesión del usuario.
+// Hasta 2 MB: la importación de productos manda varios cientos de filas.
+app.use(express.json({ limit: '2mb' }));
+
+// ---------- Rutas públicas ----------
+app.use('/api/auth', authRoutes);
+
+// Accesos rápidos para probar: QUICK_LOGIN="usuario:clave:Etiqueta,usuario2:clave2".
+// Se muestran en la pantalla de inicio, así que SOLO deben definirse en entornos de prueba.
+function quickLoginUsers() {
+  const raw = process.env.QUICK_LOGIN?.trim();
+  if (!raw) return [];
+  return raw.split(',').map(entry => {
+    const [user, pass, label] = entry.split(':').map(part => part?.trim());
+    return user && pass ? { user, pass, label: label || user } : null;
+  }).filter((entry): entry is { user: string; pass: string; label: string } => entry !== null);
+}
+
+const QUICK_LOGIN_USERS = quickLoginUsers();
+if (QUICK_LOGIN_USERS.length > 0) {
+  console.warn(`[login] ${QUICK_LOGIN_USERS.length} acceso(s) rápido(s) de prueba visibles en la pantalla de inicio (QUICK_LOGIN). No usar en producción.`);
+}
+
+// Información pública para la pantalla de inicio de sesión (nombre y logo de la empresa).
+app.get('/api/app-info', async (req, res) => {
+  let business: { name: string | null; logo: string | null; primaryColor: string | null; navColor: string | null } =
+    { name: process.env.COMPANY_NAME || null, logo: null, primaryColor: null, navColor: null };
+  try {
+    const settings = await prisma.businessSettings.findUnique({
+      where: { id: 1 },
+      select: { legalName: true, tradeName: true, logo: true, primaryColor: true, navColor: true },
+    });
+    if (settings) {
+      business = {
+        name: settings.tradeName || settings.legalName,
+        logo: settings.logo,
+        primaryColor: settings.primaryColor,
+        navColor: settings.navColor,
+      };
+    }
+  } catch (error) {
+    console.error('[app-info] No se pudieron leer los datos de la empresa:', error);
+  }
+  res.json({
+    demoMode: process.env.DEMO_MODE === 'true',
+    quickLogin: QUICK_LOGIN_USERS,
+    business,
+    version: { number: APP_VERSION, commit: APP_COMMIT },
+    industry: INDUSTRY,
+  } satisfies Sendable<AppInfo>);
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', version: APP_VERSION, commit: APP_COMMIT, builtAt: APP_BUILT_AT, timestamp: new Date() });
+});
+
+// ---------- A partir de aquí todo requiere sesión ----------
+app.use('/api', authenticate, requirePasswordChanged);
+
+// Licencia vencida: la empresa queda en solo lectura hasta renovar con VALETEC.
+app.use('/api', readOnlyWhenExpired(licenseStatus));
+
+// Catálogos que consultan varias pantallas (POS, compras, entregas…); modificarlos exige su módulo.
+const CATALOG_READERS = ['pos', 'cotizaciones', 'inventory', 'categories', 'kardex', 'compras', 'deliveries'];
+
+app.use('/api/settings', allowModules({ GET: 'authenticated', default: 'admin' }), settingsRoutes);
+app.use('/api/auditoria', allowModules({ default: 'admin' }), auditoriaRoutes);
+app.use('/api/sucursales', allowModules({ GET: 'authenticated', default: 'admin' }), sucursalesRoutes);
+app.use('/api/transferencias', allowModules({ default: ['inventory', 'kardex'] }), transferenciasRoutes);
+app.use('/api/personal', allowModules({ GET: ['personal', 'pos', 'deliveries'], default: ['personal'] }), personalRoutes);
+app.use('/api/clientes', allowModules({
+  GET: ['pos', 'caja', 'cotizaciones', 'client-dir', 'customers', 'deliveries'],
+  PUT: ['client-dir', 'customers'],
+  default: ['client-dir'],
+}), clientesRoutes);
+app.use('/api/productos', allowModules({ GET: CATALOG_READERS, default: ['inventory'] }), productosRoutes);
+app.use('/api/categorias', allowModules({ GET: CATALOG_READERS, default: ['categories', 'inventory'] }), categoriesRoutes);
+app.use('/api/kardex', allowModules({ default: ['kardex', 'inventory'] }), kardexRoutes);
+app.use('/api/ventas', allowModules({ GET: ['pos', 'dashboard'], default: ['pos'] }), ventasRoutes);
+app.use('/api/cotizaciones', allowModules({ DELETE: ['cotizaciones'], default: ['cotizaciones', 'pos'] }), cotizacionesRoutes);
+app.use('/api/caja', allowModules({ GET: ['caja', 'pos'], default: ['caja'] }), cajaRoutes);
+app.use('/api/entregas', allowModules({ default: ['deliveries'] }), entregasRoutes);
+app.use('/api/creditos', allowModules({ default: ['customers'] }), creditosRoutes);
+app.use('/api/dashboard', allowModules({ default: ['dashboard'] }), dashboardRoutes);
+app.use('/api/proveedores', allowModules({ default: ['compras'] }), proveedoresRoutes);
+app.use('/api/compras', allowModules({ default: ['compras'] }), comprasRoutes);
+// Permisos por acción dentro del router (crear: POS, cobrar: caja, despachar: despacho).
+app.use('/api/pedidos', pedidosRoutes);
+
+// Rutas propias del paquete de rubro de la empresa (farmacia: vencimientos y libro de controlados).
+for (const route of industryRoutes) {
+  app.use(`/api/rubro/${route.path}`, allowModules(route.access), route.router);
+}
+
+// Cualquier otra ruta de la API
+app.use('/api', (req, res) => res.status(404).json({ error: 'Recurso no encontrado.' }));
+
+// Errores que ninguna ruta atendió.
+app.use(finalErrorHandler);
+
+// Si falla, el servidor arranca igual: las ventas responderán que no hay serie configurada.
+try {
+  await initializeDocumentSeries(prisma);
+} catch (error) {
+  console.error('❌ No se pudieron inicializar las series de comprobantes:', error);
+}
+
+try {
+  await ensureBranchStockRows(prisma);
+} catch (error) {
+  console.error('❌ No se pudo verificar el stock por sucursal:', error);
+}
+
+// Pedidos sin cobrar que pasaron el cierre del día: se anulan y liberan su stock reservado.
+const runOrderExpiration = () => expireOrders(prisma).catch(error => {
+  console.error('❌ Error al vencer pedidos:', error);
+});
+await runOrderExpiration();
+setInterval(runOrderExpiration, 5 * 60 * 1000).unref();
+
+app.listen(PORT, () => {
+  console.log(`FerreSys ${versionLabel()} corriendo en el puerto ${PORT}`);
+});

@@ -1,0 +1,105 @@
+# Entorno aislado para la suite de pruebas: base, backend y web propios, con datos en memoria.
+# No comparte nada con las empresas ni con el PostgreSQL de deploy/. Lo levanta y lo limpia tests/run.py.
+name: ferresys-tests
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ferresys-tests-db
+    environment:
+      POSTGRES_USER: ferresys
+      POSTGRES_PASSWORD: ferresys
+      POSTGRES_DB: ferresys
+      TZ: America/Lima
+      PGTZ: America/Lima
+    # Los datos viven en memoria: la suite los borra entre cadenas de pruebas.
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./sql/consola.sql:/docker-entrypoint-initdb.d/consola.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ferresys -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build:
+      # Desde la raíz del repositorio: la imagen incluye packages/shared.
+      context: ..
+      dockerfile: backend/Dockerfile
+      args:
+        APP_COMMIT: ${FERRESYS_COMMIT:-}
+    image: ferresys-backend:tests
+    container_name: ferresys-tests-backend
+    environment:
+      PORT: 3000
+      TZ: America/Lima
+      DATABASE_URL: postgresql://ferresys:ferresys@db:5432/ferresys?schema=public&connection_limit=10
+      DEMO_MODE: "false"
+      JWT_SECRET: clave-solo-para-pruebas-no-usar-en-produccion
+      COOKIE_SECURE: "false"
+      TRUST_PROXY_HOPS: 1
+      COMPANY_NAME: Ferretería de Pruebas
+      COMPANY_SLUG: pruebas
+      INITIAL_ADMIN_USER: admin
+      INITIAL_ADMIN_PASSWORD: ${CLAVE_TEMPORAL:-ClaveTemporal2026}
+      # Las pruebas de licencia reinician el backend con otros valores (ver tests/api/lib.py).
+      LICENSED_MODULES: ${LICENSED_MODULES:-}
+      # Igual que en deploy/company: sin definir = todas ("*"); vacía = ninguna.
+      LICENSED_FEATURES: ${LICENSED_FEATURES-*}
+      MAX_USERS: ${MAX_USERS:-0}
+      MAX_BRANCHES: ${MAX_BRANCHES:-0}
+      MAX_CASH_REGISTERS: ${MAX_CASH_REGISTERS:-0}
+      LICENSE_EXPIRES_AT: ${LICENSE_EXPIRES_AT:-}
+      PLAN: ${PLAN:-}
+      # Rubro de la empresa (packages/shared/industries.js). Se elige al crearla; sin valor, ferretería.
+      INDUSTRY: ${INDUSTRY:-ferreteria}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    image: ferresys-web:tests
+    container_name: ferresys-tests-web
+    environment:
+      VITE_PORT: 5180
+      BACKEND_URL: http://backend:3000
+      TZ: America/Lima
+    ports:
+      - "127.0.0.1:${TEST_WEB_PORT:-23990}:5180"
+    depends_on:
+      - backend
+
+  # Consola de VALETEC. Sin acceso a Docker (no puede crear ni tocar empresas) y sin el repositorio:
+  # solo los catálogos que lee, y una carpeta de empresas vacía.
+  consola:
+    build:
+      context: ..
+      dockerfile: console/Dockerfile
+    image: ferresys-console:tests
+    container_name: ferresys-tests-consola
+    environment:
+      PORT: 4000
+      TZ: America/Lima
+      DATABASE_URL: postgresql://ferresys:ferresys@db:5432/consola?schema=public
+      JWT_SECRET: otra-clave-solo-para-pruebas-de-la-consola-no-usar
+      COOKIE_SECURE: "false"
+      CONSOLE_ADMIN_USER: valetec
+      CONSOLE_ADMIN_PASSWORD: ${CLAVE_TEMPORAL:-ClaveTemporal2026}
+      DEPLOY_DIR: /repo/deploy
+    volumes:
+      - ../deploy/plans.json:/repo/deploy/plans.json:ro
+      - ../deploy/version.sh:/repo/deploy/version.sh:ro
+      - ../backend/src/config/themes.json:/repo/backend/src/config/themes.json:ro
+      - ../backend/src/config/modules.js:/repo/backend/src/config/modules.js:ro
+    tmpfs:
+      - /repo/deploy/companies
+    ports:
+      - "127.0.0.1:${TEST_CONSOLE_PORT:-23991}:4000"
+    depends_on:
+      db:
+        condition: service_healthy

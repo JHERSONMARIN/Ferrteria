@@ -4,6 +4,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { DEFAULT_INDUSTRY } from '@ferresys/shared/industries';
 
 const execFileAsync = promisify(execFile);
 
@@ -73,6 +74,28 @@ async function dockerState(slug) {
   }
 }
 
+// Commit del código que tiene el servidor (deploy/version.sh), o '' si no se puede saber.
+export async function currentCommit() {
+  try {
+    const { stdout } = await execFileAsync('bash', [join(DEPLOY_DIR, 'version.sh')], { timeout: 10000 });
+    return stdout.trim();
+  } catch {
+    return '';
+  }
+}
+
+// Commit con el que se construyó la imagen que corre la empresa (variable APP_COMMIT del contenedor).
+async function runningCommit(slug) {
+  try {
+    const { stdout } = await execFileAsync('docker', [
+      'inspect', `ferresys-${slug}-backend-1`, '--format', '{{range .Config.Env}}{{println .}}{{end}}',
+    ]);
+    return stdout.split('\n').find(line => line.startsWith('APP_COMMIT='))?.slice('APP_COMMIT='.length).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 // Consulta de solo lectura a la base de la empresa (uso del plan).
 async function usage(slug) {
   const dbName = `ferresys_${slug.replace(/-/g, '_')}`;
@@ -115,13 +138,16 @@ function licenseStatus(expiresAt) {
 export async function getCompany(slug, { withUsage = false } = {}) {
   const env = readCompanyEnv(slug);
   if (!env) return null;
-  const [docker, use] = await Promise.all([dockerState(slug), withUsage ? usage(slug) : null]);
+  const [docker, use, commit, serverCommit] = await Promise.all([
+    dockerState(slug), withUsage ? usage(slug) : null, runningCommit(slug), currentCommit(),
+  ]);
   return {
     slug,
     name: env.COMPANY_NAME || slug,
     port: Number(env.WEB_PORT) || null,
     url: env.WEB_PORT ? `http://127.0.0.1:${env.WEB_PORT}` : null,
     plan: env.PLAN || null,
+    industry: env.INDUSTRY || DEFAULT_INDUSTRY,
     modules: list(env.LICENSED_MODULES),
     features: list(env.LICENSED_FEATURES),
     limits: {
@@ -132,6 +158,8 @@ export async function getCompany(slug, { withUsage = false } = {}) {
     license: licenseStatus(env.LICENSE_EXPIRES_AT || null),
     demoMode: env.DEMO_MODE === 'true',
     docker,
+    // Versión que corre y si quedó atrás del código del servidor (se pone al día con "Actualizar").
+    version: { commit, serverCommit: serverCommit || null, outdated: Boolean(commit && serverCommit && commit !== serverCommit) },
     usage: use,
   };
 }

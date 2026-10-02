@@ -3,7 +3,11 @@
 services:
   backend:
     build:
-      context: ../../backend
+      # Desde la raíz del repositorio: la imagen incluye packages/shared.
+      context: ../..
+      dockerfile: backend/Dockerfile
+      args:
+        APP_COMMIT: ${FERRESYS_COMMIT:-}
     image: ferresys-backend:local
     restart: unless-stopped
     environment:
@@ -17,15 +21,20 @@ services:
       # Proxies delante del backend: 1 (frontend); 2 cuando se agregue el proxy HTTPS.
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
       COMPANY_NAME: ${COMPANY_NAME}
+      # Identificador de la empresa: aparece en cada línea del registro del backend.
+      COMPANY_SLUG: ${COMPANY_SLUG:-}
       # Módulos contratados; vacío = todos. Se cambia con deploy/set-modules.sh
       LICENSED_MODULES: ${LICENSED_MODULES:-}
       # Funciones y límites del plan contratado. Se cambian con deploy/set-plan.sh o desde la consola.
-      LICENSED_FEATURES: ${LICENSED_FEATURES:-}
+      # Sin la variable en el .env (empresa sin plan) = todas ("*"); vacía = ninguna (plan Básico).
+      LICENSED_FEATURES: ${LICENSED_FEATURES-*}
       MAX_USERS: ${MAX_USERS:-0}
       MAX_BRANCHES: ${MAX_BRANCHES:-0}
       MAX_CASH_REGISTERS: ${MAX_CASH_REGISTERS:-0}
       LICENSE_EXPIRES_AT: ${LICENSE_EXPIRES_AT:-}
       PLAN: ${PLAN:-}
+      # Rubro de la empresa (packages/shared/industries.js). Se elige al crearla; sin valor, ferretería.
+      INDUSTRY: ${INDUSTRY:-ferreteria}
       # Accesos rápidos en la pantalla de inicio, solo para entornos de prueba (usuario:clave:Etiqueta,…).
       QUICK_LOGIN: ${QUICK_LOGIN:-}
       INITIAL_ADMIN_USER: ${INITIAL_ADMIN_USER:-admin}
@@ -40,7 +49,8 @@ services:
 
   web:
     build:
-      context: ../../frontend
+      context: ../..
+      dockerfile: frontend/Dockerfile
     image: ferresys-web:local
     restart: unless-stopped
     environment:

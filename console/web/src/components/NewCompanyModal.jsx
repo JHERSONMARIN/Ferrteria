@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { api } from '../api.js';
 
-const PUERTO_INICIAL = 5301;
+const PUERTO_INICIAL = 23001;
 
 // Alta de una empresa: crea su base, su instancia y aplica el plan elegido.
 export default function NewCompanyModal({ plans, companies, onClose, onCreated }) {
@@ -12,7 +12,7 @@ export default function NewCompanyModal({ plans, companies, onClose, onCreated }
     return puerto;
   }, [companies]);
 
-  const [form, setForm] = useState({ name: '', slug: '', port: puertoSugerido, plan: 'basico', contact: '', phone: '', email: '' });
+  const [form, setForm] = useState({ name: '', slug: '', port: puertoSugerido, plan: 'basico', industry: 'ferreteria', contact: '', phone: '', email: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState(null);
@@ -77,6 +77,12 @@ export default function NewCompanyModal({ plans, companies, onClose, onCreated }
           <select value={form.plan} onChange={e => set('plan', e.target.value)} className={input}>
             {plans && Object.entries(plans.planes).map(([id, p]) => <option key={id} value={id}>{p.nombre} — {p.descripcion}</option>)}
           </select>
+        </label>
+        <label className="text-xs font-bold text-slate-600">Rubro
+          <select value={form.industry} onChange={e => set('industry', e.target.value)} className={input}>
+            {plans?.rubros && Object.entries(plans.rubros).map(([id, r]) => <option key={id} value={id}>{r.nombre}</option>)}
+          </select>
+          <span className="block font-normal text-[11px] text-slate-500 mt-0.5">No se cambia después: define los datos que guarda la empresa.</span>
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <input value={form.contact} onChange={e => set('contact', e.target.value)} placeholder="Contacto" className={input} />

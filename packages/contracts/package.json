@@ -1,0 +1,12 @@
+{
+  "name": "@ferresys/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Forma de los datos que viajan entre las pantallas y el servidor. Solo tipos: no agrega nada al programa que se ejecuta.",
+  "type": "module",
+  "exports": {
+    "./*": {
+      "types": "./src/*.ts"
+    }
+  }
+}
