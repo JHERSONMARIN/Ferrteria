@@ -37,8 +37,8 @@ interface SaleData {
 }
 
 async function executeSale(tx: Tx, data: SaleData) {
-  const { lines, total: subtotal } = await priceLines(tx, data.items, data.quoteId, data.clienteId);
-  const { discount, total } = applyDiscount(subtotal, data.discountRequest, data.user, data.maxDiscountPercent);
+  const { lines } = await priceLines(tx, data.items, data.quoteId, data.clienteId);
+  const { gross, discount, total } = applyDiscount(lines, data.discountRequest, data.user, data.maxDiscountPercent);
   assertExpectedTotal(data.expectedTotal, lines, total);
   await industryHooks.beforeSale(tx, {
     kind: 'direct', branchId: data.user.branchId, customerId: data.clienteId, lines: saleLinesFor(lines), user: data.user,
@@ -80,12 +80,13 @@ async function executeSale(tx: Tx, data: SaleData) {
   });
 
   await repo.addCashIncome(tx, sessionId, payment);
-  await auditDiscount(tx, { saleId: sale.id, reference: numDoc, subtotal, discount, total, request: data.discountRequest, user: data.user });
+  await auditDiscount(tx, { saleId: sale.id, reference: numDoc, gross, discount, total, request: data.discountRequest, lines, user: data.user });
 
   for (const line of lines) {
     await tx.detalleVenta.create({
       data: {
-        ventaId: sale.id, productoId: line.id, quantity: line.qty, unitPrice: line.price, subtotal: line.subtotal, ...unitColumns(line),
+        ventaId: sale.id, productoId: line.id, quantity: line.qty, unitPrice: line.price, discount: line.discount, subtotal: line.subtotal,
+        ...unitColumns(line),
       },
     });
     // Por despachar: se reserva y el kardex registra la salida al despachar.
@@ -107,7 +108,7 @@ async function executeSale(tx: Tx, data: SaleData) {
     ? await scheduleDeliveryForSale(tx, { ventaId: sale.id, numDoc, clienteId: data.clienteId, lines, delivery })
     : null;
 
-  return { ...sale, subtotal, items: publicLines(lines), delivery: entrega };
+  return { ...sale, subtotal: gross, items: publicLines(lines), delivery: entrega };
 }
 
 // user: quien tiene la sesión; cobra y aplica el descuento. El vendedor puede ser otro (sin vendedorId, el mismo).

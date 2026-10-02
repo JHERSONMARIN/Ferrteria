@@ -1,7 +1,7 @@
 // El carrito de Vender: reglas puras de cantidades y stock (mismos criterios que el servidor).
 import type { Product, SaleUnit } from '@ferresys/contracts/catalog';
 import type { CartLine } from '@ferresys/contracts/sales';
-import { roundQuantity } from '../../shared/utils/quantities.ts';
+import { roundMoney, roundQuantity } from '../../shared/utils/quantities.ts';
 
 /** Una línea del carrito: un producto en una presentación (unitId null = unidad base). */
 export interface CartItem {
@@ -19,6 +19,13 @@ export interface CartItem {
   stock: number;
   unit: string;
   allowsFractions: boolean;
+  /** Descuento de la línea mientras se escribe (value es el texto del campo). */
+  discount: LineDiscountDraft | null;
+}
+
+export interface LineDiscountDraft {
+  type: 'PERCENT' | 'AMOUNT';
+  value: string;
 }
 
 // Stock que se puede vender: lo reservado por pedidos sin despachar ya tiene dueño.
@@ -44,6 +51,26 @@ export const priceFor = (product: Product, wholesale: boolean, unit: SaleUnit | 
   return wholesale && source.wholesalePrice != null ? source.wholesalePrice : source.price;
 };
 
-// Lo que viaja al servidor de cada línea.
-export const cartPayload = (cart: readonly CartItem[]): CartLine[] =>
-  cart.map(item => ({ id: item.id, unitId: item.unitId, name: item.name, qty: item.qty }));
+// Importe de la línea sin descuento.
+export const lineGross = (item: Pick<CartItem, 'qty' | 'price'>) => roundMoney(item.qty * item.price);
+
+// Descuento de la línea: igual que en el servidor. Lo que no se puede aplicar trae su motivo.
+export function lineDiscount(item: CartItem): { amount: number; error: string } {
+  const draft = item.discount;
+  if (!draft || draft.value === '') return { amount: 0, error: '' };
+  const value = Number(draft.value);
+  if (!Number.isFinite(value) || value < 0) return { amount: 0, error: 'Valor no válido.' };
+  if (draft.type === 'PERCENT' && value > 100) return { amount: 0, error: 'Hasta 100 %.' };
+  const gross = lineGross(item);
+  const amount = roundMoney(draft.type === 'PERCENT' ? gross * value / 100 : value);
+  if (amount > 0 && amount >= gross) return { amount: 0, error: 'No puede cubrir todo el importe.' };
+  return { amount, error: '' };
+}
+
+// Lo que viaja al servidor de cada línea. Las cotizaciones no llevan descuentos.
+export const cartPayload = (cart: readonly CartItem[], withDiscounts = true): CartLine[] =>
+  cart.map(item => {
+    const { amount } = lineDiscount(item);
+    const discount = withDiscounts && item.discount && amount > 0 ? { type: item.discount.type, value: Number(item.discount.value) } : null;
+    return { id: item.id, unitId: item.unitId, name: item.name, qty: item.qty, ...(discount && { discount }) };
+  });

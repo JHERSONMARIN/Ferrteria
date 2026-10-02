@@ -6,7 +6,9 @@ import type { PricesChanged, Quote } from '@ferresys/contracts/sales';
 import type { ApiError } from '../../../api/client.ts';
 import { formatQuantity, quantityProblem, roundMoney, roundQuantity } from '../../../shared/utils/quantities.ts';
 import { useConfirm, useToast } from '../../../shared/ui/index.ts';
-import { availableStock, baseQtyOf, lineKey, priceFor, unitOf, type CartItem } from '../cart.ts';
+import {
+  availableStock, baseQtyOf, lineDiscount, lineGross, lineKey, priceFor, unitOf, type CartItem, type LineDiscountDraft,
+} from '../cart.ts';
 
 export interface LoadedQuote {
   id: number;
@@ -27,7 +29,11 @@ export function usePosCart(products: readonly Product[], isWholesale: boolean) {
     cart.forEach(i => map.set(i.id, roundQuantity((map.get(i.id) || 0) + baseQtyOf(i))));
     return map;
   }, [cart]);
-  const subtotal = roundMoney(cart.reduce((sum, item) => sum + item.price * item.qty, 0));
+  // Importe sin descuentos, lo descontado en las líneas y lo que queda (sobre eso va el descuento del total).
+  const gross = roundMoney(cart.reduce((sum, item) => sum + lineGross(item), 0));
+  const lineDiscounts = roundMoney(cart.reduce((sum, item) => sum + lineDiscount(item).amount, 0));
+  const subtotal = roundMoney(gross - lineDiscounts);
+  const lineDiscountError = cart.some(item => lineDiscount(item).error !== '');
 
   // Al cambiar de cliente se recalculan los precios del carrito (salvo si viene de una cotización,
   // que conserva los precios cotizados).
@@ -72,7 +78,7 @@ export function usePosCart(products: readonly Product[], isWholesale: boolean) {
     const draft: CartItem = current ?? {
       key, id: product.id, unitId: unit?.id ?? null, unitName: unit?.name ?? null, factor: unit?.factor ?? 1,
       name: product.name, code: product.code, price: priceFor(product, isWholesale, unit ?? null), qty: 0, stock: available,
-      unit: unit?.name ?? product.unit, allowsFractions: unit ? unit.allowsFractions : product.allowsFractions,
+      unit: unit?.name ?? product.unit, allowsFractions: unit ? unit.allowsFractions : product.allowsFractions, discount: null,
     };
     const max = maxQtyFor(draft);
     if (draft.qty + 1 > max) {
@@ -104,6 +110,10 @@ export function usePosCart(products: readonly Product[], isWholesale: boolean) {
   };
 
   const remove = (key: string) => setCart(prev => prev.filter(item => item.key !== key));
+
+  // null quita el descuento de la línea.
+  const setDiscount = (key: string, discount: LineDiscountDraft | null) =>
+    setCart(prev => prev.map(i => (i.key === key ? { ...i, discount } : i)));
 
   const clear = () => setCart([]);
 
@@ -146,15 +156,16 @@ export function usePosCart(products: readonly Product[], isWholesale: boolean) {
         stock: availableStock(d.producto),
         unit: d.unitName ?? d.producto.unit,
         allowsFractions: unit ? unit.allowsFractions : d.producto.allowsFractions,
+        discount: null,
       };
     }));
     setLoadedQuote({ id: quote.id, numDoc: quote.numDoc });
   };
 
   return {
-    cart, subtotal, qtyInCart, loadedQuote, unlinkQuote: () => setLoadedQuote(null),
+    cart, gross, lineDiscounts, subtotal, lineDiscountError, qtyInCart, loadedQuote, unlinkQuote: () => setLoadedQuote(null),
     unitChoice, closeUnitChoice: () => setUnitChoice(null),
-    add, setQty, remove, clear, askToClear, applyServerPrices, loadQuote,
+    add, setQty, remove, setDiscount, clear, askToClear, applyServerPrices, loadQuote,
   };
 }
 

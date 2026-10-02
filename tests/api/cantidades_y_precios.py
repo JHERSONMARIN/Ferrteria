@@ -128,6 +128,34 @@ verificar("La deuda del cliente es lo cobrado (95), no el precio de lista",
           sql(f"select \"debtTotal\" from creditos_cliente where \"clienteId\" = {MIN}") == "95.00",
           sql(f"select \"debtTotal\" from creditos_cliente where \"clienteId\" = {MIN}"))
 
+print("\n=== Descuento por línea ===")
+def linea(producto, qty, **extra):
+    return {"id": producto, "qty": qty, **extra}
+
+def venta_lineas(nav, lineas, total, **extra):
+    return nav.api("POST", "/ventas", {"docType": "Nota de Venta", "payMethod": "Efectivo", "cart": lineas, "totalEsperado": total, **extra})
+
+st, r = venta_lineas(vendedor, [linea(ID["CLA"], 10, discount={"type": "PERCENT", "value": 5})], 95)
+verificar("5 % en una línea de S/ 100 → total 95", st == 201 and r["venta"]["total"] == 95 and r["venta"]["discount"] == 5, (st, r))
+verificar("La línea informa su descuento y su subtotal descontado",
+          r["venta"]["items"][0]["discount"] == 5 and r["venta"]["items"][0]["subtotal"] == 95, r["venta"]["items"])
+verificar("El detalle guarda el descuento de la línea", sql(
+    f"select d.discount || '/' || d.subtotal from detalle_ventas d join ventas v on v.id = d.\"ventaId\" where v.\"numDoc\" = '{r['venta']['numDoc']}'") == "5.00/95.00")
+verificar("La auditoría registra el descuento de la línea", sql(
+    f"select details->'lines'->0->>'discount' from audit_logs where action = 'DISCOUNT_APPLIED' and \"entityId\" = '{r['venta']['id']}'") == "5")
+st, r = venta_lineas(vendedor, [linea(ID["CLA"], 10, discount={"type": "PERCENT", "value": 5})], 90, discount={"type": "AMOUNT", "value": 5})
+verificar("Línea (5) y total (5) suman 10 %: dentro del tope", st == 201 and r["venta"]["total"] == 90 and r["venta"]["discount"] == 10, (st, r))
+st, r = venta_lineas(vendedor, [linea(ID["CLA"], 10, discount={"type": "PERCENT", "value": 5})], 89, discount={"type": "AMOUNT", "value": 6})
+verificar("Línea (5) y total (6) superan el 10 % → 403", st == 403 and r.get("codigo") == "DESCUENTO_EXCEDIDO", (st, r))
+st, r = venta_lineas(vendedor, [linea(ID["CLA"], 10, discount={"type": "PERCENT", "value": 15})], 85)
+verificar("Solo con la línea también rige el tope → 403", st == 403 and r.get("codigo") == "DESCUENTO_EXCEDIDO", (st, r))
+st, r = venta_lineas(admin, [linea(ID["CLA"], 1, discount={"type": "AMOUNT", "value": 10})], 0)
+verificar("Un descuento no puede llevarse toda la línea → 400", st == 400 and "todo su importe" in r.get("error", ""), (st, r))
+st, r = venta_lineas(admin, [linea(ID["CLA"], 1, discount={"type": "PERCENT", "value": 101})], 10)
+verificar("Descuento de línea mayor a 100 % → 400", st == 400, (st, r))
+st, r = vendedor.api("POST", "/cotizaciones", {"cart": [linea(ID["CLA"], 2, discount={"type": "PERCENT", "value": 10})]})
+verificar("Las cotizaciones no llevan descuento por línea", st == 201 and r["cotizacion"]["total"] == 20, (st, r))
+
 print("\n=== Descuento en pedidos (vendedor y caja) ===")
 st, r = configurar(admin, saleFlowMode="SEPARATE_CASHIER")
 verificar("Cambio a modo vendedor y caja", st == 200, (st, r))
@@ -149,6 +177,11 @@ verificar("El descuento queda a nombre del vendedor, no del cajero",
           sql(f"select u.\"user\" from ventas v join usuarios u on u.id = v.\"discountById\" where v.id = {PED}") == "vendedor")
 st, r = cajero.api("POST", f"/pedidos/{PED}/cobrar", {"docType": "Boleta", "payMethod": "Efectivo"})
 verificar("Cobrar dos veces sigue bloqueado → 409", st == 409, (st, r))
+st, r = vendedor.api("POST", "/pedidos", {"cart": [{"id": ID["CAB"], "qty": 10, "discount": {"type": "AMOUNT", "value": 2}}], "totalEsperado": 23})
+verificar("Pedido con descuento en una línea (25 − 2 = 23)", st == 201 and r["pedido"]["total"] == 23 and r["pedido"]["discount"] == 2
+          and r["pedido"]["subtotal"] == 25 and r["pedido"]["items"][0]["discount"] == 2, (st, r))
+st, r = cajero.api("POST", f"/pedidos/{r['pedido']['id']}/cobrar", {"docType": "Boleta", "payMethod": "Efectivo"})
+verificar("El cajero lo cobra con el descuento de la línea", st == 200 and r["pedido"]["total"] == 23 and r["pedido"]["items"][0]["discount"] == 2, (st, r))
 
 print("\n=== Historial ===")
 hist = admin.api("GET", "/ventas")[1]

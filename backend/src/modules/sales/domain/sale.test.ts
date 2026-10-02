@@ -24,7 +24,7 @@ const cable: SellableProduct = {
 
 test('carrito: agrupa el mismo producto en la misma presentación y ordena por id', () => {
   assert.deepEqual(normalizeCart([{ id: 5, qty: 1 }, { id: 2, qty: 2 }, { id: 5, qty: 1.5 }, { id: 5, qty: 1, unitId: 9 }]), [
-    { id: 2, unitId: null, qty: 2 }, { id: 5, unitId: null, qty: 2.5 }, { id: 5, unitId: 9, qty: 1 },
+    { id: 2, unitId: null, qty: 2, discount: null }, { id: 5, unitId: null, qty: 2.5, discount: null }, { id: 5, unitId: 9, qty: 1, discount: null },
   ]);
 });
 
@@ -43,11 +43,19 @@ test('precio: la lista mayorista usa el precio mayorista si existe; la presentac
 });
 
 test('línea: 2.75 m a S/ 2.50 = 6.88; un rollo mueve 100 unidades del stock', () => {
-  const metros = priceLine(cable, { id: 1, unitId: null, qty: 2.75 }, 2.5);
+  const metros = priceLine(cable, { id: 1, unitId: null, qty: 2.75, discount: null }, 2.5);
   assert.equal(metros.subtotal, 6.88);
   assert.equal(metros.baseQty, 2.75);
-  const rollos = priceLine(cable, { id: 1, unitId: 9, qty: 2 }, 230);
+  const rollos = priceLine(cable, { id: 1, unitId: 9, qty: 2, discount: null }, 230);
   assert.deepEqual([rollos.subtotal, rollos.baseQty, rollos.unitName], [460, 200, 'Rollo x 100 m']);
+});
+
+test('descuento por línea: % o S/ sobre su importe, sin llevárselo todo', () => {
+  const linea = priceLine(cable, { id: 1, unitId: null, qty: 4, discount: { type: 'PERCENT', value: 10 } }, 2.5);
+  assert.deepEqual([linea.discount, linea.subtotal], [1, 9]);
+  const rollo = priceLine(cable, { id: 1, unitId: 9, qty: 1, discount: { type: 'AMOUNT', value: 30 } }, 230);
+  assert.deepEqual([rollo.discount, rollo.subtotal], [30, 200]);
+  assert.throws(() => priceLine(cable, { id: 1, unitId: null, qty: 2, discount: { type: 'AMOUNT', value: 5 } }, 2.5), /todo su importe/);
 });
 
 test('cotización: vigente hasta el final de su plazo', () => {
@@ -57,7 +65,7 @@ test('cotización: vigente hasta el final de su plazo', () => {
 });
 
 test('total desactualizado: se rechaza con PRECIOS_CAMBIARON y los precios nuevos', () => {
-  const lines = [priceLine(cable, { id: 1, unitId: null, qty: 2 }, 2.5)];
+  const lines = [priceLine(cable, { id: 1, unitId: null, qty: 2, discount: null }, 2.5)];
   assert.doesNotThrow(() => assertExpectedTotal(5, lines, 5));
   assert.doesNotThrow(() => assertExpectedTotal(undefined, lines, 5));
   assert.throws(() => assertExpectedTotal(4, lines, 5), (e: unknown) =>
@@ -75,11 +83,24 @@ test('descuento: por porcentaje o monto, con tope por rol; el administrador no t
   assert.throws(() => computeDiscount(100, { type: 'AMOUNT', value: 100 }, 'ADMINISTRADOR', 0), /todo el total/);
 });
 
+test('el tope suma los descuentos de las líneas y el del total, sobre el importe sin descuentos', () => {
+  // Líneas por S/ 100 con S/ 6 de descuento: quedan 94; el tope de 10 % es S/ 10 en total.
+  assert.deepEqual(computeDiscount(94, { type: 'AMOUNT', value: 4 }, 'VENDEDOR', 10, 6), { discount: 4, total: 90 });
+  assert.throws(() => computeDiscount(94, { type: 'AMOUNT', value: 5 }, 'VENDEDOR', 10, 6), (e: unknown) =>
+    e instanceof SaleError && e.codigo === 'DESCUENTO_EXCEDIDO');
+  // Solo con descuentos de línea también se controla el tope.
+  assert.throws(() => computeDiscount(85, null, 'VENDEDOR', 10, 15), /máximo es 10 %/);
+  assert.deepEqual(computeDiscount(85, null, 'ADMINISTRADOR', 0, 15), { discount: 0, total: 85 });
+});
+
 test('pedido de descuento: tipo válido, positivo y porcentaje hasta 100; 0 = sin descuento', () => {
   assert.equal(parseDiscountRequest(undefined), null);
   assert.equal(parseDiscountRequest({ type: 'PERCENT', value: 0 }), null);
   assert.throws(() => parseDiscountRequest({ type: 'REGALO', value: 5 }), /Tipo de descuento/);
   assert.throws(() => parseDiscountRequest({ type: 'PERCENT', value: 120 }), /100 %/);
+  // También por línea del carrito.
+  assert.deepEqual(normalizeCart([{ id: 1, qty: 2, discount: { type: 'PERCENT', value: '5' } }])[0]?.discount, { type: 'PERCENT', value: 5 });
+  assert.throws(() => normalizeCart([{ id: 1, qty: 2, discount: { type: 'PERCENT', value: 101 } }]), /100 %/);
 });
 
 test('pago: efectivo, digital, mixto que cuadre y fiado (que no entra a caja)', () => {

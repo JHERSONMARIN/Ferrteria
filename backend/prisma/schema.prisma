@@ -229,7 +229,8 @@ model Venta {
   mixDigital Decimal?         @default(0) @db.Decimal(12, 2)
   payCode   String?
   total     Decimal           @default(0) @db.Decimal(12, 2)
-  // Descuento sobre la suma de las líneas: total = suma de subtotales - discount.
+  // Todo lo descontado en la venta: los descuentos de sus líneas más el descuento sobre el total.
+  // total = suma de (cantidad × precio) - discount.
   discount  Decimal           @default(0) @db.Decimal(12, 2)
   status    SaleStatus      @default(DISPATCHED)
   createdAt DateTime        @default(now())
@@ -279,6 +280,8 @@ model DetalleVenta {
   id        Int   @id @default(autoincrement())
   quantity  Decimal @db.Decimal(12, 3)
   unitPrice Decimal @db.Decimal(12, 2)
+  // Descuento de esta línea; subtotal = quantity × unitPrice - discount.
+  discount  Decimal @default(0) @db.Decimal(12, 2)
   subtotal  Decimal @db.Decimal(12, 2)
 
   ventaId Int

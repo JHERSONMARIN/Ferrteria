@@ -258,7 +258,10 @@ export default function CashierQueuePage({ currentUser, onTriggerPrint, saleFlow
                         <td className="py-2.5 text-ink">{item.name}{item.unitName && <span className="text-xs text-brand-text font-semibold"> · {item.unitName}</span>}<span className="block text-[10px] font-mono text-muted">{item.code}</span></td>
                         <td className="py-2.5 text-right font-bold">{item.qty}</td>
                         <td className="py-2.5 text-right tabular-nums">{formatSoles(item.price)}</td>
-                        <td className="py-2.5 text-right font-bold tabular-nums">{formatSoles(item.subtotal)}</td>
+                        <td className="py-2.5 text-right font-bold tabular-nums">
+                          {formatSoles(item.qty * item.price)}
+                          {item.discount > 0 && <span className="block text-[11px] font-semibold text-success">desc. − {formatSoles(item.discount)}</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

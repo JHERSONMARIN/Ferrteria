@@ -89,7 +89,7 @@ export async function convertQuote(client: Client, quoteId: number, payload: z.i
     vendedorId: payload.vendedorId ?? quote.vendedorId,
     clienteId: quote.clienteId,
     cotizacionId: quote.id,
-    cart: mergeCart(quote.detalles.map(d => ({ id: d.productoId, qty: Number(d.quantity), unitId: d.unitId }))),
+    cart: mergeCart(quote.detalles.map(d => ({ id: d.productoId, qty: Number(d.quantity), unitId: d.unitId, discount: null }))),
     totalEsperado: null,
     discount: null,
     delivery: null,

@@ -94,8 +94,8 @@ export async function createOrder(client: Client, payload: z.infer<typeof OrderB
   const industryData = parseSaleData(payload.industryData);
 
   return client.$transaction(async (tx) => {
-    const { lines, total: subtotal } = await priceLines(tx, items, quoteId, clienteId);
-    const { discount, total } = applyDiscount(subtotal, discountRequest, user, Number(settings.maxDiscountPercent));
+    const { lines } = await priceLines(tx, items, quoteId, clienteId);
+    const { gross, discount, total } = applyDiscount(lines, discountRequest, user, Number(settings.maxDiscountPercent));
     assertExpectedTotal(payload.totalEsperado, lines, total);
     await industryHooks.beforeSale(tx, {
       kind: 'order', branchId: user.branchId, customerId: clienteId, lines: saleLinesFor(lines), user, data: industryData,
@@ -115,12 +115,15 @@ export async function createOrder(client: Client, payload: z.infer<typeof OrderB
         industryData: industryData ?? {},
       },
     });
-    await auditDiscount(tx, { saleId: order.id, reference: `el pedido N° ${order.id}`, subtotal, discount, total, request: discountRequest, user });
+    await auditDiscount(tx, { saleId: order.id, reference: `el pedido N° ${order.id}`, gross, discount, total, request: discountRequest, lines, user });
 
     for (const line of lines) {
       await reserveStock(tx, line.id, line.baseQty, user.branchId);
       await tx.detalleVenta.create({
-        data: { ventaId: order.id, productoId: line.id, quantity: line.qty, unitPrice: line.price, subtotal: line.subtotal, ...unitColumns(line) },
+        data: {
+          ventaId: order.id, productoId: line.id, quantity: line.qty, unitPrice: line.price, discount: line.discount, subtotal: line.subtotal,
+          ...unitColumns(line),
+        },
       });
     }
     return present(tx, order.id);

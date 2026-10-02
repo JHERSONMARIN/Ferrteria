@@ -39,11 +39,25 @@ const issue = (ctx: z.RefinementCtx, message: string) => ctx.addIssue({ code: 'c
 // Identificador opcional que la pantalla manda como número, texto o vacío: lo inválido = sin valor.
 const looseId = numberish.nullish().transform(value => (value === '' || value === null || value === undefined ? null : parseInt(String(value), 10) || null));
 
-/** Una línea del carrito ya revisada: producto, presentación (null = unidad base) y cantidad. */
+/** Descuento en % o en S/, sobre el total o sobre una línea. Sin descuento, o de 0, = null. */
+export const DiscountBody = z.object({
+  type: z.enum(['PERCENT', 'AMOUNT'], { error: 'Tipo de descuento no válido.' }),
+  value: z.union([z.number(), z.string()], { error: 'El descuento debe ser un número positivo.' }).nullish().transform(Number)
+    .refine(value => Number.isFinite(value) && value >= 0, { error: 'El descuento debe ser un número positivo.' }),
+}, { error: 'Tipo de descuento no válido.' })
+  .refine(d => d.type !== 'PERCENT' || d.value <= 100, { error: 'El descuento no puede superar el 100 %.' })
+  .nullish()
+  .transform(d => (!d || d.value === 0 ? null : d));
+export type DiscountRequest = NonNullable<z.input<typeof DiscountBody>>;
+/** Un descuento ya validado. */
+export type Discount = NonNullable<z.output<typeof DiscountBody>>;
+
+/** Una línea del carrito ya revisada: producto, presentación (null = unidad base), cantidad y su descuento. */
 export interface CartItem {
   id: number;
   unitId: number | null;
   qty: number;
+  discount: Discount | null;
 }
 
 // Clave de una línea: el mismo producto en otra presentación es otra línea.
@@ -55,7 +69,8 @@ export function mergeCart(items: readonly CartItem[]): CartItem[] {
   const lines = new Map<string, CartItem>();
   for (const item of items) {
     const key = lineKey(item.id, item.unitId);
-    lines.set(key, { ...item, qty: roundQuantity((lines.get(key)?.qty ?? 0) + item.qty) });
+    const previous = lines.get(key);
+    lines.set(key, { ...item, qty: roundQuantity((previous?.qty ?? 0) + item.qty), discount: item.discount ?? previous?.discount ?? null });
   }
   return [...lines.values()].sort((a, b) => a.id - b.id || (a.unitId ?? 0) - (b.unitId ?? 0));
 }
@@ -65,6 +80,8 @@ const CartLineBody = z.object({
   id: numberish.nullish(),
   unitId: numberish.nullish(),
   qty: numberish.nullish(),
+  /** Descuento de la línea (las cotizaciones no llevan descuento: se ignora). */
+  discount: DiscountBody,
   /** Solo para los mensajes de error. */
   name: z.string().optional(),
 }, { error: 'El carrito contiene un producto inválido.' });
@@ -85,21 +102,10 @@ export const CartBody = z.array(CartLineBody, { error: EMPTY_CART }).min(1, { er
       issue(ctx, `Cantidad inválida para ${label}: debe ser mayor a 0 y con hasta ${MAX_QUANTITY_DECIMALS} decimales.`);
       return z.NEVER;
     }
-    items.push({ id, unitId, qty });
+    items.push({ id, unitId, qty, discount: line.discount });
   }
   return mergeCart(items);
 });
-
-/** Descuento sobre el total: en % o en S/. Sin descuento, o de 0, = null. */
-export const DiscountBody = z.object({
-  type: z.enum(['PERCENT', 'AMOUNT'], { error: 'Tipo de descuento no válido.' }),
-  value: z.union([z.number(), z.string()], { error: 'El descuento debe ser un número positivo.' }).nullish().transform(Number)
-    .refine(value => Number.isFinite(value) && value >= 0, { error: 'El descuento debe ser un número positivo.' }),
-}, { error: 'Tipo de descuento no válido.' })
-  .refine(d => d.type !== 'PERCENT' || d.value <= 100, { error: 'El descuento no puede superar el 100 %.' })
-  .nullish()
-  .transform(d => (!d || d.value === 0 ? null : d));
-export type DiscountRequest = NonNullable<z.input<typeof DiscountBody>>;
 
 /** Cómo se paga (venta directa, cobro de un pedido y cotización convertida). */
 const paymentFields = {
@@ -175,6 +181,9 @@ export interface SaleLine {
   code: string;
   qty: number;
   price: number;
+  /** Descuento de la línea (0 si no tiene). */
+  discount: number;
+  /** qty × price − discount. */
   subtotal: number;
   unitId: number | null;
   unitName: string | null;

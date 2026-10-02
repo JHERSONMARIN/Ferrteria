@@ -1,4 +1,5 @@
 // Ticket de 80 mm: queda oculto en la pantalla y es lo único que sale al imprimir.
+import { Fragment } from 'react';
 import type { BusinessSettings } from '@ferresys/contracts/settings';
 import type { TicketData } from '../utils/tickets.ts';
 
@@ -73,15 +74,24 @@ export default function TicketPrint({ data, business }: Props) {
         </thead>
         <tbody>
           {items.map((item, idx) => (
-            <tr key={idx}>
-              <td style={{ padding: '2px 0' }}>{item.qty}</td>
-              <td style={{ padding: '2px 0' }}>
-                {item.name ? item.name.substring(0, 15) : ''}
-                {item.unitName && <><br />({item.unitName})</>}
-              </td>
-              <td style={{ padding: '2px 0', textAlign: 'right' }}>{Number(item.price).toFixed(2)}</td>
-              <td style={{ padding: '2px 0', textAlign: 'right' }}>{(item.qty * item.price).toFixed(2)}</td>
-            </tr>
+            <Fragment key={idx}>
+              <tr>
+                <td style={{ padding: '2px 0' }}>{item.qty}</td>
+                <td style={{ padding: '2px 0' }}>
+                  {item.name ? item.name.substring(0, 15) : ''}
+                  {item.unitName && <><br />({item.unitName})</>}
+                </td>
+                <td style={{ padding: '2px 0', textAlign: 'right' }}>{Number(item.price).toFixed(2)}</td>
+                <td style={{ padding: '2px 0', textAlign: 'right' }}>{(item.qty * item.price).toFixed(2)}</td>
+              </tr>
+              {Number(item.discount) > 0 && (
+                <tr>
+                  <td></td>
+                  <td colSpan={2} style={{ padding: '0 0 2px' }}>Desc.</td>
+                  <td style={{ padding: '0 0 2px', textAlign: 'right' }}>-{Number(item.discount).toFixed(2)}</td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>

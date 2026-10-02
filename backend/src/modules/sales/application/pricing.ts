@@ -5,8 +5,9 @@ import type { SaleLine } from '../../../industries/index.ts';
 import type { SessionUser } from '../../../types/express.d.ts';
 import {
   SaleError, assertCreditAvailable, assertSellable, computeDiscount, isQuoteValid, lineKey, priceLine, splitPayment,
-  sumLines, unitPriceFor, type CartItem, type DiscountRequest, type PayMethod, type PricedLine,
+  sumLineDiscounts, sumLines, unitPriceFor, type CartItem, type DiscountRequest, type PayMethod, type PricedLine,
 } from '../domain/sale.ts';
+import { roundMoney } from '../../../utils/quantities.ts';
 import * as repo from '../infrastructure/saleRepository.ts';
 import type { Db } from '../infrastructure/saleRepository.ts';
 
@@ -51,22 +52,32 @@ export async function markQuoteConverted(db: Db, quoteId: number): Promise<void>
   if (!(await repo.convertQuoteIfPending(db, quoteId))) throw new SaleError('La cotización ya fue procesada.', 409);
 }
 
-// El descuento es una función del plan; el tope por rol lo decide el dominio.
-export function applyDiscount(subtotal: number, request: DiscountRequest | null, user: SessionUser, maxPercent: number) {
-  if (request) requireFeature('discounts');
-  return computeDiscount(subtotal, request, user.role, maxPercent);
+// Descuentos de la venta: los de sus líneas y el del total. Son una función del plan; el tope por rol lo
+// decide el dominio. gross: el importe sin descuentos; discount: todo lo descontado (lo que se guarda en la venta).
+export function applyDiscount(lines: readonly PricedLine[], request: DiscountRequest | null, user: SessionUser, maxPercent: number) {
+  const lineDiscount = sumLineDiscounts(lines);
+  if (request || lineDiscount > 0) requireFeature('discounts');
+  const subtotal = sumLines(lines);
+  const { discount, total } = computeDiscount(subtotal, request, user.role, maxPercent, lineDiscount);
+  return { gross: roundMoney(subtotal + lineDiscount), discount: roundMoney(discount + lineDiscount), total };
 }
 
 export async function auditDiscount(db: Parameters<typeof recordAudit>[0], data: {
-  saleId: number; reference: string; subtotal: number; discount: number; total: number; request: DiscountRequest | null; user: SessionUser;
+  saleId: number; reference: string; gross: number; discount: number; total: number; request: DiscountRequest | null;
+  lines: readonly PricedLine[]; user: SessionUser;
 }): Promise<void> {
-  if (data.discount <= 0 || !data.request) return;
+  if (data.discount <= 0) return;
+  const discountedLines = data.lines.filter(l => l.discount > 0).map(l => ({ product: l.name, discount: l.discount }));
   await recordAudit(db, {
     action: 'DISCOUNT_APPLIED',
     entity: 'Venta',
     entityId: data.saleId,
-    summary: `Descuento de S/ ${data.discount.toFixed(2)} en ${data.reference} (de S/ ${data.subtotal.toFixed(2)} a S/ ${data.total.toFixed(2)})`,
-    details: { subtotal: data.subtotal, discount: data.discount, total: data.total, type: data.request.type, value: data.request.value },
+    summary: `Descuento de S/ ${data.discount.toFixed(2)} en ${data.reference} (de S/ ${data.gross.toFixed(2)} a S/ ${data.total.toFixed(2)})`,
+    details: {
+      subtotal: data.gross, discount: data.discount, total: data.total,
+      ...(data.request && { type: data.request.type, value: data.request.value }),
+      ...(discountedLines.length > 0 && { lines: discountedLines }),
+    },
     user: data.user,
   });
 }

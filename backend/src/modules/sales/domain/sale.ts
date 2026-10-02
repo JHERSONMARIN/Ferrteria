@@ -73,13 +73,16 @@ export const unitPriceFor = (product: SellableProduct, priceList: PriceList, uni
   return priceList === 'WHOLESALE' && source.wholesalePrice != null ? source.wholesalePrice : source.price;
 };
 
-export interface PricedLine extends CartItem {
+export interface PricedLine extends Omit<CartItem, 'discount'> {
   unitName: string | null;
   factor: number;
   baseQty: number;
   name: string;
   code: string;
   price: number;
+  /** Descuento de la línea, en soles. */
+  discount: number;
+  /** qty × price − discount. */
   subtotal: number;
 }
 
@@ -89,10 +92,24 @@ export function unitFields(unit: SaleUnit | null, qty: number) {
   return { unitId: unit?.id ?? null, unitName: unit?.name ?? null, factor, baseQty: baseQuantity(qty, factor) };
 }
 
+// Monto de un descuento ({ type, value }) sobre un importe.
+export const discountAmount = (amount: number, request: DiscountRequest | null) =>
+  (request ? roundMoney(request.type === 'PERCENT' ? amount * request.value / 100 : request.value) : 0);
+
+// La línea con su precio y su descuento, que no puede llevarse todo su importe.
 export function priceLine(product: SellableProduct, item: CartItem, price: number): PricedLine {
   const unit = saleUnitOf(product, item.unitId);
-  return { ...item, ...unitFields(unit, item.qty), name: product.name, code: product.code, price, subtotal: roundMoney(price * item.qty) };
+  const gross = roundMoney(price * item.qty);
+  const discount = discountAmount(gross, item.discount);
+  if (discount > 0 && discount >= gross) throw new SaleError(`El descuento de ${product.name} no puede cubrir todo su importe.`);
+  return {
+    id: item.id, qty: item.qty, ...unitFields(unit, item.qty), name: product.name, code: product.code,
+    price, discount, subtotal: roundMoney(gross - discount),
+  };
 }
+
+// Lo descontado en las líneas.
+export const sumLineDiscounts = (lines: readonly { discount: number }[]) => roundMoney(lines.reduce((sum, l) => sum + l.discount, 0));
 
 export const sumLines = (lines: readonly { subtotal: number }[]) => roundMoney(lines.reduce((sum, l) => sum + l.subtotal, 0));
 
@@ -124,15 +141,17 @@ export interface DiscountRequest {
   value: number;
 }
 
-// Sobre la suma de las líneas. El administrador no tiene tope; el resto del personal descuenta hasta el %
-// que fijó la empresa.
-export function computeDiscount(subtotal: number, request: DiscountRequest | null, role: string | undefined, maxPercent: number) {
-  if (!request) return { discount: 0, total: subtotal };
-  const discount = roundMoney(request.type === 'PERCENT' ? subtotal * request.value / 100 : request.value);
-  if (discount >= subtotal) throw new SaleError('El descuento no puede cubrir todo el total de la venta.');
-  if (role !== 'ADMINISTRADOR') {
-    const allowed = roundMoney(subtotal * maxPercent / 100);
-    if (discount > allowed) {
+// Descuento sobre el total: sobre la suma de las líneas (ya con sus descuentos). El administrador no tiene
+// tope; el resto del personal descuenta, sumando líneas y total, hasta el % que fijó la empresa sobre el
+// importe sin descuentos.
+export function computeDiscount(
+  subtotal: number, request: DiscountRequest | null, role: string | undefined, maxPercent: number, lineDiscount = 0,
+) {
+  const discount = discountAmount(subtotal, request);
+  if (request && discount >= subtotal) throw new SaleError('El descuento no puede cubrir todo el total de la venta.');
+  if (role !== 'ADMINISTRADOR' && discount + lineDiscount > 0) {
+    const allowed = roundMoney((subtotal + lineDiscount) * maxPercent / 100);
+    if (roundMoney(discount + lineDiscount) > allowed) {
       throw new SaleError(
         maxPercent > 0
           ? `Su descuento máximo es ${maxPercent} % (S/ ${allowed.toFixed(2)} en esta venta).`
@@ -213,8 +232,8 @@ export function assertCanCancel(
 
 // Líneas tal como las ve la pantalla, y las columnas de la presentación al guardar el detalle.
 export const publicLines = (lines: readonly PricedLine[]) =>
-  lines.map(({ id, name, code, qty, price, subtotal, unitId, unitName, factor }) => ({
-    id, name, code, qty, price, subtotal, unitId: unitId ?? null, unitName: unitName ?? null, factor: factor ?? 1,
+  lines.map(({ id, name, code, qty, price, discount, subtotal, unitId, unitName, factor }) => ({
+    id, name, code, qty, price, discount: discount ?? 0, subtotal, unitId: unitId ?? null, unitName: unitName ?? null, factor: factor ?? 1,
   }));
 
 export const unitColumns = (line: { unitId: number | null; unitName: string | null; factor: number }) =>

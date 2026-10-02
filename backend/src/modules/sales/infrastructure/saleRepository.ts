@@ -111,7 +111,7 @@ const ORDER_INCLUDE = {
   vendedor: { select: { name: true } },
   detalles: {
     select: {
-      productoId: true, quantity: true, unitPrice: true, subtotal: true, unitId: true, unitName: true, unitFactor: true,
+      productoId: true, quantity: true, unitPrice: true, discount: true, subtotal: true, unitId: true, unitName: true, unitFactor: true,
       producto: { select: { name: true, code: true } },
     },
   },
@@ -133,7 +133,7 @@ export const linesOf = (order: OrderRow): PricedLine[] => order.detalles.map(d =
   const factor = num(d.unitFactor);
   const qty = num(d.quantity);
   return {
-    id: d.productoId, qty, price: num(d.unitPrice), subtotal: num(d.subtotal), name: d.producto.name, code: d.producto.code,
+    id: d.productoId, qty, price: num(d.unitPrice), discount: num(d.discount), subtotal: num(d.subtotal), name: d.producto.name, code: d.producto.code,
     unitId: d.unitId, unitName: d.unitName, factor, baseQty: baseQuantity(qty, factor),
   };
 });

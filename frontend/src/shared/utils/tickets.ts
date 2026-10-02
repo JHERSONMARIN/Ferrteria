@@ -19,6 +19,8 @@ export interface TicketItem {
   name?: string;
   unitName?: string | null;
   price: number;
+  /** Descuento de la línea (ya incluido en el descuento total del ticket). */
+  discount?: number;
 }
 
 export interface TicketData {

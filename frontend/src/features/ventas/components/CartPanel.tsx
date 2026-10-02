@@ -29,6 +29,8 @@ export default function CartPanel({
 }: Props) {
   const lines = cart.cart;
   const empty = lines.length === 0;
+  // Lo descontado en las líneas y sobre el total.
+  const totalDiscount = cart.lineDiscounts + discount.applied;
 
   return (
     <div
@@ -80,7 +82,13 @@ export default function CartPanel({
       )}
 
       <div className="flex-1 xl:overflow-y-auto px-4 min-h-[140px]">
-        <CartLines cart={lines} onSetQty={cart.setQty} onRemove={cart.remove} />
+        <CartLines
+          cart={lines}
+          onSetQty={cart.setQty}
+          onRemove={cart.remove}
+          allowDiscount={discount.allowed}
+          onSetDiscount={cart.setDiscount}
+        />
       </div>
 
       <div ref={actionsRef} className="border-t border-line bg-surface-muted p-4 flex flex-col gap-3 shrink-0">
@@ -88,14 +96,15 @@ export default function CartPanel({
 
         {discount.allowed && !empty && <DiscountEditor discount={discount} />}
 
-        {discount.applied > 0 && (
+        {totalDiscount > 0 && (
           <div className="text-sm text-muted flex flex-col gap-0.5">
-            <div className="flex justify-between"><span>Subtotal</span><span className="tabular-nums">{formatSoles(cart.subtotal)}</span></div>
+            <div className="flex justify-between"><span>Subtotal</span><span className="tabular-nums">{formatSoles(cart.gross)}</span></div>
             <div className="flex justify-between text-success font-semibold">
-              <span>Descuento</span><span className="tabular-nums">− {formatSoles(discount.applied)}</span>
+              <span>Descuento</span><span className="tabular-nums">− {formatSoles(totalDiscount)}</span>
             </div>
           </div>
         )}
+        {discount.overCap && <p className="text-xs text-danger">{discount.overCap}</p>}
 
         <div className="flex justify-between items-end">
           <span className="text-sm text-muted">Total</span>
@@ -104,7 +113,7 @@ export default function CartPanel({
 
         <button
           onClick={onPrimary}
-          disabled={processing || empty || cashClosed || Boolean(discount.error)}
+          disabled={processing || empty || cashClosed || Boolean(discount.error || discount.overCap) || cart.lineDiscountError}
           className="w-full bg-brand hover:bg-brand-strong text-brand-contrast font-bold py-3.5 rounded-lg shadow-md transition-colors text-base disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {processing && !isDirect

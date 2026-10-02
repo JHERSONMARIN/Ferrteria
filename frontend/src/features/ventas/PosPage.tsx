@@ -66,7 +66,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
   const catalog = useCatalogSearch(products, dbCategories);
   const cart = usePosCart(products, isWholesale);
-  const discount = useSaleDiscount(cart.subtotal, currentUser.role === 'ADMINISTRADOR', maxDiscountPercent);
+  const discount = useSaleDiscount(cart.subtotal, currentUser.role === 'ADMINISTRADOR', maxDiscountPercent, cart.lineDiscounts);
   const cartTotal = roundMoney(cart.subtotal - discount.applied);
   // Cantidad de líneas: sumar metros con unidades no tiene sentido.
   const cartUnits = cart.cart.length;
@@ -191,8 +191,11 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
 
   // ---------- Modo directo: cobro en el POS ----------
 
+  // Un descuento que no se puede aplicar (de una línea o del total) frena el cobro.
+  const discountsBlocked = cart.lineDiscountError || Boolean(discount.error || discount.overCap);
+
   const openCheckout = () => {
-    if (cart.cart.length === 0 || processing || !validateTypedCustomer() || !validateSaleData()) return;
+    if (cart.cart.length === 0 || processing || discountsBlocked || !validateTypedCustomer() || !validateSaleData()) return;
     setShowCheckout(true);
   };
 
@@ -250,7 +253,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
   // ---------- Modo con pedidos: el vendedor envía el pedido a caja ----------
 
   const sendToCashier = async () => {
-    if (cart.cart.length === 0 || processing || !validateTypedCustomer() || !validateSaleData()) return;
+    if (cart.cart.length === 0 || processing || discountsBlocked || !validateTypedCustomer() || !validateSaleData()) return;
     try {
       setProcessing(true);
       const res = await api.post<OrderSaved>('/pedidos', {
@@ -303,7 +306,7 @@ export default function PosPage({ currentUser, onTriggerPrint, saleFlowMode = 'D
       const res = await api.post<QuoteSaved>('/cotizaciones', {
         clienteId: selectedCustomer ? selectedCustomer.id : null,
         validDays: 7,
-        cart: cartPayload(cart.cart),
+        cart: cartPayload(cart.cart, false),
       } satisfies QuoteRequest);
       if (!res.success || !res.cotizacion) return;
 
