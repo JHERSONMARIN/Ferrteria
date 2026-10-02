@@ -4,7 +4,7 @@ import { recordAudit } from '../../audit/index.ts';
 import { requireFeature, requireWithinLimit } from '../../licensing/index.ts';
 import {
   CashError, LEGACY_REGISTER_NAME, assertCanClose, assertCanDeactivate, assertCanMove, closingDifference, expectedCash,
-  membershipToLeave, parseAmount, parseRegisterName, summarizeSales, type CashUser,
+  membershipToLeave, summarizeSales, type CashUser,
 } from '../domain/cash.ts';
 import * as repo from '../infrastructure/cashRepository.ts';
 import type { Db, SessionView } from '../infrastructure/cashRepository.ts';
@@ -48,8 +48,8 @@ export async function getCashStatus(db: Db, user: CashUser) {
   return { abierta: false as const, caja: null, registers: await repo.registersToJoin(db, user.branchId) };
 }
 
-export async function openSession(client: Client, input: { cashRegisterId?: number; montoInicial?: unknown }, user: CashUser) {
-  const openingAmount = parseAmount(input.montoInicial, 'El monto inicial');
+export async function openSession(client: Client, input: { cashRegisterId?: number; montoInicial: number }, user: CashUser) {
+  const openingAmount = input.montoInicial;
 
   return client.$transaction(async (tx) => {
     // Con una sola caja activa en la sucursal no hace falta elegirla.
@@ -103,8 +103,8 @@ export async function leaveSession(client: Client, sessionId: number, user: Cash
 }
 
 // El arqueo es del turno: lo hace cualquiera de sus cajeros (o un administrador).
-export async function closeSession(client: Client, input: { sessionId: number; montoCierreConteo: unknown }, user: CashUser & { name: string }) {
-  const counted = parseAmount(input.montoCierreConteo, 'El conteo');
+export async function closeSession(client: Client, input: { sessionId: number; montoCierreConteo: number }, user: CashUser & { name: string }) {
+  const counted = input.montoCierreConteo;
 
   return client.$transaction(async (tx) => {
     const session = await repo.loadSession(tx, input.sessionId);
@@ -151,11 +151,11 @@ async function activeBranch(db: Db, branchId: number): Promise<number> {
   return branchId;
 }
 
-export async function createRegister(db: Db, input: { name?: unknown; branchId?: number }, user: CashUser) {
+export async function createRegister(db: Db, input: { name: string; branchId?: number }, user: CashUser) {
   // La primera caja viene con cualquier plan; varias cajas y turnos compartidos, con el plan Profesional.
   requireFeature('shared_cash');
   requireWithinLimit('maxCashRegisters', await repo.countActiveRegisters(db), 'caja(s)');
-  const name = parseRegisterName(input.name);
+  const { name } = input;
   const branchId = input.branchId === undefined ? user.branchId : await activeBranch(db, input.branchId);
   try {
     return await repo.createRegister(db, { name, branchId });
@@ -165,12 +165,12 @@ export async function createRegister(db: Db, input: { name?: unknown; branchId?:
   }
 }
 
-export async function updateRegister(db: Db, id: number, input: { name?: unknown; branchId?: number; active?: boolean }) {
+export async function updateRegister(db: Db, id: number, input: { name?: string; branchId?: number; active?: boolean }) {
   const register = await repo.registerForUpdate(db, id);
   if (!register) throw new CashError('La caja no existe.', 404);
 
   const data: { name?: string; branchId?: number; active?: boolean } = {};
-  if (input.name !== undefined) data.name = parseRegisterName(input.name);
+  if (input.name !== undefined) data.name = input.name;
   if (input.branchId !== undefined) {
     data.branchId = await activeBranch(db, input.branchId);
     if (data.branchId !== register.branchId) assertCanMove(register.hasOpenSession);

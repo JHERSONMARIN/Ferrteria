@@ -3,25 +3,18 @@ import express, { type Request, type Response } from 'express';
 import { z } from '@ferresys/contracts/zod';
 import { errorBody } from '@ferresys/shared/errors';
 import { prisma } from '../../../db.ts';
-import { id, optionalId, parseInput } from '../../../lib/validation.ts';
+import { id, parseInput } from '../../../lib/validation.ts';
 import { respondIfLicenseError } from '../../licensing/index.ts';
 import { CashError } from '../domain/cash.ts';
 import * as cash from '../application/cashService.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type { CashClosed, CashRegister, CashStatus } from '@ferresys/contracts/cash';
+import {
+  CloseCashBody, CreateRegisterBody, OpenCashBody, UpdateRegisterBody,
+  type CashClosed, type CashRegister, type CashStatus,
+} from '@ferresys/contracts/cash';
 
 const router = express.Router();
 
-// Los montos los valida el dominio (con su mensaje); aquí se revisa la forma de lo demás.
-// (en Zod 4 un campo z.unknown() sin .optional() exige que la clave venga).
-const OpenBody = z.object({ cashRegisterId: optionalId('Caja no válida.'), montoInicial: z.unknown().optional() });
-const CloseBody = z.object({ cajaId: id('Identificador no válido.'), montoCierreConteo: z.unknown().optional() });
-const RegisterBody = z.object({ name: z.unknown().optional(), branchId: optionalId('Sucursal no válida.') });
-const RegisterUpdate = z.object({
-  name: z.unknown().optional(),
-  branchId: optionalId('Sucursal no válida.'),
-  active: z.boolean({ error: 'Estado no válido.' }).optional(),
-});
 const Params = z.object({ id: id('Identificador no válido.') });
 
 const cashError = (message: string) => new CashError(message);
@@ -52,7 +45,7 @@ router.get('/estado-actual', handle('obtener el estado de caja', async (req, res
 
 // POST /api/caja/apertura { cashRegisterId, montoInicial }
 router.post('/apertura', handle('abrir la caja', async (req, res) => {
-  const caja = await cash.openSession(prisma, body(OpenBody, req), req.user);
+  const caja = await cash.openSession(prisma, body(OpenCashBody, req), req.user);
   res.status(201).json({ success: true, caja });
 }));
 
@@ -70,7 +63,7 @@ router.post('/turnos/:id/salir', handle('salir del turno', async (req, res) => {
 
 // POST /api/caja/cierre { cajaId, montoCierreConteo }
 router.post('/cierre', handle('cerrar la caja', async (req, res) => {
-  const { cajaId, montoCierreConteo } = body(CloseBody, req);
+  const { cajaId, montoCierreConteo } = body(CloseCashBody, req);
   const result = await cash.closeSession(prisma, { sessionId: cajaId, montoCierreConteo }, req.user);
   res.json({ success: true, ...result } satisfies Sendable<CashClosed>);
 }));
@@ -83,12 +76,12 @@ router.get('/registros', handle('listar las cajas', async (req, res) => {
 
 router.post('/registros', handle('crear la caja', async (req, res) => {
   requireAdmin(req);
-  res.status(201).json(await cash.createRegister(prisma, body(RegisterBody, req), req.user));
+  res.status(201).json(await cash.createRegister(prisma, body(CreateRegisterBody, req), req.user));
 }));
 
 router.put('/registros/:id', handle('actualizar la caja', async (req, res) => {
   requireAdmin(req);
-  res.json(await cash.updateRegister(prisma, paramId(req), body(RegisterUpdate, req)));
+  res.json(await cash.updateRegister(prisma, paramId(req), body(UpdateRegisterBody, req)));
 }));
 
 export default router;

@@ -7,8 +7,6 @@ export class CashError extends AppError {
   static override area = 'CAJA';
 }
 
-export const MAX_AMOUNT = 1_000_000;
-export const MAX_REGISTER_NAME = 40;
 // Turnos abiertos antes de que existieran las cajas físicas (Fase 6).
 export const LEGACY_REGISTER_NAME = 'Caja personal (anterior)';
 
@@ -82,23 +80,6 @@ export const expectedCash = (openingAmount: number, summary: SalesSummary) => ro
 // Positiva si sobra dinero, negativa si falta.
 export const closingDifference = (counted: number, expected: number) => roundMoney(counted - expected);
 
-export function parseAmount(value: unknown, label: string): number {
-  const amount = Number(value);
-  if (value === '' || value === null || value === undefined || !Number.isFinite(amount) || amount < 0 || amount > MAX_AMOUNT) {
-    throw new CashError(`${label} debe ser un monto entre 0 y ${MAX_AMOUNT}.`);
-  }
-  return roundMoney(amount);
-}
-
-export function parseRegisterName(value: unknown): string {
-  const name = String(value ?? '').trim();
-  if (name.length < 2 || name.length > MAX_REGISTER_NAME) {
-    throw new CashError(`El nombre de la caja debe tener entre 2 y ${MAX_REGISTER_NAME} caracteres.`);
-  }
-  return name;
-}
-
-// El arqueo lo hace cualquiera de los cajeros del turno, o un administrador.
 export function assertCanClose(user: CashUser, memberIds: readonly number[]): void {
   if (!isAdmin(user) && !memberIds.includes(user.id)) {
     throw new CashError('Solo un cajero del turno puede cerrarlo.', 403);

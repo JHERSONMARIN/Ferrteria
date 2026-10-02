@@ -1,10 +1,18 @@
 // Reglas de caja, sin base de datos ni servidor:  npm run test:unit
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { z } from '@ferresys/contracts/zod';
+import { cashAmount, registerName } from '@ferresys/contracts/cash';
+import { parseInput } from '../../../lib/validation.ts';
 import {
   CashError, assertCanClose, assertCanDeactivate, closingDifference, expectedCash, membershipToLeave,
-  parseAmount, parseRegisterName, summarizeSales, type SaleForCash,
+  summarizeSales, type SaleForCash,
 } from './cash.ts';
+
+// Los montos y el nombre de la caja los validan los esquemas del contrato, como en la ruta.
+const cashError = (message: string) => new CashError(message);
+const parseAmount = (value: unknown, label: string) => parseInput(z.object({ v: cashAmount(label) }), { v: value }, cashError).v;
+const parseRegisterName = (value: unknown) => parseInput(z.object({ v: registerName }), { v: value }, cashError).v;
 
 const sale = (overrides: Partial<SaleForCash>): SaleForCash => ({
   total: 10, payMethod: 'EFECTIVO', mixCash: null, mixDigital: null, paidById: 1, paidByName: 'Ana', ...overrides,

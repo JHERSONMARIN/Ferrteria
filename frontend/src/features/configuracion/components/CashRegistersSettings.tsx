@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CashRegister } from '@ferresys/contracts/cash';
+import type { CashRegister, CreateRegisterRequest, UpdateRegisterRequest } from '@ferresys/contracts/cash';
 import { api } from '../../../api/client.ts';
 import { queryKeys } from '../../../api/queryClient.ts';
 import { useBranches } from '../../../api/queries.ts';
@@ -49,16 +49,16 @@ export default function CashRegistersSettings() {
     const name = newName.trim();
     if (!name) return;
     const payload = multiBranch && newBranchId ? { name, branchId: Number(newBranchId) } : { name };
-    if (await run(() => api.post('/caja/registros', payload), `${name} creada.`)) setNewName('');
+    if (await run(() => api.post('/caja/registros', payload satisfies CreateRegisterRequest), `${name} creada.`)) setNewName('');
   };
 
   const saveName = async () => {
     if (!editing) return;
-    if (await run(() => api.put(`/caja/registros/${editing.id}`, { name: editing.name.trim() }), 'Nombre actualizado.')) setEditing(null);
+    if (await run(() => api.put(`/caja/registros/${editing.id}`, { name: editing.name.trim() } satisfies UpdateRegisterRequest), 'Nombre actualizado.')) setEditing(null);
   };
 
   const toggleActive = (register: CashRegister) => run(
-    () => api.put(`/caja/registros/${register.id}`, { active: !register.active }),
+    () => api.put(`/caja/registros/${register.id}`, { active: !register.active } satisfies UpdateRegisterRequest),
     register.active ? `${register.name} desactivada.` : `${register.name} activada.`
   );
 
