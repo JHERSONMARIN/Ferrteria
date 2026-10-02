@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, type InputHTMLAttributes, type ReactNode 
 import { useQueryClient } from '@tanstack/react-query';
 import type { Branch, UpdateBranchRequest } from '@ferresys/contracts/branches';
 import type { DispatchRole, SaleFlowMode, SessionUser } from '@ferresys/contracts/identity';
-import type { BusinessSettings, DocumentType, LicenseStatus, SettingsResponse, SettingsSaved, SettingsUpdate } from '@ferresys/contracts/settings';
+import type { BusinessSettings, DocumentType, LicenseStatus, SettingsResponse, SettingsRequest, SettingsSaved } from '@ferresys/contracts/settings';
 import { api } from '../../api/client.ts';
 import { queryKeys } from '../../api/queryClient.ts';
 import { useBranches, useSettings } from '../../api/queries.ts';
@@ -352,7 +352,7 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
     await saveBranchMode(async () => {
       const missing = option.requires.filter(m => !savedSettings.enabledModules.includes(m));
       if (missing.length > 0) {
-        const res = await api.put<SettingsSaved>('/settings', { ...savedSettings, enabledModules: [...savedSettings.enabledModules, ...missing] } satisfies SettingsUpdate);
+        const res = await api.put<SettingsSaved>('/settings', { ...savedSettings, enabledModules: [...savedSettings.enabledModules, ...missing] } satisfies SettingsRequest);
         storeSettings(res.settings);
       }
       await api.put(`/sucursales/${modeBranch.id}`, { saleFlowMode: option.id } satisfies UpdateBranchRequest);
@@ -372,7 +372,7 @@ export default function ConfiguracionPage({ currentUser, hasFeature = () => true
       setSaving(true);
       const res = await api.put<SettingsSaved>('/settings', {
         ...form, taxRate: Number(form.taxRate), maxDiscountPercent: Number(form.maxDiscountPercent),
-      } satisfies SettingsUpdate);
+      } satisfies SettingsRequest);
       storeSettings(res.settings);
       setForm(toForm(res.settings));
       setSaveMessage({ type: 'success', text: 'Configuración guardada.' });

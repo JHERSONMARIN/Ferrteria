@@ -5,9 +5,12 @@ import { AppError } from '@ferresys/shared/errors';
 import { ALWAYS_ENABLED_MODULES, AVAILABLE_MODULES } from '../../config/modules.js';
 import { changedFields, recordAudit } from '../audit/index.ts';
 import { isModuleLicensed } from '../licensing/index.ts';
+import type { z } from '@ferresys/contracts/zod';
+import type { SettingsBody } from '@ferresys/contracts/settings';
 
 type Db = Pick<typeof prisma, 'businessSettings'>;
 type Client = typeof prisma;
+type SettingsInput = z.infer<typeof SettingsBody>;
 
 export class SettingsValidationError extends AppError {
   static override area = 'CONFIGURACION';
@@ -39,18 +42,11 @@ export async function getSettings(db: Db) {
   return { ...row, enabledModules: moduleList(row.enabledModules) };
 }
 
-function optionalText(value: unknown, maxLength: number, fieldLabel: string): string | null {
-  if (value === undefined || value === null) return null;
-  const text = String(value).trim();
-  if (text.length > maxLength) throw new SettingsValidationError(`${fieldLabel} no puede superar ${maxLength} caracteres.`);
-  return text || null;
-}
-
 // Los módulos activos los define VALETEC (deploy/set-modules.sh y la consola): si la petición no los
-// trae, se conservan los que ya tiene la empresa.
-function normalizeModules(modules: unknown): string[] | undefined {
+// trae, se conservan los que ya tiene la empresa. La forma la valida SettingsBody; aquí, que existan y
+// estén en el plan.
+function normalizeModules(modules: string[] | undefined): string[] | undefined {
   if (modules === undefined) return undefined;
-  if (!Array.isArray(modules)) throw new SettingsValidationError('La lista de módulos es inválida.');
   const unknown = modules.filter(m => !AVAILABLE_MODULES.includes(m));
   if (unknown.length > 0) throw new SettingsValidationError(`Módulos desconocidos: ${unknown.join(', ')}.`);
   const notLicensed = modules.filter(m => !isModuleLicensed(m));
@@ -61,74 +57,11 @@ function normalizeModules(modules: unknown): string[] | undefined {
   return AVAILABLE_MODULES.filter(m => enabled.has(m)); // en el orden del menú
 }
 
-// Logo: data URL de imagen, hasta 300 KB. Vacío o null lo quita; sin la clave no se toca.
-const MAX_LOGO_BYTES = 300 * 1024;
-const LOGO_PATTERN = /^data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+export const settingsError = (message: string) => new SettingsValidationError(message);
 
-function parseLogo(value: unknown): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === '') return null;
-  const logo = String(value).trim();
-  if (!LOGO_PATTERN.test(logo)) throw new SettingsValidationError('El logo debe ser una imagen PNG, JPG, WEBP o SVG.');
-  if (Buffer.byteLength(logo, 'utf8') > MAX_LOGO_BYTES) {
-    throw new SettingsValidationError('El logo no puede superar 300 KB. Use una imagen más liviana.');
-  }
-  return logo;
-}
-
-// Colores de la empresa (principal y del menú): #RRGGBB. Vacío o null vuelve al estilo por defecto.
-function parseColor(value: unknown): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === '') return null;
-  const color = String(value).trim().toLowerCase();
-  if (!/^#[0-9a-f]{6}$/.test(color)) {
-    throw new SettingsValidationError('El color principal debe escribirse como #RRGGBB (por ejemplo #ea580c).');
-  }
-  return color;
-}
-
-export function validateSettingsInput(input: Record<string, unknown>) {
-  const legalName = String(input?.legalName ?? '').trim();
-  if (legalName.length < 2 || legalName.length > 150) throw new SettingsValidationError('La razón social debe tener entre 2 y 150 caracteres.');
-
-  const taxId = optionalText(input.taxId, 11, 'El RUC');
-  if (taxId && !/^\d{11}$/.test(taxId)) throw new SettingsValidationError('El RUC debe tener 11 dígitos.');
-
-  const email = optionalText(input.email, 120, 'El correo');
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new SettingsValidationError('El correo electrónico no es válido.');
-
-  const taxRate = Number(input.taxRate);
-  if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) throw new SettingsValidationError('El porcentaje de IGV debe estar entre 0 y 100.');
-
-  const currencySymbol = optionalText(input.currencySymbol, 5, 'El símbolo de moneda');
-  if (!currencySymbol) throw new SettingsValidationError('El símbolo de moneda es obligatorio.');
-
-  // Opcional: si no viene, se conserva el tope actual. El modo de trabajo es de cada sucursal (módulo branches).
-  let maxDiscountPercent: number | undefined;
-  if (input.maxDiscountPercent !== undefined) {
-    maxDiscountPercent = Number(input.maxDiscountPercent);
-    if (!Number.isFinite(maxDiscountPercent) || maxDiscountPercent < 0 || maxDiscountPercent > 100) {
-      throw new SettingsValidationError('El descuento máximo debe estar entre 0 y 100 %.');
-    }
-    maxDiscountPercent = Math.round(maxDiscountPercent * 100) / 100;
-  }
-
-  return {
-    legalName,
-    tradeName: optionalText(input.tradeName, 100, 'El nombre comercial'),
-    taxId,
-    address: optionalText(input.address, 200, 'La dirección'),
-    phone: optionalText(input.phone, 30, 'El teléfono'),
-    email,
-    currencySymbol,
-    taxRate,
-    ticketFooter: optionalText(input.ticketFooter, 300, 'El pie del ticket'),
-    logo: parseLogo(input.logo),
-    primaryColor: parseColor(input.primaryColor),
-    navColor: parseColor(input.navColor),
-    enabledModules: normalizeModules(input.enabledModules),
-    maxDiscountPercent,
-  };
+// Lo que se guarda: el cuerpo ya validado, con los módulos revisados contra el catálogo y el plan.
+export function validateSettingsInput(input: SettingsInput) {
+  return { ...input, enabledModules: normalizeModules(input.enabledModules) };
 }
 
 const AUDITED_FIELDS = [
@@ -147,7 +80,7 @@ export function assertModesStillServed(enabledModules: readonly string[], branch
   }
 }
 
-export async function updateSettings(client: Client, input: Record<string, unknown>, user: { id: number; name: string } | null = null) {
+export async function updateSettings(client: Client, input: SettingsInput, user: { id: number; name: string } | null = null) {
   const data = validateSettingsInput(input);
   const current = await getSettings(client);
   const enabledModules = data.enabledModules ?? current.enabledModules;

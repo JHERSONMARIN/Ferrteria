@@ -7,9 +7,10 @@ import { prisma } from '../../db.ts';
 import { AVAILABLE_MODULES } from '../../config/modules.js';
 import { INDUSTRY, LICENSED_FEATURES, LICENSED_MODULES, LIMITS, licenseStatus } from '../licensing/index.ts';
 import { vocabulary } from '../../industries/index.ts';
-import { getSettings, updateSettings } from './settings.ts';
+import { getSettings, settingsError, updateSettings } from './settings.ts';
+import { parseInput } from '../../lib/validation.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type { SettingsResponse, SettingsSaved } from '@ferresys/contracts/settings';
+import { SettingsBody, type SettingsResponse, type SettingsSaved } from '@ferresys/contracts/settings';
 
 const router = express.Router();
 
@@ -39,7 +40,7 @@ router.get('/', async (req, res) => {
 // PUT /api/settings
 router.put('/', async (req, res) => {
   try {
-    const settings = await updateSettings(prisma, (req.body ?? {}) as Record<string, unknown>, req.user);
+    const settings = await updateSettings(prisma, parseInput(SettingsBody, req.body, settingsError), req.user);
     res.json({ success: true, settings } satisfies Sendable<SettingsSaved>);
   } catch (error) {
     if (error instanceof AppError) return res.status(error.status).json(errorBody(error));

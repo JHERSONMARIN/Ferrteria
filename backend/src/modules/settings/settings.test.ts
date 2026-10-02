@@ -1,7 +1,12 @@
 // Reglas de la configuración, sin base de datos:  npm run test:unit
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SettingsValidationError, assertModesStillServed, validateSettingsInput } from './settings.ts';
+import { SettingsBody } from '@ferresys/contracts/settings';
+import { parseInput } from '../../lib/validation.ts';
+import { SettingsValidationError, assertModesStillServed, settingsError, validateSettingsInput as normalize } from './settings.ts';
+
+// Lo que hace la ruta: valida la forma con el contrato y revisa los módulos.
+const validateSettingsInput = (input: Record<string, unknown>) => normalize(parseInput(SettingsBody, input, settingsError));
 
 const base = { legalName: 'Ferretería El Martillo S.A.C.', taxRate: 18, currencySymbol: 'S/' };
 

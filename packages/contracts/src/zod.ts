@@ -14,3 +14,10 @@ export const id = (message: string) => z.coerce.number({ error: message }).int({
 // El .optional() de afuera hace que la clave pueda faltar; el de adentro acepta el undefined del preprocess.
 export const optionalId = (message: string) =>
   z.preprocess(value => (value === '' || value === null ? undefined : value), id(message).optional()).optional();
+
+// Texto opcional: ausente, null o vacío = null; si no, recortado y con un largo máximo.
+// label va con su artículo ("La dirección", "El teléfono") porque abre el mensaje.
+export const optionalText = (maxLength: number, label: string) =>
+  z.union([z.string(), z.number()], { error: `${label} no es un texto válido.` }).nullish()
+    .transform(value => (value === null || value === undefined ? null : String(value).trim() || null))
+    .refine(value => value === null || value.length <= maxLength, { error: `${label} no puede superar ${maxLength} caracteres.` });
