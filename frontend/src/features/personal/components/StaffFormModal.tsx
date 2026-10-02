@@ -1,7 +1,7 @@
 // Alta o edición de una persona: datos de acceso, cargo, sucursal y los módulos que puede usar.
 import { useState } from 'react';
 import type { Branch } from '@ferresys/contracts/branches';
-import type { Role, SessionUser, StaffMember, StaffRequest } from '@ferresys/contracts/identity';
+import type { Role, SessionUser, StaffMember, CreateStaffRequest, UpdateStaffRequest } from '@ferresys/contracts/identity';
 import { api } from '../../../api/client.ts';
 import FieldError from '../../../shared/ui/FieldError.tsx';
 import { useToast } from '../../../shared/ui/index.ts';
@@ -111,7 +111,7 @@ export default function StaffFormModal({ editing, currentUser, branches, availab
   const handleSaveStaff = async () => {
     if (!validateStaff()) return;
 
-    const payload: StaffRequest = {
+    const payload = {
       name: name.trim(),
       user: user.trim(),
       role,
@@ -122,8 +122,8 @@ export default function StaffFormModal({ editing, currentUser, branches, availab
     };
     try {
       setSaving(true);
-      if (editingId) await api.put(`/personal/${editingId}`, payload);
-      else await api.post('/personal', payload);
+      if (editingId) await api.put(`/personal/${editingId}`, payload satisfies UpdateStaffRequest);
+      else await api.post('/personal', payload satisfies CreateStaffRequest);
       onSaved(editingId ? 'Personal modificado exitosamente.' : 'Personal registrado exitosamente.');
     } catch (err) {
       aviso.error(`Error al guardar personal: ${(err as Error).message}`);

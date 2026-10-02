@@ -1,16 +1,8 @@
 // Receta de una venta de farmacia, sin base de datos: qué pide cada producto y si la venta lo trae.
-import { z } from '@ferresys/contracts/zod';
 import type { PharmacySaleData } from '@ferresys/contracts/industries';
 
-const optionalText = (label: string, max: number) =>
-  z.string({ message: `${label}: debe ser un texto.` }).trim().max(max, `${label}: hasta ${max} caracteres.`)
-    .optional().transform(value => value || undefined);
-
-export const pharmacySale = z.object({
-  prescriptionNumber: optionalText('N° de receta', 30),
-  prescriber: optionalText('Médico', 120),
-  patient: optionalText('Paciente', 120),
-}).transform((data): PharmacySaleData => Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)));
+// El esquema de la receta está en el contrato.
+export { PharmacySaleBody as pharmacySale } from '@ferresys/contracts/industries';
 
 /** Lo que pide la venta: nada, el número de receta, o (con un controlado) también médico y paciente. */
 export type PrescriptionNeed = 'none' | 'prescription' | 'controlled';

@@ -6,16 +6,15 @@ import type { SessionUser } from '../../types/express.d.ts';
 import { changedFields, recordAudit } from '../audit/index.ts';
 import { getActiveModules, requireWithinLimit } from '../licensing/index.ts';
 import { getSettings } from '../settings/index.ts';
-import { MAIN_ADMIN_ID, StaffError, assertCanManage, moduleList, parseRole } from './permissions.ts';
+import { MAIN_ADMIN_ID, StaffError, assertCanManage, moduleList, type Role } from './permissions.ts';
+import type { z } from '@ferresys/contracts/zod';
+import type { CreateStaffBody, UpdateStaffBody } from '@ferresys/contracts/identity';
 
 type Client = typeof prisma;
 
-const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
-
 // Solo se pueden asignar módulos que la empresa tenga contratados y activos.
-async function assertModulesAllowed(client: Client, modules: unknown): Promise<string[] | undefined> {
+async function assertModulesAllowed(client: Client, modules: string[] | null | undefined): Promise<string[] | undefined> {
   if (modules === undefined || modules === null) return undefined;
-  if (!Array.isArray(modules) || modules.some(m => typeof m !== 'string')) throw new StaffError('La lista de módulos no es válida.');
   const allowed = getActiveModules(await getSettings(client));
   const outside = modules.filter(m => !allowed.includes(m));
   if (outside.length > 0) throw new StaffError(`Estos módulos no están disponibles en el plan de la empresa: ${outside.join(', ')}.`);
@@ -23,10 +22,9 @@ async function assertModulesAllowed(client: Client, modules: unknown): Promise<s
 }
 
 // Sucursal asignada: debe existir y estar activa. Sin valor, la indicada por defecto.
-async function branchFor(client: Client, value: unknown, fallback: number): Promise<number> {
-  if (value === undefined || value === null || value === '') return fallback;
-  const branchId = parseInt(String(value), 10);
-  const branch = Number.isNaN(branchId) ? null : await client.branch.findUnique({ where: { id: branchId }, select: { active: true } });
+async function branchFor(client: Client, branchId: number | undefined, fallback: number): Promise<number> {
+  if (branchId === undefined) return fallback;
+  const branch = await client.branch.findUnique({ where: { id: branchId }, select: { active: true } });
   if (!branch || !branch.active) throw new StaffError('La sucursal elegida no existe o está desactivada.');
   return branchId;
 }
@@ -42,11 +40,9 @@ export async function listStaff(client: Client) {
 }
 
 // La clave la define quien da de alta: el empleado debe cambiarla al ingresar.
-export async function createStaff(client: Client, input: Record<string, unknown>, actor: SessionUser) {
-  const name = text(input.name);
-  const username = text(input.user);
-  if (!name || !username || !input.pass) throw new StaffError('Nombre, usuario y contraseña son obligatorios.');
-  const role = parseRole(input.role, 'VENDEDOR');
+export async function createStaff(client: Client, input: z.infer<typeof CreateStaffBody>, actor: SessionUser) {
+  const { name, user: username } = input;
+  const role = input.role ?? 'VENDEDOR';
   assertCanManage(actor, { newRole: role });
   validateNewPassword(input.pass);
 
@@ -55,7 +51,7 @@ export async function createStaff(client: Client, input: Record<string, unknown>
   requireWithinLimit('maxUsers', await client.usuario.count({ where: { active: true } }), 'usuario(s)');
   const modules = await assertModulesAllowed(client, input.modules) ?? ['pos'];
   const branchId = await branchFor(client, input.branchId, actor.branchId);
-  const pass = await hashPassword(String(input.pass));
+  const pass = await hashPassword(input.pass);
 
   return client.$transaction(async (tx) => {
     const created = await tx.usuario.create({
@@ -74,14 +70,12 @@ export async function createStaff(client: Client, input: Record<string, unknown>
   });
 }
 
-export async function updateStaff(client: Client, id: number, input: Record<string, unknown>, actor: SessionUser) {
-  const name = text(input.name);
-  const username = text(input.user);
-  if (!name || !username) throw new StaffError('El nombre y el usuario son obligatorios.');
+export async function updateStaff(client: Client, id: number, input: z.infer<typeof UpdateStaffBody>, actor: SessionUser) {
+  const { name, user: username } = input;
 
   const current = await client.usuario.findUnique({ where: { id } });
   if (!current) throw new StaffError('Usuario no encontrado.', 404);
-  const role = parseRole(input.role, current.role as ReturnType<typeof parseRole>);
+  const role = input.role ?? current.role as Role;
   assertCanManage(actor, { currentRole: current.role, newRole: role });
 
   if (username.toLowerCase() !== current.user.toLowerCase()) {
@@ -97,7 +91,7 @@ export async function updateStaff(client: Client, id: number, input: Record<stri
     modules: await assertModulesAllowed(client, input.modules) ?? (current.modules as string[]),
   };
 
-  if (input.branchId !== undefined && input.branchId !== '') {
+  if (input.branchId !== undefined) {
     const branchId = await branchFor(client, input.branchId, current.branchId);
     if (branchId !== current.branchId) {
       // Lo que cobre iría a una caja de la otra sucursal: primero debe salir de su turno.
@@ -107,12 +101,12 @@ export async function updateStaff(client: Client, id: number, input: Record<stri
     data.branchId = branchId;
   }
 
-  if (typeof input.active === 'boolean') {
+  if (input.active !== undefined) {
     if (id === MAIN_ADMIN_ID && !input.active) throw new StaffError('No se puede desactivar al Administrador principal del sistema.');
     data.active = input.active;
   }
 
-  if (typeof input.pass === 'string' && input.pass.trim().length > 0) {
+  if (input.pass) {
     validateNewPassword(input.pass);
     data.pass = await hashPassword(input.pass);
     // Si se restablece la clave de otra persona, queda como temporal.

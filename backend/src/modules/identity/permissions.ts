@@ -5,8 +5,7 @@ export class StaffError extends AppError {
   static override area = 'PERSONAL';
 }
 
-export const ROLES = ['ADMINISTRADOR', 'VENDEDOR', 'CAJERO', 'REPARTIDOR', 'ALMACEN'] as const;
-export type Role = (typeof ROLES)[number];
+export { ROLES, type Role } from '@ferresys/contracts/identity';
 
 export const isAdmin = (user: { role: string }) => user.role === 'ADMINISTRADOR';
 
@@ -18,12 +17,6 @@ export const moduleList = (value: unknown): string[] =>
 // administrador tiene todos los módulos activos de la empresa sin asignárselos uno a uno.
 export function canUseAnyModule(activeModules: readonly string[], user: { role: string; modules: readonly string[] }, required: readonly string[]) {
   return required.some(m => activeModules.includes(m) && (isAdmin(user) || user.modules.includes(m)));
-}
-
-export function parseRole(value: unknown, fallback: Role): Role {
-  if (value === undefined || value === null || value === '') return fallback;
-  if (!(ROLES as readonly unknown[]).includes(value)) throw new StaffError('Rol no válido.');
-  return value as Role;
 }
 
 // Quien administra el personal sin ser administrador (tiene el módulo Personal) no puede crear

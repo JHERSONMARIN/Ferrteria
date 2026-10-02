@@ -11,7 +11,9 @@ import { moduleList, StaffError } from './permissions.ts';
 import { authenticate, clearSessionCookie, setSessionCookie } from './session.ts';
 import { createStaff, deleteStaff, listStaff, updateStaff } from './staff.ts';
 import type { Sendable } from '@ferresys/contracts/common';
-import type { LoginResponse, MeResponse, StaffMember } from '@ferresys/contracts/identity';
+import {
+  ChangePasswordBody, CreateStaffBody, LoginBody, UpdateStaffBody, type LoginResponse, type MeResponse, type StaffMember,
+} from '@ferresys/contracts/identity';
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 
@@ -30,7 +32,7 @@ const handle = (failure: string, fn: Handler) => async (req: Request, res: Respo
   }
 };
 
-const body = (req: Request) => (req.body ?? {}) as Record<string, unknown>;
+const staffError = (message: string) => new StaffError(message);
 
 // ---------- /api/auth ----------
 
@@ -40,12 +42,6 @@ export const authRoutes = express.Router();
 // qué nombres de usuario existen.
 const DUMMY_HASH = await hashPassword('ferresys-usuario-inexistente');
 
-const LoginBody = z.object({
-  user: z.string({ error: 'Usuario y contraseña requeridos.' }).trim().min(1, { error: 'Usuario y contraseña requeridos.' }),
-  pass: z.string({ error: 'Usuario y contraseña requeridos.' }).min(1, { error: 'Usuario y contraseña requeridos.' }),
-});
-
-// POST /api/auth/login { user, pass }: con límite de intentos por usuario e IP.
 authRoutes.post('/login', handle('Error interno de servidor en autenticación.', async (req, res) => {
   const { user, pass } = parseInput(LoginBody, req.body, m => new AppError(m, 400));
   const blockedFor = secondsBlocked(user, req.ip);
@@ -77,9 +73,9 @@ authRoutes.post('/login', handle('Error interno de servidor en autenticación.',
 
 // POST /api/auth/change-password { currentPassword, newPassword }
 authRoutes.post('/change-password', authenticate, handle('No se pudo cambiar la contraseña.', async (req, res) => {
-  const { currentPassword, newPassword } = body(req);
+  const { currentPassword, newPassword } = parseInput(ChangePasswordBody, req.body, m => new AppError(m, 400));
   const stored = await prisma.usuario.findUnique({ where: { id: req.user.id }, select: { pass: true } });
-  if (!stored || !(await verifyPassword(String(currentPassword ?? ''), stored.pass))) {
+  if (!stored || !(await verifyPassword(currentPassword, stored.pass))) {
     throw new AppError('La contraseña actual no es correcta.', 400);
   }
   validateNewPassword(newPassword);
@@ -110,18 +106,18 @@ authRoutes.get('/me', authenticate, (req, res) => {
 export const staffRoutes = express.Router();
 
 const Params = z.object({ id: id('ID de usuario inválido.') });
-const staffId = (req: Request) => parseInput(Params, req.params, m => new StaffError(m)).id;
+const staffId = (req: Request) => parseInput(Params, req.params, staffError).id;
 
 staffRoutes.get('/', handle('Error al listar personal.', async (req, res) => {
   res.json(await listStaff(prisma) satisfies Sendable<StaffMember[]>);
 }));
 
 staffRoutes.post('/', handle('Error al guardar personal.', async (req, res) => {
-  res.status(201).json(await createStaff(prisma, body(req), req.user));
+  res.status(201).json(await createStaff(prisma, parseInput(CreateStaffBody, req.body, staffError), req.user));
 }));
 
 staffRoutes.put('/:id', handle('Error al actualizar usuario en la base de datos.', async (req, res) => {
-  res.json(await updateStaff(prisma, staffId(req), body(req), req.user));
+  res.json(await updateStaff(prisma, staffId(req), parseInput(UpdateStaffBody, req.body, staffError), req.user));
 }));
 
 staffRoutes.delete('/:id', handle('Error al eliminar usuario.', async (req, res) => {

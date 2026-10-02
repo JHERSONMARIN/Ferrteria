@@ -1,7 +1,13 @@
 // Reglas de permisos, sin base de datos:  npm run test:unit
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { StaffError, assertCanManage, canUseAnyModule, parseRole } from './permissions.ts';
+import { UpdateStaffBody } from '@ferresys/contracts/identity';
+import { parseInput } from '../../lib/validation.ts';
+import { StaffError, assertCanManage, canUseAnyModule } from './permissions.ts';
+
+// Lo que hace la ruta: el rol se valida con el esquema del contrato; vacío = el que ya tenía.
+const parseRole = (role: unknown, fallback: string) =>
+  parseInput(UpdateStaffBody, { name: 'Ana', user: 'ana', role }, m => new StaffError(m)).role ?? fallback;
 
 test('un módulo se usa si está activo en la empresa y asignado; el administrador, todos los activos', () => {
   const active = ['pos', 'caja', 'inventory'];

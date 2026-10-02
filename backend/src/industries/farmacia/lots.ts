@@ -1,5 +1,4 @@
 // Reglas de los lotes de farmacia, sin base de datos: qué datos trae una entrada y de qué lotes sale una salida.
-import { z } from '@ferresys/contracts/zod';
 import { AppError } from '@ferresys/shared/errors';
 import { roundQuantity } from '../../utils/quantities.ts';
 
@@ -7,23 +6,8 @@ export class PharmacyError extends AppError {
   static override area = 'FARMACIA';
 }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const isRealDate = (value: string) => DATE.test(value) && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value);
-
-// Lote de una entrada: número y vencimiento juntos, o ninguno (entra "sin lote").
-export const stockEntry = z.object({
-  lotNumber: z.string({ message: 'El lote debe ser un texto.' }).trim().max(30, 'El lote: hasta 30 caracteres.').optional(),
-  expiresAt: z.string({ message: 'El vencimiento debe ser una fecha.' }).trim()
-    .refine(value => value === '' || isRealDate(value), 'El vencimiento debe ser una fecha válida (AAAA-MM-DD).').optional(),
-}).transform((data, ctx) => {
-  const lotNumber = data.lotNumber || undefined;
-  const expiresAt = data.expiresAt || undefined;
-  if (Boolean(lotNumber) !== Boolean(expiresAt)) {
-    ctx.addIssue({ code: 'custom', message: 'Indique el lote y su vencimiento, o ninguno de los dos.' });
-    return z.NEVER;
-  }
-  return lotNumber && expiresAt ? { lotNumber, expiresAt } : {};
-});
+// Lote de una entrada: el esquema está en el contrato.
+export { PharmacyStockEntryBody as stockEntry } from '@ferresys/contracts/industries';
 
 export interface EntryLot {
   lotNumber: string;
